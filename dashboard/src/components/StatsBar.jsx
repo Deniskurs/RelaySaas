@@ -8,10 +8,15 @@ const StatItem = ({ label, value, variant = "neutral" }) => {
   };
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 bg-card border border-border rounded-lg">
+    <div className="flex items-center gap-3 px-4 py-2 glass-card">
       <div className="flex flex-col">
         <span className="text-xs text-foreground-muted">{label}</span>
-        <span className={cn("text-sm font-semibold font-mono tabular-nums", variantStyles[variant])}>
+        <span
+          className={cn(
+            "text-sm font-semibold font-mono tabular-nums",
+            variantStyles[variant]
+          )}
+        >
           {value}
         </span>
       </div>

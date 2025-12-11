@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     max_risk_percent: float = 2.0
     allowed_symbols: str = ""  # Comma-separated, empty = all
     symbol_suffix: str = ""  # Broker-specific suffix (e.g., ".raw", "m", "!")
+    auto_accept_symbols: str = "XAUUSD,GOLD"  # Symbols that execute immediately without confirmation
+
+    # Lot size scaling (reference balance: £500)
+    lot_reference_balance: float = 500.0  # Reference balance for lot calculation
+    lot_reference_size: float = 0.04  # Lot size at reference balance for GOLD/XAUUSD
+    lot_reference_size_default: float = 0.01  # Lot size at reference balance for other symbols
+
+    # Smart execution: GOLD threshold for market orders (in dollars)
+    gold_market_threshold: float = 3.0  # Execute at market if price within $3 of entry
 
     # Execution
     split_tps: bool = True
@@ -50,6 +59,11 @@ class Settings(BaseSettings):
     def symbol_whitelist(self) -> List[str]:
         """Parse comma-separated symbols into a list."""
         return [s.strip().upper() for s in self.allowed_symbols.split(",") if s.strip()]
+
+    @property
+    def auto_accept_list(self) -> List[str]:
+        """Parse comma-separated auto-accept symbols into a list."""
+        return [s.strip().upper() for s in self.auto_accept_symbols.split(",") if s.strip()]
 
     @property
     def tp_ratios(self) -> List[float]:

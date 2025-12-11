@@ -14,16 +14,14 @@ export default function TopBar({
     <header
       className={cn(
         "h-14 sticky top-0 z-40",
-        "bg-background/80 backdrop-blur-xl",
-        "border-b border-border",
+        "bg-background/60 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40",
+        "border-b border-white/5",
         "px-6 flex items-center justify-between"
       )}
     >
       {/* Left: Title */}
       <div className="flex items-center gap-4">
-        <h1 className="text-sm font-medium text-foreground">
-          {title}
-        </h1>
+        <h1 className="text-sm font-medium text-foreground">{title}</h1>
       </div>
 
       {/* Right: Controls */}

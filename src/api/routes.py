@@ -300,8 +300,185 @@ async def correct_signal(
         )
 
 
+class SignalConfirmRequest(BaseModel):
+    """Request to confirm a signal with optional lot size."""
+    lot_size: Optional[float] = None
+
+
+# Signal confirmation endpoints
+@router.post("/signals/{signal_id}/confirm", response_model=SignalCorrectionResponse)
+async def confirm_signal(
+    signal_id: int,
+    confirm_request: SignalConfirmRequest = SignalConfirmRequest(),
+    session: AsyncSession = Depends(get_session),
+):
+    """Confirm and execute a pending signal with optional lot size override."""
+    signal = await crud.get_signal(session, signal_id)
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    if signal.status != "pending_confirmation":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Signal not pending confirmation, current status: {signal.status}"
+        )
+
+    if not _copier:
+        raise HTTPException(
+            status_code=503,
+            detail="Signal copier not initialized"
+        )
+
+    # Validate lot size if provided
+    from ..config import settings
+    if confirm_request.lot_size is not None:
+        if confirm_request.lot_size < 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail="Lot size must be at least 0.01"
+            )
+        if confirm_request.lot_size > settings.max_lot_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Lot size cannot exceed {settings.max_lot_size}"
+            )
+
+    success = await _copier.confirm_signal(signal_id, lot_size_override=confirm_request.lot_size)
+
+    if success:
+        return SignalCorrectionResponse(
+            status="executed",
+            message=f"Signal confirmed and executed",
+            executed=True,
+        )
+    else:
+        updated_signal = await crud.get_signal(session, signal_id)
+        failure_reason = updated_signal.failure_reason if updated_signal else "Unknown error"
+        return SignalCorrectionResponse(
+            status="failed",
+            message=f"Execution failed: {failure_reason}",
+            executed=False,
+        )
+
+
+class SignalRejectRequest(BaseModel):
+    """Request to reject a signal."""
+    reason: str = "Manually rejected"
+
+
+@router.post("/signals/{signal_id}/reject", response_model=StatusResponse)
+async def reject_signal(
+    signal_id: int,
+    rejection: SignalRejectRequest = SignalRejectRequest(),
+    session: AsyncSession = Depends(get_session),
+):
+    """Reject a pending signal."""
+    signal = await crud.get_signal(session, signal_id)
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    if signal.status != "pending_confirmation":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Signal not pending confirmation, current status: {signal.status}"
+        )
+
+    if not _copier:
+        raise HTTPException(
+            status_code=503,
+            detail="Signal copier not initialized"
+        )
+
+    success = await _copier.reject_signal(signal_id, rejection.reason)
+
+    if success:
+        return StatusResponse(status="rejected")
+    else:
+        raise HTTPException(status_code=500, detail="Failed to reject signal")
+
+
 # Health check
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+
+# Lot size preset endpoints
+class LotPresetsResponse(BaseModel):
+    """Lot size presets based on current account balance."""
+    base_lot: float
+    low_lot: float      # 0.5x base
+    medium_lot: float   # 1x base
+    high_lot: float     # 2x base
+    balance: float
+    reference_balance: float
+    reference_lot: float
+
+
+@router.get("/account/lot-presets", response_model=LotPresetsResponse)
+async def get_lot_presets(symbol: Optional[str] = None):
+    """Get calculated lot size presets based on current account balance.
+
+    Args:
+        symbol: Optional symbol to calculate lots for (GOLD/XAUUSD use 0.04 base, others use 0.01)
+    """
+    from ..trading.validator import calculate_lot_for_symbol, get_reference_lot_for_symbol
+    from ..config import settings
+
+    balance = _account_info.get("balance", 0)
+
+    # Use symbol-specific reference lot (GOLD=0.04, others=0.01 on £500)
+    symbol_for_calc = symbol or "DEFAULT"
+    reference_lot = get_reference_lot_for_symbol(symbol_for_calc)
+
+    base_lot = calculate_lot_for_symbol(
+        symbol=symbol_for_calc,
+        account_balance=balance,
+        min_lot=0.01,
+        max_lot=settings.max_lot_size,
+    )
+
+    return LotPresetsResponse(
+        base_lot=round(base_lot, 2),
+        low_lot=round(max(0.01, base_lot * 0.5), 2),
+        medium_lot=round(base_lot, 2),
+        high_lot=round(min(base_lot * 2, settings.max_lot_size), 2),
+        balance=balance,
+        reference_balance=settings.lot_reference_balance,
+        reference_lot=reference_lot,
+    )
+
+
+class LastTradeLotResponse(BaseModel):
+    """Last executed trade lot size."""
+    lot_size: Optional[float] = None
+    symbol: Optional[str] = None
+    direction: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+
+@router.get("/account/last-trade-lot", response_model=LastTradeLotResponse)
+async def get_last_trade_lot(
+    session: AsyncSession = Depends(get_session),
+):
+    """Get the lot size of the most recently executed trade."""
+    from sqlalchemy import select, desc
+    from ..database.models import Trade
+
+    result = await session.execute(
+        select(Trade)
+        .order_by(desc(Trade.opened_at))
+        .limit(1)
+    )
+    trade = result.scalar_one_or_none()
+
+    if trade:
+        return LastTradeLotResponse(
+            lot_size=trade.lot_size,
+            symbol=trade.symbol,
+            direction=trade.direction,
+            timestamp=trade.opened_at,
+        )
+
+    return LastTradeLotResponse()

@@ -6,6 +6,80 @@ from ..config import settings
 from ..utils.logger import log
 
 
+def get_reference_lot_for_symbol(symbol: str) -> float:
+    """Get the reference lot size for a given symbol.
+
+    GOLD/XAUUSD uses higher base lot (0.04 on £500), others use lower (0.01 on £500).
+
+    Args:
+        symbol: Trading symbol.
+
+    Returns:
+        Reference lot size for the symbol.
+    """
+    symbol_upper = symbol.upper()
+    if symbol_upper in ["XAUUSD", "GOLD"]:
+        return settings.lot_reference_size  # 0.04 for GOLD
+    return settings.lot_reference_size_default  # 0.01 for others
+
+
+def calculate_dynamic_lot_size(
+    account_balance: float,
+    reference_balance: float = 500.0,
+    reference_lot: float = 0.04,
+    min_lot: float = 0.01,
+    max_lot: float = 0.1,
+) -> float:
+    """Calculate lot size scaled to account balance.
+
+    Formula: lot_size = (account_balance / reference_balance) * reference_lot
+
+    Args:
+        account_balance: Current account balance.
+        reference_balance: Reference balance for scaling (default 500).
+        reference_lot: Lot size at reference balance (default 0.04).
+        min_lot: Minimum allowed lot size.
+        max_lot: Maximum allowed lot size.
+
+    Returns:
+        Calculated lot size, bounded by min/max.
+    """
+    if account_balance <= 0:
+        return min_lot
+
+    calculated = (account_balance / reference_balance) * reference_lot
+    return max(min_lot, min(round(calculated, 2), max_lot))
+
+
+def calculate_lot_for_symbol(
+    symbol: str,
+    account_balance: float,
+    min_lot: float = 0.01,
+    max_lot: float = 0.1,
+) -> float:
+    """Calculate lot size for a specific symbol based on account balance.
+
+    Uses symbol-specific reference lot (GOLD=0.04, others=0.01 on £500 reference).
+
+    Args:
+        symbol: Trading symbol.
+        account_balance: Current account balance.
+        min_lot: Minimum allowed lot size.
+        max_lot: Maximum allowed lot size.
+
+    Returns:
+        Calculated lot size for the symbol.
+    """
+    reference_lot = get_reference_lot_for_symbol(symbol)
+    return calculate_dynamic_lot_size(
+        account_balance=account_balance,
+        reference_balance=settings.lot_reference_balance,
+        reference_lot=reference_lot,
+        min_lot=min_lot,
+        max_lot=max_lot,
+    )
+
+
 class TradeValidator:
     """Validate signals before execution."""
 
@@ -33,7 +107,16 @@ class TradeValidator:
         """
         errors: List[str] = []
         warnings: List[str] = []
-        adjusted_lot_size = settings.default_lot_size
+
+        # Calculate dynamic base lot size from account balance (symbol-specific)
+        balance = account_info.get("balance", 0)
+        base_lot_size = calculate_lot_for_symbol(
+            symbol=signal.symbol,
+            account_balance=balance,
+            min_lot=0.01,
+            max_lot=settings.max_lot_size,
+        )
+        adjusted_lot_size = base_lot_size
 
         # 1. Symbol whitelist check
         if settings.symbol_whitelist and signal.symbol not in settings.symbol_whitelist:
@@ -70,8 +153,7 @@ class TradeValidator:
                 f"Stop loss is {sl_distance_percent:.2f}% from entry - large risk"
             )
 
-        # 4. Risk calculation and lot size adjustment
-        balance = account_info.get("balance", 0)
+        # 4. Risk calculation and lot size adjustment (may reduce from dynamic base)
         if balance > 0:
             pip_value = self._get_pip_value(signal.symbol)
             sl_pips = abs(signal.entry_price - signal.stop_loss) / pip_value
@@ -83,13 +165,13 @@ class TradeValidator:
 
             if risk_per_lot > 0:
                 calculated_lot = max_risk_amount / risk_per_lot
-                if calculated_lot < settings.default_lot_size:
+                if calculated_lot < base_lot_size:
                     adjusted_lot_size = max(0.01, round(calculated_lot, 2))
                     warnings.append(
-                        f"Lot size adjusted from {settings.default_lot_size} to "
+                        f"Lot size adjusted from {base_lot_size} to "
                         f"{adjusted_lot_size} for risk management"
                     )
-                elif settings.default_lot_size * risk_per_lot > max_risk_amount:
+                elif base_lot_size * risk_per_lot > max_risk_amount:
                     adjusted_lot_size = max(0.01, round(calculated_lot, 2))
                     warnings.append(
                         f"Lot size adjusted to {adjusted_lot_size} for risk management"

@@ -8,7 +8,7 @@ class LLMParseResult(BaseModel):
     """Raw result from LLM parsing."""
 
     is_signal: bool
-    signal_type: Literal["OPEN", "CLOSE"] = "OPEN"  # OPEN for new trades, CLOSE for exit signals
+    signal_type: Literal["OPEN", "CLOSE", "LOT_MODIFIER"] = "OPEN"  # OPEN, CLOSE, or LOT_MODIFIER
     direction: Optional[Literal["BUY", "SELL"]] = None
     original_direction: Optional[Literal["BUY", "SELL"]] = None  # Before auto-correction
     symbol: Optional[str] = None
@@ -19,6 +19,11 @@ class LLMParseResult(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     rejection_reason: Optional[str] = None  # Why it was rejected if is_signal=false
     suggested_correction: Optional[Literal["BUY", "SELL"]] = None  # Suggested direction if fixable
+
+    # LOT_MODIFIER specific fields
+    lot_modifier_type: Optional[Literal["DOUBLE", "ADD"]] = None  # Type of lot modification
+    lot_multiplier: Optional[float] = None  # e.g., 2.0 for double, 1.0 for add same
+    target_symbol: Optional[str] = None  # Symbol to apply modifier to (None = most recent)
 
 
 class ParsedSignal(BaseModel):

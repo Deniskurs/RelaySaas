@@ -6,7 +6,8 @@ SIGNAL_PARSER_PROMPT = """You are a professional trading signal parser. Your job
 Analyze the message and extract trading signal data. Messages can be:
 1. OPEN signals - new trade entries (BUY/SELL with entry, SL, TPs)
 2. CLOSE signals - instructions to exit/close existing positions
-3. Non-signals - just commentary, analysis, or chat → return {"is_signal": false}
+3. LOT_MODIFIER signals - instructions to add to or scale existing positions
+4. Non-signals - just commentary, analysis, or chat → return {"is_signal": false}
 </task>
 
 <close_signal_detection>
@@ -22,6 +23,20 @@ For CLOSE signals:
 - No entry/SL/TP needed
 - direction is optional (can close all positions on symbol, or just BUY/SELL positions)
 </close_signal_detection>
+
+<lot_modifier_detection>
+LOT_MODIFIER signals are instructions to add to or scale an existing position. Look for keywords like:
+- "double lot", "double up", "2x", "double position"
+- "add to position", "add more", "add another"
+- "increase position", "scale in", "run it back", "same again"
+
+For LOT_MODIFIER signals:
+- signal_type: "LOT_MODIFIER"
+- target_symbol: The symbol mentioned (e.g., "GOLD" → "XAUUSD"), or null if referring to most recent trade
+- lot_modifier_type: "DOUBLE" (2x the position) or "ADD" (add same size again)
+- lot_multiplier: The multiplier (2.0 for double, 1.0 for add same)
+- No entry/SL/TP needed (uses existing position parameters)
+</lot_modifier_detection>
 
 <extraction_rules>
 1. SYMBOL: Extract and normalize the trading pair
@@ -105,6 +120,17 @@ For a CLOSE signal:
   "warnings": ["Early exit - potential reversal"]
 }
 
+For a LOT_MODIFIER signal:
+{
+  "is_signal": true,
+  "signal_type": "LOT_MODIFIER",
+  "target_symbol": "XAUUSD",
+  "lot_modifier_type": "DOUBLE",
+  "lot_multiplier": 2.0,
+  "confidence": 0.9,
+  "warnings": []
+}
+
 For a corrected direction:
 {
   "is_signal": true,
@@ -172,6 +198,18 @@ Output: {"is_signal": true, "signal_type": "CLOSE", "symbol": "XAUUSD", "confide
 
 Input: "Close all USDJPY positions"
 Output: {"is_signal": true, "signal_type": "CLOSE", "symbol": "USDJPY", "confidence": 0.95, "warnings": []}
+
+Input: "Double lot on GOLD"
+Output: {"is_signal": true, "signal_type": "LOT_MODIFIER", "target_symbol": "XAUUSD", "lot_modifier_type": "DOUBLE", "lot_multiplier": 2.0, "confidence": 0.9, "warnings": []}
+
+Input: "2x"
+Output: {"is_signal": true, "signal_type": "LOT_MODIFIER", "target_symbol": null, "lot_modifier_type": "DOUBLE", "lot_multiplier": 2.0, "confidence": 0.85, "warnings": ["No symbol specified - applies to most recent trade"]}
+
+Input: "Add to position"
+Output: {"is_signal": true, "signal_type": "LOT_MODIFIER", "target_symbol": null, "lot_modifier_type": "ADD", "lot_multiplier": 1.0, "confidence": 0.85, "warnings": ["No symbol specified - applies to most recent trade"]}
+
+Input: "Run it back on gold"
+Output: {"is_signal": true, "signal_type": "LOT_MODIFIER", "target_symbol": "XAUUSD", "lot_modifier_type": "ADD", "lot_multiplier": 1.0, "confidence": 0.85, "warnings": []}
 </examples>
 
 Parse the following message:"""

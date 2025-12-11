@@ -8,7 +8,7 @@ const formatCurrency = (val) =>
   }).format(val);
 
 const MetricCard = ({ label, value }) => (
-  <div className="p-4 bg-card border border-border rounded-lg">
+  <div className="p-4 glass-card">
     <p className="text-xs text-foreground-muted mb-1">{label}</p>
     <p className="text-xl font-semibold font-mono tabular-nums text-foreground">
       {value}

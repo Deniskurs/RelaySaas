@@ -6,47 +6,59 @@
 
 @layer base {
   :root {
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    /* PayloadCMS-inspired neutral palette */
-    --background: 0 0% 7%;
-    --background-elevated: 0 0% 9%;
+    /* 
+      Magical Dark Theme 
+      Inspired by PayloadCMS & Apple Dark Mode
+    */
 
-    --foreground: 0 0% 95%;
-    --foreground-muted: 0 0% 63%;
-    --foreground-subtle: 0 0% 45%;
+    /* Backgrounds: Deep, rich blacks with subtle cool tints */
+    --background: 240 10% 3.9%;
+    --background-elevated: 240 10% 6%; /* Slightly lighter for cards/surfaces */
 
-    --surface: 0 0% 11%;
-    --surface-hover: 0 0% 13%;
+    /* Text: High contrast but not harsh white */
+    --foreground: 0 0% 98%;
+    --foreground-muted: 240 5% 64.9%;
+    --foreground-subtle: 240 5% 45%;
 
-    --border: 0 0% 16%;
-    --border-subtle: 0 0% 13%;
+    /* Surface & Glass bases */
+    --surface: 240 10% 6%;
+    --surface-hover: 240 10% 9%;
 
-    /* Single accent - muted blue-gray */
-    --primary: 215 20% 55%;
+    /* Borders: Very subtle, almost invisible */
+    --border: 240 3.7% 15.9%;
+    --border-subtle: 240 3.7% 10%;
+
+    /* Primary Accent: Sophisticated Indigo/Violet glow */
+    --primary: 252 87% 65%; /* Vivid Indigo */
     --primary-foreground: 0 0% 100%;
 
-    /* Semantic colors - muted */
-    --success: 152 45% 45%;
-    --success-foreground: 0 0% 100%;
+    /* Semantic Colors: Vivid against the dark background */
+    --success: 142 71% 45%;
+    --success-foreground: 144 70% 3%;
 
-    --warning: 38 70% 50%;
-    --warning-foreground: 0 0% 0%;
+    --warning: 48 96% 53%;
+    --warning-foreground: 48 96% 10%;
 
-    --destructive: 0 55% 55%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
 
-    /* shadcn compatibility */
-    --card: 0 0% 9%;
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 95%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 95%;
-    --input: 0 0% 15%;
-    --ring: 215 20% 55%;
+    /* ShadCN / Component Mappings */
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 6%;
+    --popover-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --input: 240 3.7% 15.9%;
+    --ring: 252 87% 65%; /* Matches primary */
   }
 
   * {
@@ -55,15 +67,30 @@
 
   html {
     color-scheme: dark;
+    /* Smooth scrolling for the whole page */
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    /* Subtle mesh gradient background effect could go here if implemented via image/canvas, 
+       but for pure CSS, a radial gradient works well */
+    background-image: radial-gradient(
+        circle at 15% 50%,
+        rgba(76, 29, 149, 0.08),
+        transparent 25%
+      ),
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(56, 189, 248, 0.05),
+        transparent 25%
+      );
+    background-attachment: fixed;
   }
 }
 
-/* Minimal scrollbar */
+/* Custom Scrollbar - Sleek & Minimal */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -74,34 +101,52 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-white/10 rounded-full;
+  @apply bg-white/5 rounded-full transition-colors;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-white/15;
+  @apply bg-white/10;
 }
 
-/* Simple glass effect */
+/* Glassmorphism Utilities */
 @layer utilities {
+  .glass-panel {
+    @apply bg-black/40 backdrop-blur-xl border border-white/5 shadow-2xl;
+  }
+
   .glass-card {
-    @apply bg-card border border-border rounded-lg;
+    @apply bg-card/50 backdrop-blur-md border border-white/5 transition-all duration-300 hover:bg-card/70 hover:border-white/10;
   }
 
-  .glass-subtle {
-    @apply bg-surface border border-border-subtle rounded-md;
+  .text-glow {
+    text-shadow: 0 0 20px rgba(139, 92, 246, 0.5); /* Violet glow */
+  }
+
+  .border-glow {
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
   }
 }
 
-/* Focus styles */
+/* Typography Enhancements */
 @layer utilities {
-  .focus-ring {
-    @apply focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  .tracking-tighter-headers {
+    letter-spacing: -0.02em;
   }
 }
 
-/* Mono numbers */
-@layer utilities {
-  .tabular-nums {
-    font-variant-numeric: tabular-nums;
+/* Animations using standard CSS where Tailwind plugin might fall short */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
   }
+  50% {
+    transform: translateY(-5px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
 }

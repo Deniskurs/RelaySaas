@@ -289,6 +289,9 @@ class TradeExecutor:
     def _get_price_threshold(self, symbol: str) -> float:
         """Get price threshold for determining order type.
 
+        For GOLD/XAUUSD, uses configurable threshold for "smart" market execution.
+        This allows fast signals to execute at market even if price moved slightly.
+
         Args:
             symbol: Trading symbol.
 
@@ -299,7 +302,9 @@ class TradeExecutor:
         if "JPY" in symbol:
             return 0.05
         elif symbol in ["XAUUSD", "GOLD"]:
-            return 1.0
+            # Smart execution: use configurable threshold (default $3)
+            # This means if price is within $3 of entry, use market order
+            return settings.gold_market_threshold
         elif symbol in ["DJ30", "US30", "USTEC", "NAS100"]:
             return 10.0
         else:

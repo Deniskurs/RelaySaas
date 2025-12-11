@@ -11,7 +11,7 @@ export default function DashboardLayout({
   isConnected,
 }) {
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div className="min-h-screen bg-transparent font-sans selection:bg-primary/20">
       <TopBar
         title={title || "Dashboard"}
         isPaused={isPaused}
