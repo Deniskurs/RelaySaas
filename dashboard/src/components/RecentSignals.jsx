@@ -29,16 +29,21 @@ const SignalCard = ({ signal, onCorrect }) => {
   const status = signal.status?.toLowerCase() || "pending";
   const price = signal.price || signal.entryPrice || "--";
   const [isLoading, setIsLoading] = useState(false);
+  const [correctionResult, setCorrectionResult] = useState(null);
 
   // Check if there's a suggested correction in warnings
   const suggestedCorrection = signal.warnings?.find(w => w.startsWith("Suggested correction:"))?.match(/Change to (BUY|SELL)/)?.[1];
-  const canCorrect = (status === "skipped" || status === "failed") && signal.symbol;
+  const canCorrect = (status === "skipped" || status === "failed") && signal.symbol && !correctionResult;
 
   const handleCorrect = async (newDirection) => {
     if (!signal.id || !onCorrect) return;
     setIsLoading(true);
+    setCorrectionResult(null);
     try {
-      await onCorrect(signal.id, newDirection);
+      const result = await onCorrect(signal.id, newDirection);
+      setCorrectionResult(result);
+    } catch (error) {
+      setCorrectionResult({ status: "error", message: error.message || "Failed to correct" });
     } finally {
       setIsLoading(false);
     }
@@ -192,6 +197,18 @@ const SignalCard = ({ signal, onCorrect }) => {
           )}
         </div>
       )}
+
+      {/* Row 8: Correction Result */}
+      {correctionResult && (
+        <div className={cn(
+          "p-2 rounded border text-xs",
+          correctionResult.executed || correctionResult.status === "executed"
+            ? "bg-success/10 border-success/20 text-success"
+            : "bg-destructive/10 border-destructive/20 text-destructive"
+        )}>
+          {correctionResult.message || (correctionResult.executed ? "Trade executed!" : "Correction failed")}
+        </div>
+      )}
     </div>
   );
 };
@@ -230,11 +247,15 @@ export default function RecentSignals({ signals = [], isLoading = false, onRefre
 
   const handleCorrect = async (signalId, newDirection) => {
     try {
-      await postData(`/signals/${signalId}/correct`, { new_direction: newDirection });
+      const response = await postData(`/signals/${signalId}/correct`, { new_direction: newDirection });
+      console.log("Correction response:", response);
       // Refresh signals list after correction
       if (onRefresh) onRefresh();
+      // Return result so SignalCard can show feedback
+      return response;
     } catch (error) {
       console.error("Failed to correct signal:", error);
+      throw error;
     }
   };
 

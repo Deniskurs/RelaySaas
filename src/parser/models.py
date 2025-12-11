@@ -8,6 +8,7 @@ class LLMParseResult(BaseModel):
     """Raw result from LLM parsing."""
 
     is_signal: bool
+    signal_type: Literal["OPEN", "CLOSE"] = "OPEN"  # OPEN for new trades, CLOSE for exit signals
     direction: Optional[Literal["BUY", "SELL"]] = None
     original_direction: Optional[Literal["BUY", "SELL"]] = None  # Before auto-correction
     symbol: Optional[str] = None

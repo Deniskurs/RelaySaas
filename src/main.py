@@ -7,7 +7,7 @@ import uvicorn
 
 from .config import settings
 from .api.server import app
-from .api.routes import set_account_info, set_live_positions
+from .api.routes import set_account_info, set_live_positions, set_copier
 from .database.database import init_db, async_session
 from .database import crud
 from .telegram.listener import TelegramListener
@@ -43,6 +43,9 @@ class SignalCopier:
         except Exception as e:
             log.error("Failed to connect to MetaApi", error=str(e))
             raise
+
+        # Set copier reference for API routes (signal correction)
+        set_copier(self)
 
         # Start account info updater
         self._account_update_task = asyncio.create_task(self._update_account_loop())
@@ -145,7 +148,13 @@ class SignalCopier:
             )
             return
 
-        # Update signal with parsed data
+        # Check if this is a CLOSE signal
+        signal_type = getattr(parsed, 'signal_type', 'OPEN')
+        if signal_type == "CLOSE":
+            await self._handle_close_signal(signal_id, parsed)
+            return
+
+        # Update signal with parsed data (for OPEN signals)
         async with async_session() as session:
             await crud.update_signal(
                 session,
@@ -310,6 +319,266 @@ class SignalCopier:
             direction=parsed.direction,
             trades=len(executions),
             lot_size=lot_size,
+        )
+
+    async def execute_corrected_signal(self, signal_id: int, direction: str) -> bool:
+        """Execute a corrected signal with the specified direction.
+
+        Args:
+            signal_id: Database signal ID.
+            direction: Corrected direction (BUY or SELL).
+
+        Returns:
+            True if execution succeeded, False otherwise.
+        """
+        log.info("Executing corrected signal", signal_id=signal_id, direction=direction)
+
+        # Get signal from database
+        async with async_session() as session:
+            signal = await crud.get_signal(session, signal_id)
+
+        if not signal:
+            log.error("Signal not found for correction", signal_id=signal_id)
+            return False
+
+        # Check we have the required fields
+        if not signal.symbol or not signal.entry_price or not signal.stop_loss:
+            log.error("Signal missing required fields", signal_id=signal_id)
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason="Missing required fields (symbol, entry, or SL)",
+                )
+            return False
+
+        take_profits = signal.take_profits or []
+        if not take_profits:
+            log.error("Signal has no take profits", signal_id=signal_id)
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason="No take profit levels defined",
+                )
+            return False
+
+        # Create a ParsedSignal-like object
+        class CorrectedSignal:
+            pass
+
+        parsed = CorrectedSignal()
+        parsed.direction = direction
+        parsed.symbol = signal.symbol
+        parsed.entry_price = signal.entry_price
+        parsed.stop_loss = signal.stop_loss
+        parsed.take_profits = take_profits
+        parsed.confidence = signal.confidence or 0.8
+        parsed.warnings = ["Direction manually corrected"]
+
+        # Validate
+        try:
+            account_info = await self.executor.get_account_info()
+        except Exception as e:
+            log.error("Failed to get account info for correction", error=str(e))
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason=f"Account info error: {str(e)}",
+                )
+            return False
+
+        validation = await self.validator.validate(parsed, account_info)
+
+        if not validation.passed:
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason="; ".join(validation.errors),
+                )
+            log.warning("Corrected signal validation failed", errors=validation.errors)
+            return False
+
+        # Execute
+        lot_size = validation.adjusted_lot_size or settings.default_lot_size
+
+        try:
+            executions = await self.executor.execute(parsed, lot_size)
+        except Exception as e:
+            log.error("Corrected signal execution error", error=str(e))
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason=f"Execution error: {str(e)}",
+                )
+            return False
+
+        if not executions:
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason="Order execution failed",
+                )
+            return False
+
+        # Save trades
+        async with async_session() as session:
+            await crud.update_signal(
+                session,
+                signal_id,
+                direction=direction,
+                status="executed",
+                executed_at=datetime.utcnow(),
+            )
+
+            for exe in executions:
+                await crud.create_trade(
+                    session,
+                    signal_id=signal_id,
+                    order_id=exe.order_id,
+                    symbol=exe.symbol,
+                    direction=exe.direction,
+                    lot_size=exe.lot_size,
+                    entry_price=exe.entry_price,
+                    stop_loss=exe.stop_loss,
+                    take_profit=exe.take_profit,
+                    tp_index=exe.tp_index,
+                )
+
+        await event_bus.emit(
+            Events.TRADE_OPENED,
+            {
+                "signal_id": signal_id,
+                "symbol": parsed.symbol,
+                "direction": direction,
+                "trades": len(executions),
+                "lot_size": lot_size,
+                "corrected": True,
+            },
+        )
+
+        log.info(
+            "Corrected signal executed successfully",
+            signal_id=signal_id,
+            symbol=parsed.symbol,
+            direction=direction,
+            trades=len(executions),
+        )
+
+        return True
+
+    async def _handle_close_signal(self, signal_id: int, parsed):
+        """Handle a CLOSE signal to exit positions.
+
+        Args:
+            signal_id: Database signal ID.
+            parsed: Parsed signal with symbol to close.
+        """
+        symbol = parsed.symbol
+        broker_symbol = symbol + settings.symbol_suffix
+
+        log.info("Processing CLOSE signal", signal_id=signal_id, symbol=symbol)
+
+        # Update signal record
+        async with async_session() as session:
+            await crud.update_signal(
+                session,
+                signal_id,
+                symbol=symbol,
+                status="parsed",
+                warnings=getattr(parsed, 'warnings', []),
+                parsed_at=datetime.utcnow(),
+            )
+
+        # Get current positions
+        try:
+            account_info = await self.executor.get_account_info()
+            positions = account_info.get("positions", [])
+        except Exception as e:
+            log.error("Failed to get positions for close signal", error=str(e))
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason=f"Could not fetch positions: {str(e)}",
+                )
+            return
+
+        # Find matching positions
+        matching = [
+            p for p in positions
+            if p.get("symbol", "").upper().replace(settings.symbol_suffix.upper(), "") == symbol.upper()
+        ]
+
+        if not matching:
+            log.warning("No open positions found for symbol", symbol=symbol)
+            async with async_session() as session:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="skipped",
+                    failure_reason=f"No open positions found for {symbol}",
+                )
+            await event_bus.emit(
+                Events.SIGNAL_SKIPPED,
+                {"id": signal_id, "reason": f"No open positions for {symbol}"},
+            )
+            return
+
+        # Close all matching positions
+        closed_count = 0
+        for pos in matching:
+            position_id = pos.get("id") or pos.get("positionId")
+            if position_id:
+                try:
+                    await self.executor.close_position(str(position_id))
+                    closed_count += 1
+                    log.info("Position closed", position_id=position_id, symbol=symbol)
+                except Exception as e:
+                    log.error("Failed to close position", position_id=position_id, error=str(e))
+
+        # Update signal status
+        async with async_session() as session:
+            if closed_count > 0:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="executed",
+                    executed_at=datetime.utcnow(),
+                )
+            else:
+                await crud.update_signal(
+                    session,
+                    signal_id,
+                    status="failed",
+                    failure_reason="Failed to close any positions",
+                )
+
+        await event_bus.emit(
+            Events.TRADE_CLOSED,
+            {
+                "signal_id": signal_id,
+                "symbol": symbol,
+                "positions_closed": closed_count,
+            },
+        )
+
+        log.info(
+            "CLOSE signal processed",
+            signal_id=signal_id,
+            symbol=symbol,
+            closed=closed_count,
         )
 
     async def _update_account_loop(self):

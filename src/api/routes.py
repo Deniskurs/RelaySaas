@@ -240,13 +240,30 @@ class SignalCorrectionRequest(BaseModel):
     new_direction: Literal["BUY", "SELL"]
 
 
-@router.post("/signals/{signal_id}/correct", response_model=StatusResponse)
+class SignalCorrectionResponse(BaseModel):
+    """Response for signal correction."""
+    status: str
+    message: str = ""
+    executed: bool = False
+
+
+# Reference to the copier instance (set by main.py)
+_copier = None
+
+
+def set_copier(copier):
+    """Set the copier instance for signal corrections."""
+    global _copier
+    _copier = copier
+
+
+@router.post("/signals/{signal_id}/correct", response_model=SignalCorrectionResponse)
 async def correct_signal(
     signal_id: int,
     correction: SignalCorrectionRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    """Correct a skipped/failed signal's direction and requeue for execution."""
+    """Correct a skipped/failed signal's direction and execute it."""
     signal = await crud.get_signal(session, signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -257,17 +274,30 @@ async def correct_signal(
             detail=f"Can only correct skipped or failed signals, current status: {signal.status}"
         )
 
-    # Update signal with corrected direction and mark for retry
-    await crud.update_signal(
-        session,
-        signal_id,
-        direction=correction.new_direction,
-        status="pending_retry",
-        failure_reason=None,  # Clear old failure reason
-        warnings=[f"Direction manually corrected to {correction.new_direction}"],
-    )
+    if not _copier:
+        raise HTTPException(
+            status_code=503,
+            detail="Signal copier not initialized"
+        )
 
-    return StatusResponse(status="corrected", message=f"Signal corrected to {correction.new_direction}")
+    # Execute the corrected signal
+    success = await _copier.execute_corrected_signal(signal_id, correction.new_direction)
+
+    if success:
+        return SignalCorrectionResponse(
+            status="executed",
+            message=f"Signal corrected to {correction.new_direction} and executed",
+            executed=True,
+        )
+    else:
+        # Get updated signal to see what went wrong
+        updated_signal = await crud.get_signal(session, signal_id)
+        failure_reason = updated_signal.failure_reason if updated_signal else "Unknown error"
+        return SignalCorrectionResponse(
+            status="failed",
+            message=f"Correction failed: {failure_reason}",
+            executed=False,
+        )
 
 
 # Health check
