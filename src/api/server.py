@@ -9,7 +9,6 @@ from .routes import router
 from .onboarding_routes import router as onboarding_router
 from .admin_routes import router as admin_router
 from .websocket import websocket_endpoint, setup_websocket_events
-from ..database.database import init_db, close_db
 from ..utils.logger import log
 
 
@@ -18,12 +17,10 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
     log.info("Starting Signal Copier API")
-    await init_db()
     setup_websocket_events()
     yield
     # Shutdown
     log.info("Shutting down Signal Copier API")
-    await close_db()
 
 
 app = FastAPI(

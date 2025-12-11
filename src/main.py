@@ -2,16 +2,17 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Tuple
 
 import uvicorn
 
 from .config import settings
 from .api.server import app
 from .api.routes import set_account_info, set_live_positions, set_copier
-from .database.database import init_db, async_session
-from .database import crud
+from .database import supabase_crud as crud
+from .database.supabase import get_settings as get_db_settings, get_system_config
 from .telegram.listener import TelegramListener
+from .telegram.client import TelegramConfigError
 from .parser.llm_parser import SignalParser
 from .trading.validator import TradeValidator
 from .trading.executor import TradeExecutor
@@ -21,6 +22,45 @@ from .utils.logger import log
 # Multi-tenant imports
 from .users.manager import user_manager
 from .signal_router import signal_router
+
+
+class ConfigurationError(Exception):
+    """Raised when system is not properly configured."""
+    pass
+
+
+def check_system_config() -> Tuple[bool, List[str]]:
+    """Check if system configuration is complete.
+
+    Returns:
+        Tuple of (is_configured, list of missing/issues)
+    """
+    config = get_system_config()
+    issues = []
+
+    # Check Anthropic API key
+    if not config.get("anthropic_api_key"):
+        issues.append("Anthropic API Key not set")
+
+    # Check MetaApi
+    if not config.get("metaapi_token"):
+        issues.append("MetaApi Token not set")
+    if not config.get("metaapi_account_id"):
+        issues.append("MetaApi Account ID not set")
+
+    # Check Telegram
+    if not config.get("telegram_api_id"):
+        issues.append("Telegram API ID not set")
+    if not config.get("telegram_api_hash"):
+        issues.append("Telegram API Hash not set")
+    if not config.get("telegram_phone"):
+        issues.append("Telegram Phone not set")
+
+    # Channel IDs are optional but warn if empty
+    if not config.get("telegram_channel_ids"):
+        issues.append("No Telegram channels configured (signals won't be received)")
+
+    return len(issues) == 0 or (len(issues) == 1 and "channels" in issues[0].lower()), issues
 
 
 class SignalCopier:
@@ -36,9 +76,6 @@ class SignalCopier:
     async def start(self):
         """Start the signal copier."""
         log.info("Starting Signal Copier")
-
-        # Initialize database
-        await init_db()
 
         # Connect to MetaApi
         try:
@@ -64,29 +101,35 @@ class SignalCopier:
         Args:
             message: Dict with text, channel_name, channel_id, message_id, date.
         """
-        # Check if paused
-        async with async_session() as session:
-            if await crud.is_paused(session):
-                log.debug("Processing paused, skipping message")
-                return
+        text = message.get("text", "")
+        channel_name = message.get("channel_name", "Unknown")
 
-        text = message["text"]
-        if not text or len(text) < 10:
+        # Log every message received for debugging
+        log.info("Message received from Telegram",
+                 channel=channel_name,
+                 length=len(text) if text else 0,
+                 preview=text[:30] if text else "")
+
+        # Check if paused
+        db_settings = get_db_settings()
+        if db_settings.get("paused", False):
+            log.info("Processing paused, skipping message")
             return
 
-        channel_name = message["channel_name"]
-        log.info("Processing message", channel=channel_name, preview=text[:50])
+        if not text or len(text) < 10:
+            log.debug("Message too short, skipping", length=len(text) if text else 0)
+            return
+
+        log.info("Processing signal message", channel=channel_name, preview=text[:50])
 
         # Create signal record
-        async with async_session() as session:
-            signal = await crud.create_signal(
-                session,
-                raw_message=text,
-                channel_name=channel_name,
-                channel_id=message.get("channel_id"),
-                message_id=message.get("message_id"),
-            )
-            signal_id = signal.id
+        signal = await crud.create_signal(
+            raw_message=text,
+            channel_name=channel_name,
+            channel_id=message.get("channel_id"),
+            message_id=message.get("message_id"),
+        )
+        signal_id = signal["id"]
 
         await event_bus.emit(
             Events.SIGNAL_RECEIVED,
@@ -120,20 +163,18 @@ class SignalCopier:
             if suggested:
                 warnings = warnings + [f"Suggested correction: Change to {suggested}"]
 
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="skipped",
-                    failure_reason=rejection_reason,
-                    # Store extracted data even for rejected signals so user can see what was parsed
-                    direction=direction,
-                    symbol=symbol,
-                    entry_price=entry_price,
-                    stop_loss=stop_loss,
-                    take_profits=take_profits,
-                    warnings=warnings,
-                )
+            await crud.update_signal(
+                signal_id,
+                status="skipped",
+                failure_reason=rejection_reason,
+                # Store extracted data even for rejected signals so user can see what was parsed
+                direction=direction,
+                symbol=symbol,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profits=take_profits,
+                warnings=warnings,
+            )
 
             await event_bus.emit(
                 Events.SIGNAL_SKIPPED,
@@ -165,20 +206,18 @@ class SignalCopier:
             return
 
         # Update signal with parsed data (for OPEN signals)
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                direction=parsed.direction,
-                symbol=parsed.symbol,
-                entry_price=parsed.entry_price,
-                stop_loss=parsed.stop_loss,
-                take_profits=parsed.take_profits,
-                confidence=parsed.confidence,
-                warnings=parsed.warnings,
-                status="parsed",
-                parsed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            direction=parsed.direction,
+            symbol=parsed.symbol,
+            entry_price=parsed.entry_price,
+            stop_loss=parsed.stop_loss,
+            take_profits=parsed.take_profits,
+            confidence=parsed.confidence,
+            warnings=parsed.warnings,
+            status="parsed",
+            parsed_at=datetime.utcnow().isoformat(),
+        )
 
         await event_bus.emit(
             Events.SIGNAL_PARSED,
@@ -207,13 +246,11 @@ class SignalCopier:
             account_info = await self.executor.get_account_info()
         except Exception as e:
             log.error("Failed to get account info", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Account info error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Account info error: {str(e)}",
+            )
             await event_bus.emit(
                 Events.SIGNAL_FAILED,
                 {"id": signal_id, "errors": [str(e)]},
@@ -233,13 +270,11 @@ class SignalCopier:
         )
 
         if not validation.passed:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="; ".join(validation.errors),
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="; ".join(validation.errors),
+            )
 
             await event_bus.emit(
                 Events.SIGNAL_FAILED,
@@ -259,16 +294,14 @@ class SignalCopier:
 
         if not is_auto_accept:
             # Requires manual confirmation - save and wait
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="pending_confirmation",
-                    # Store the adjusted lot size for when user confirms
-                    warnings=(parsed.warnings or []) + [
-                        f"Awaiting confirmation (lot size: {validation.adjusted_lot_size or settings.default_lot_size})"
-                    ],
-                )
+            await crud.update_signal(
+                signal_id,
+                status="pending_confirmation",
+                # Store the adjusted lot size for when user confirms
+                warnings=(parsed.warnings or []) + [
+                    f"Awaiting confirmation (lot size: {validation.adjusted_lot_size or settings.default_lot_size})"
+                ],
+            )
 
             await event_bus.emit(
                 Events.SIGNAL_PENDING_CONFIRMATION,
@@ -298,13 +331,11 @@ class SignalCopier:
             executions = await self.executor.execute(parsed, lot_size)
         except Exception as e:
             log.error("Trade execution error", error=str(e), signal_id=signal_id)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Execution error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Execution error: {str(e)}",
+            )
             await event_bus.emit(
                 Events.SIGNAL_FAILED,
                 {"id": signal_id, "errors": [str(e)]},
@@ -312,13 +343,11 @@ class SignalCopier:
             return
 
         if not executions:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Order execution failed",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Order execution failed",
+            )
 
             await event_bus.emit(
                 Events.SIGNAL_FAILED,
@@ -327,27 +356,24 @@ class SignalCopier:
             return
 
         # Save trades
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                status="executed",
-                executed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            status="executed",
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
-            for exe in executions:
-                await crud.create_trade(
-                    session,
-                    signal_id=signal_id,
-                    order_id=exe.order_id,
-                    symbol=exe.symbol,
-                    direction=exe.direction,
-                    lot_size=exe.lot_size,
-                    entry_price=exe.entry_price,
-                    stop_loss=exe.stop_loss,
-                    take_profit=exe.take_profit,
-                    tp_index=exe.tp_index,
-                )
+        for exe in executions:
+            await crud.create_trade(
+                signal_id=signal_id,
+                order_id=exe.order_id,
+                symbol=exe.symbol,
+                direction=exe.direction,
+                lot_size=exe.lot_size,
+                entry_price=exe.entry_price,
+                stop_loss=exe.stop_loss,
+                take_profit=exe.take_profit,
+                tp_index=exe.tp_index,
+            )
 
         await event_bus.emit(
             Events.TRADE_OPENED,
@@ -382,39 +408,34 @@ class SignalCopier:
         log.info("Confirming signal", signal_id=signal_id, lot_size_override=lot_size_override)
 
         # Get signal from database
-        async with async_session() as session:
-            signal = await crud.get_signal(session, signal_id)
+        signal = await crud.get_signal(signal_id)
 
         if not signal:
             log.error("Signal not found for confirmation", signal_id=signal_id)
             return False
 
-        if signal.status != "pending_confirmation":
-            log.error("Signal not pending confirmation", signal_id=signal_id, status=signal.status)
+        if signal.get("status") != "pending_confirmation":
+            log.error("Signal not pending confirmation", signal_id=signal_id, status=signal.get("status"))
             return False
 
         # Check we have the required fields
-        if not signal.symbol or not signal.entry_price or not signal.stop_loss or not signal.direction:
+        if not signal.get("symbol") or not signal.get("entry_price") or not signal.get("stop_loss") or not signal.get("direction"):
             log.error("Signal missing required fields", signal_id=signal_id)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Missing required fields",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Missing required fields",
+            )
             return False
 
-        take_profits = signal.take_profits or []
+        take_profits = signal.get("take_profits") or []
         if not take_profits:
             log.error("Signal has no take profits", signal_id=signal_id)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="No take profit levels defined",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="No take profit levels defined",
+            )
             return False
 
         # Create a ParsedSignal-like object
@@ -422,12 +443,12 @@ class SignalCopier:
             pass
 
         parsed = ConfirmedSignal()
-        parsed.direction = signal.direction
-        parsed.symbol = signal.symbol
-        parsed.entry_price = signal.entry_price
-        parsed.stop_loss = signal.stop_loss
+        parsed.direction = signal.get("direction")
+        parsed.symbol = signal.get("symbol")
+        parsed.entry_price = signal.get("entry_price")
+        parsed.stop_loss = signal.get("stop_loss")
         parsed.take_profits = take_profits
-        parsed.confidence = signal.confidence or 0.8
+        parsed.confidence = signal.get("confidence") or 0.8
         parsed.warnings = ["Manually confirmed"]
 
         # Get lot size: use override if provided, otherwise extract from warnings or use default
@@ -435,7 +456,7 @@ class SignalCopier:
             lot_size = lot_size_override
         else:
             lot_size = settings.default_lot_size
-            for warning in (signal.warnings or []):
+            for warning in (signal.get("warnings") or []):
                 if "lot size:" in warning.lower():
                     try:
                         lot_size = float(warning.split("lot size:")[1].strip().rstrip(")"))
@@ -450,47 +471,40 @@ class SignalCopier:
             executions = await self.executor.execute(parsed, lot_size)
         except Exception as e:
             log.error("Confirmed signal execution error", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Execution error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Execution error: {str(e)}",
+            )
             return False
 
         if not executions:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Order execution failed",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Order execution failed",
+            )
             return False
 
         # Save trades
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                status="executed",
-                executed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            status="executed",
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
-            for exe in executions:
-                await crud.create_trade(
-                    session,
-                    signal_id=signal_id,
-                    order_id=exe.order_id,
-                    symbol=exe.symbol,
-                    direction=exe.direction,
-                    lot_size=exe.lot_size,
-                    entry_price=exe.entry_price,
-                    stop_loss=exe.stop_loss,
-                    take_profit=exe.take_profit,
-                    tp_index=exe.tp_index,
-                )
+        for exe in executions:
+            await crud.create_trade(
+                signal_id=signal_id,
+                order_id=exe.order_id,
+                symbol=exe.symbol,
+                direction=exe.direction,
+                lot_size=exe.lot_size,
+                entry_price=exe.entry_price,
+                stop_loss=exe.stop_loss,
+                take_profit=exe.take_profit,
+                tp_index=exe.tp_index,
+            )
 
         await event_bus.emit(
             Events.TRADE_OPENED,
@@ -526,23 +540,21 @@ class SignalCopier:
         """
         log.info("Rejecting signal", signal_id=signal_id, reason=reason)
 
-        async with async_session() as session:
-            signal = await crud.get_signal(session, signal_id)
+        signal = await crud.get_signal(signal_id)
 
-            if not signal:
-                log.error("Signal not found for rejection", signal_id=signal_id)
-                return False
+        if not signal:
+            log.error("Signal not found for rejection", signal_id=signal_id)
+            return False
 
-            if signal.status != "pending_confirmation":
-                log.error("Signal not pending confirmation", signal_id=signal_id, status=signal.status)
-                return False
+        if signal.get("status") != "pending_confirmation":
+            log.error("Signal not pending confirmation", signal_id=signal_id, status=signal.get("status"))
+            return False
 
-            await crud.update_signal(
-                session,
-                signal_id,
-                status="rejected",
-                failure_reason=reason,
-            )
+        await crud.update_signal(
+            signal_id,
+            status="rejected",
+            failure_reason=reason,
+        )
 
         await event_bus.emit(
             Events.SIGNAL_SKIPPED,
@@ -564,35 +576,30 @@ class SignalCopier:
         log.info("Executing corrected signal", signal_id=signal_id, direction=direction)
 
         # Get signal from database
-        async with async_session() as session:
-            signal = await crud.get_signal(session, signal_id)
+        signal = await crud.get_signal(signal_id)
 
         if not signal:
             log.error("Signal not found for correction", signal_id=signal_id)
             return False
 
         # Check we have the required fields
-        if not signal.symbol or not signal.entry_price or not signal.stop_loss:
+        if not signal.get("symbol") or not signal.get("entry_price") or not signal.get("stop_loss"):
             log.error("Signal missing required fields", signal_id=signal_id)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Missing required fields (symbol, entry, or SL)",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Missing required fields (symbol, entry, or SL)",
+            )
             return False
 
-        take_profits = signal.take_profits or []
+        take_profits = signal.get("take_profits") or []
         if not take_profits:
             log.error("Signal has no take profits", signal_id=signal_id)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="No take profit levels defined",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="No take profit levels defined",
+            )
             return False
 
         # Create a ParsedSignal-like object
@@ -601,11 +608,11 @@ class SignalCopier:
 
         parsed = CorrectedSignal()
         parsed.direction = direction
-        parsed.symbol = signal.symbol
-        parsed.entry_price = signal.entry_price
-        parsed.stop_loss = signal.stop_loss
+        parsed.symbol = signal.get("symbol")
+        parsed.entry_price = signal.get("entry_price")
+        parsed.stop_loss = signal.get("stop_loss")
         parsed.take_profits = take_profits
-        parsed.confidence = signal.confidence or 0.8
+        parsed.confidence = signal.get("confidence") or 0.8
         parsed.warnings = ["Direction manually corrected"]
 
         # Validate
@@ -613,25 +620,21 @@ class SignalCopier:
             account_info = await self.executor.get_account_info()
         except Exception as e:
             log.error("Failed to get account info for correction", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Account info error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Account info error: {str(e)}",
+            )
             return False
 
         validation = await self.validator.validate(parsed, account_info)
 
         if not validation.passed:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="; ".join(validation.errors),
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="; ".join(validation.errors),
+            )
             log.warning("Corrected signal validation failed", errors=validation.errors)
             return False
 
@@ -642,48 +645,41 @@ class SignalCopier:
             executions = await self.executor.execute(parsed, lot_size)
         except Exception as e:
             log.error("Corrected signal execution error", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Execution error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Execution error: {str(e)}",
+            )
             return False
 
         if not executions:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Order execution failed",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Order execution failed",
+            )
             return False
 
         # Save trades
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                direction=direction,
-                status="executed",
-                executed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            direction=direction,
+            status="executed",
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
-            for exe in executions:
-                await crud.create_trade(
-                    session,
-                    signal_id=signal_id,
-                    order_id=exe.order_id,
-                    symbol=exe.symbol,
-                    direction=exe.direction,
-                    lot_size=exe.lot_size,
-                    entry_price=exe.entry_price,
-                    stop_loss=exe.stop_loss,
-                    take_profit=exe.take_profit,
-                    tp_index=exe.tp_index,
-                )
+        for exe in executions:
+            await crud.create_trade(
+                signal_id=signal_id,
+                order_id=exe.order_id,
+                symbol=exe.symbol,
+                direction=exe.direction,
+                lot_size=exe.lot_size,
+                entry_price=exe.entry_price,
+                stop_loss=exe.stop_loss,
+                take_profit=exe.take_profit,
+                tp_index=exe.tp_index,
+            )
 
         await event_bus.emit(
             Events.TRADE_OPENED,
@@ -720,15 +716,13 @@ class SignalCopier:
         log.info("Processing CLOSE signal", signal_id=signal_id, symbol=symbol)
 
         # Update signal record
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                symbol=symbol,
-                status="parsed",
-                warnings=getattr(parsed, 'warnings', []),
-                parsed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            symbol=symbol,
+            status="parsed",
+            warnings=getattr(parsed, 'warnings', []),
+            parsed_at=datetime.utcnow().isoformat(),
+        )
 
         # Get current positions
         try:
@@ -736,13 +730,11 @@ class SignalCopier:
             positions = account_info.get("positions", [])
         except Exception as e:
             log.error("Failed to get positions for close signal", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Could not fetch positions: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Could not fetch positions: {str(e)}",
+            )
             return
 
         # Find matching positions
@@ -753,13 +745,11 @@ class SignalCopier:
 
         if not matching:
             log.warning("No open positions found for symbol", symbol=symbol)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="skipped",
-                    failure_reason=f"No open positions found for {symbol}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="skipped",
+                failure_reason=f"No open positions found for {symbol}",
+            )
             await event_bus.emit(
                 Events.SIGNAL_SKIPPED,
                 {"id": signal_id, "reason": f"No open positions for {symbol}"},
@@ -779,21 +769,18 @@ class SignalCopier:
                     log.error("Failed to close position", position_id=position_id, error=str(e))
 
         # Update signal status
-        async with async_session() as session:
-            if closed_count > 0:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="executed",
-                    executed_at=datetime.utcnow(),
-                )
-            else:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Failed to close any positions",
-                )
+        if closed_count > 0:
+            await crud.update_signal(
+                signal_id,
+                status="executed",
+                executed_at=datetime.utcnow().isoformat(),
+            )
+        else:
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Failed to close any positions",
+            )
 
         await event_bus.emit(
             Events.TRADE_CLOSED,
@@ -842,15 +829,13 @@ class SignalCopier:
         broker_symbol = target_symbol + settings.symbol_suffix
 
         # Update signal record with parsed data
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                symbol=target_symbol,
-                status="parsed",
-                warnings=warnings + [f"LOT_MODIFIER: {modifier_type} (x{multiplier})"],
-                parsed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            symbol=target_symbol,
+            status="parsed",
+            warnings=warnings + [f"LOT_MODIFIER: {modifier_type} (x{multiplier})"],
+            parsed_at=datetime.utcnow().isoformat(),
+        )
 
         # Get current positions to find the matching trade
         try:
@@ -858,13 +843,11 @@ class SignalCopier:
             positions = account_info.get("positions", [])
         except Exception as e:
             log.error("Failed to get positions for lot modifier", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Could not fetch positions: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Could not fetch positions: {str(e)}",
+            )
             return
 
         # Find matching position
@@ -875,13 +858,11 @@ class SignalCopier:
 
         if not matching:
             log.warning("No open positions found for lot modifier", symbol=target_symbol)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="skipped",
-                    failure_reason=f"No open {target_symbol} positions to modify",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="skipped",
+                failure_reason=f"No open {target_symbol} positions to modify",
+            )
             await event_bus.emit(
                 Events.SIGNAL_SKIPPED,
                 {"id": signal_id, "reason": f"No open positions for {target_symbol}"},
@@ -904,36 +885,30 @@ class SignalCopier:
             direction = "SELL"
         else:
             log.error("Could not determine position direction", position_type=position_type)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Unknown position type: {position_type}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Unknown position type: {position_type}",
+            )
             return
 
         # If no SL/TP on position, we can't proceed safely
         if not stop_loss:
             log.error("Reference position has no stop loss")
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Reference position has no stop loss",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Reference position has no stop loss",
+            )
             return
 
         if not take_profit:
             log.error("Reference position has no take profit")
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Reference position has no take profit",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Reference position has no take profit",
+            )
             return
 
         # Calculate new lot size based on modifier type
@@ -973,51 +948,44 @@ class SignalCopier:
             executions = await self.executor.execute(mod_signal, new_lot_size)
         except Exception as e:
             log.error("Lot modifier execution error", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Execution error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Execution error: {str(e)}",
+            )
             return
 
         if not executions:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Additional order execution failed",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Additional order execution failed",
+            )
             return
 
         # Save trades
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                direction=direction,
-                entry_price=entry_price,
-                stop_loss=stop_loss,
-                take_profits=[take_profit],
-                status="executed",
-                executed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            direction=direction,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profits=[take_profit],
+            status="executed",
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
-            for exe in executions:
-                await crud.create_trade(
-                    session,
-                    signal_id=signal_id,
-                    order_id=exe.order_id,
-                    symbol=exe.symbol,
-                    direction=exe.direction,
-                    lot_size=exe.lot_size,
-                    entry_price=exe.entry_price,
-                    stop_loss=exe.stop_loss,
-                    take_profit=exe.take_profit,
-                    tp_index=exe.tp_index,
-                )
+        for exe in executions:
+            await crud.create_trade(
+                signal_id=signal_id,
+                order_id=exe.order_id,
+                symbol=exe.symbol,
+                direction=exe.direction,
+                lot_size=exe.lot_size,
+                entry_price=exe.entry_price,
+                stop_loss=exe.stop_loss,
+                take_profit=exe.take_profit,
+                tp_index=exe.tp_index,
+            )
 
         await event_bus.emit(
             Events.TRADE_OPENED,
@@ -1078,6 +1046,38 @@ class SignalCopier:
 
             await asyncio.sleep(5)  # Update every 5 seconds
 
+    async def restart_telegram(self):
+        """Restart the Telegram listener with fresh config from database.
+
+        This allows reconnecting after Telegram verification without server restart.
+        """
+        log.info("Restarting Telegram listener...")
+
+        # Stop existing listener if running
+        if self.telegram and self.telegram.client:
+            try:
+                await self.telegram.stop()
+            except Exception as e:
+                log.warning("Error stopping old Telegram listener", error=str(e))
+
+        # Create new listener instance (will pick up fresh config from DB)
+        self.telegram = TelegramListener()
+
+        # Start it in a background task (non-blocking)
+        asyncio.create_task(self._run_telegram_listener())
+
+        log.info("Telegram listener restart initiated")
+        return True
+
+    async def _run_telegram_listener(self):
+        """Run Telegram listener in background task."""
+        try:
+            await self.telegram.start(self.on_message)
+        except TelegramConfigError as e:
+            log.error(f"Telegram configuration error: {e}")
+        except Exception as e:
+            log.error("Telegram listener error", error=str(e))
+
     async def stop(self):
         """Stop the signal copier."""
         log.info("Stopping Signal Copier")
@@ -1099,8 +1099,36 @@ copier = SignalCopier()
 
 async def run_copier():
     """Run the signal copier (Telegram listener) in legacy single-user mode."""
+    # Check configuration first
+    is_configured, issues = check_system_config()
+
+    if not is_configured:
+        log.error(
+            "System not configured! Please set up your configuration in Admin > System Config.",
+            missing=issues,
+        )
+        log.info("API server will start, but signal processing is disabled until configuration is complete.")
+        log.info("Visit your dashboard and go to Admin > System Config to configure:")
+        for issue in issues:
+            log.info(f"  - {issue}")
+
+        # Keep running but don't start the copier - just wait
+        while True:
+            # Check config periodically
+            await asyncio.sleep(30)
+            is_configured, issues = check_system_config()
+            if is_configured:
+                log.info("Configuration detected! Starting signal copier...")
+                break
+
     try:
         await copier.start()
+    except TelegramConfigError as e:
+        log.error(f"Telegram configuration error: {e}")
+        log.info("Please configure Telegram in Admin > System Config and restart.")
+        # Keep API running
+        while True:
+            await asyncio.sleep(60)
     except Exception as e:
         log.error("Signal copier error", error=str(e))
         raise
@@ -1109,9 +1137,6 @@ async def run_copier():
 async def run_multi_tenant():
     """Run the multi-tenant signal copier."""
     log.info("Starting multi-tenant signal copier")
-
-    # Initialize database
-    await init_db()
 
     # Set up signal router as the message handler
     user_manager.set_message_handler(signal_router.route_message)

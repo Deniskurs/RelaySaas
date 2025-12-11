@@ -8,16 +8,44 @@ from anthropic import AsyncAnthropic
 
 from .models import ParsedSignal, LLMParseResult
 from .prompts import SIGNAL_PARSER_PROMPT
-from ..config import settings
+from ..database.supabase import get_system_config
 from ..utils.logger import log
 
 
 class SignalParser:
     """Parse trading signals using Claude LLM."""
 
-    def __init__(self):
-        self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.llm_model
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        """Initialize the signal parser.
+
+        Args:
+            api_key: Anthropic API key. If None, will be read from database config.
+            model: LLM model to use. If None, will be read from database config.
+        """
+        self._api_key = api_key
+        self._model = model
+        self._client: Optional[AsyncAnthropic] = None
+
+    def _get_client(self) -> AsyncAnthropic:
+        """Get or create Anthropic client, reading config from database."""
+        config = get_system_config()
+        api_key = self._api_key or config.get("anthropic_api_key", "")
+
+        if not api_key:
+            raise ValueError("Anthropic API key not configured. Set it in Admin > System Config.")
+
+        # Recreate client if API key changed
+        if self._client is None:
+            self._client = AsyncAnthropic(api_key=api_key)
+
+        return self._client
+
+    def _get_model(self) -> str:
+        """Get model from config."""
+        if self._model:
+            return self._model
+        config = get_system_config()
+        return config.get("llm_model", "claude-haiku-4-5-20251001")
 
     async def parse(self, message: str, retries: int = 3) -> Optional[Union[ParsedSignal, LLMParseResult]]:
         """Parse a message into a structured signal.
@@ -32,8 +60,11 @@ class SignalParser:
         last_error = None
         for attempt in range(retries):
             try:
-                response = await self.client.messages.create(
-                    model=self.model,
+                client = self._get_client()
+                model = self._get_model()
+
+                response = await client.messages.create(
+                    model=model,
                     max_tokens=1024,
                     system=SIGNAL_PARSER_PROMPT,
                     messages=[{"role": "user", "content": message}],

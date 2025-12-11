@@ -47,8 +47,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Database
-    database_url: str = "sqlite:///data/signals.db"
+    # Supabase (required)
+    supabase_url: str = ""
+    supabase_key: str = ""
+    supabase_service_key: str = ""
+    supabase_jwt_secret: str = ""
 
     @property
     def channel_list(self) -> List[str]:

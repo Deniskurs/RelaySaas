@@ -4,8 +4,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 from .config import settings
-from .database.database import async_session
-from .database import crud
+from .database import supabase_crud as crud
 from .parser.llm_parser import SignalParser
 from .trading.validator import TradeValidator
 from .trading.executor import TradeExecutor, ExecutorSettings
@@ -73,17 +72,15 @@ class SignalRouter:
         channel_name = message["channel_name"]
         log.info(f"{user_tag}Processing message", channel=channel_name, preview=text[:50])
 
-        # Create signal record in database with user_id
-        async with async_session() as session:
-            signal = await crud.create_signal(
-                session,
-                raw_message=text,
-                channel_name=channel_name,
-                channel_id=message.get("channel_id"),
-                message_id=message.get("message_id"),
-                user_id=user_id,  # Multi-tenant: associate with user
-            )
-            signal_id = signal.id
+        # Create signal record in Supabase with user_id
+        signal = await crud.create_signal(
+            raw_message=text,
+            channel_name=channel_name,
+            channel_id=message.get("channel_id"),
+            message_id=message.get("message_id"),
+            user_id=user_id,
+        )
+        signal_id = signal["id"]
 
         await event_bus.emit(
             Events.SIGNAL_RECEIVED,
@@ -117,19 +114,17 @@ class SignalRouter:
             if suggested:
                 warnings = warnings + [f"Suggested correction: Change to {suggested}"]
 
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="skipped",
-                    failure_reason=rejection_reason,
-                    direction=direction,
-                    symbol=symbol,
-                    entry_price=entry_price,
-                    stop_loss=stop_loss,
-                    take_profits=take_profits,
-                    warnings=warnings,
-                )
+            await crud.update_signal(
+                signal_id,
+                status="skipped",
+                failure_reason=rejection_reason,
+                direction=direction,
+                symbol=symbol,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profits=take_profits,
+                warnings=warnings,
+            )
 
             await event_bus.emit(
                 Events.SIGNAL_SKIPPED,
@@ -161,20 +156,18 @@ class SignalRouter:
             return
 
         # Update signal with parsed data (OPEN signals)
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                direction=parsed.direction,
-                symbol=parsed.symbol,
-                entry_price=parsed.entry_price,
-                stop_loss=parsed.stop_loss,
-                take_profits=parsed.take_profits,
-                confidence=parsed.confidence,
-                warnings=parsed.warnings,
-                status="parsed",
-                parsed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            direction=parsed.direction,
+            symbol=parsed.symbol,
+            entry_price=parsed.entry_price,
+            stop_loss=parsed.stop_loss,
+            take_profits=parsed.take_profits,
+            confidence=parsed.confidence,
+            warnings=parsed.warnings,
+            status="parsed",
+            parsed_at=datetime.utcnow().isoformat(),
+        )
 
         await event_bus.emit(
             Events.SIGNAL_PARSED,
@@ -203,13 +196,11 @@ class SignalRouter:
         executor = conn.metaapi_executor
         if not executor:
             log.error(f"{user_tag}No executor available")
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="MetaApi executor not connected",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="MetaApi executor not connected",
+            )
             return
 
         # Validate
@@ -217,25 +208,21 @@ class SignalRouter:
             account_info = await executor.get_account_info()
         except Exception as e:
             log.error(f"{user_tag}Failed to get account info", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Account info error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Account info error: {str(e)}",
+            )
             return
 
         validator = self._get_validator(user_id, conn)
         if not validator:
             log.error(f"{user_tag}No validator available")
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Validator not available",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Validator not available",
+            )
             return
 
         validation = await validator.validate(parsed, account_info)
@@ -252,13 +239,11 @@ class SignalRouter:
         )
 
         if not validation.passed:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="; ".join(validation.errors),
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="; ".join(validation.errors),
+            )
             log.warning(
                 f"{user_tag}Signal validation failed",
                 signal_id=signal_id,
@@ -280,15 +265,13 @@ class SignalRouter:
 
         if not is_auto_accept:
             # Requires manual confirmation
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="pending_confirmation",
-                    warnings=(parsed.warnings or []) + [
-                        f"Awaiting confirmation (lot size: {lot_size})"
-                    ],
-                )
+            await crud.update_signal(
+                signal_id,
+                status="pending_confirmation",
+                warnings=(parsed.warnings or []) + [
+                    f"Awaiting confirmation (lot size: {lot_size})"
+                ],
+            )
 
             await event_bus.emit(
                 Events.SIGNAL_PENDING_CONFIRMATION,
@@ -317,48 +300,41 @@ class SignalRouter:
             executions = await executor.execute(parsed, lot_size)
         except Exception as e:
             log.error(f"{user_tag}Trade execution error", error=str(e), signal_id=signal_id)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Execution error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Execution error: {str(e)}",
+            )
             return
 
         if not executions:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Order execution failed",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Order execution failed",
+            )
             return
 
-        # Save trades
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                status="executed",
-                executed_at=datetime.utcnow(),
-            )
+        # Save trades and update signal
+        await crud.update_signal(
+            signal_id,
+            status="executed",
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
-            for exe in executions:
-                await crud.create_trade(
-                    session,
-                    signal_id=signal_id,
-                    order_id=exe.order_id,
-                    symbol=exe.symbol,
-                    direction=exe.direction,
-                    lot_size=exe.lot_size,
-                    entry_price=exe.entry_price,
-                    stop_loss=exe.stop_loss,
-                    take_profit=exe.take_profit,
-                    tp_index=exe.tp_index,
-                    user_id=user_id,  # Multi-tenant: associate trade with user
-                )
+        for exe in executions:
+            await crud.create_trade(
+                signal_id=signal_id,
+                order_id=exe.order_id,
+                symbol=exe.symbol,
+                direction=exe.direction,
+                lot_size=exe.lot_size,
+                entry_price=exe.entry_price,
+                stop_loss=exe.stop_loss,
+                take_profit=exe.take_profit,
+                tp_index=exe.tp_index,
+                user_id=user_id,
+            )
 
         await event_bus.emit(
             Events.TRADE_OPENED,
@@ -396,28 +372,24 @@ class SignalRouter:
 
         log.info(f"{user_tag}Processing CLOSE signal", signal_id=signal_id, symbol=symbol)
 
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                symbol=symbol,
-                status="parsed",
-                warnings=getattr(parsed, 'warnings', []),
-                parsed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            symbol=symbol,
+            status="parsed",
+            warnings=getattr(parsed, 'warnings', []),
+            parsed_at=datetime.utcnow().isoformat(),
+        )
 
         try:
             account_info = await executor.get_account_info()
             positions = account_info.get("positions", [])
         except Exception as e:
             log.error(f"{user_tag}Failed to get positions for close signal", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Could not fetch positions: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Could not fetch positions: {str(e)}",
+            )
             return
 
         # Find matching positions
@@ -428,13 +400,11 @@ class SignalRouter:
 
         if not matching:
             log.warning(f"{user_tag}No open positions found for symbol", symbol=symbol)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="skipped",
-                    failure_reason=f"No open positions found for {symbol}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="skipped",
+                failure_reason=f"No open positions found for {symbol}",
+            )
             return
 
         # Close all matching positions
@@ -448,21 +418,18 @@ class SignalRouter:
                 except Exception as e:
                     log.error(f"{user_tag}Failed to close position", position_id=position_id, error=str(e))
 
-        async with async_session() as session:
-            if closed_count > 0:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="executed",
-                    executed_at=datetime.utcnow(),
-                )
-            else:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Failed to close any positions",
-                )
+        if closed_count > 0:
+            await crud.update_signal(
+                signal_id,
+                status="executed",
+                executed_at=datetime.utcnow().isoformat(),
+            )
+        else:
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Failed to close any positions",
+            )
 
         await event_bus.emit(
             Events.TRADE_CLOSED,
@@ -509,28 +476,24 @@ class SignalRouter:
             multiplier=multiplier,
         )
 
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                symbol=target_symbol,
-                status="parsed",
-                warnings=warnings + [f"LOT_MODIFIER: {modifier_type} (x{multiplier})"],
-                parsed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            symbol=target_symbol,
+            status="parsed",
+            warnings=warnings + [f"LOT_MODIFIER: {modifier_type} (x{multiplier})"],
+            parsed_at=datetime.utcnow().isoformat(),
+        )
 
         try:
             account_info = await executor.get_account_info()
             positions = account_info.get("positions", [])
         except Exception as e:
             log.error(f"{user_tag}Failed to get positions for lot modifier", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Could not fetch positions: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Could not fetch positions: {str(e)}",
+            )
             return
 
         # Find matching position
@@ -541,13 +504,11 @@ class SignalRouter:
 
         if not matching:
             log.warning(f"{user_tag}No open positions found for lot modifier", symbol=target_symbol)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="skipped",
-                    failure_reason=f"No open {target_symbol} positions to modify",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="skipped",
+                failure_reason=f"No open {target_symbol} positions to modify",
+            )
             return
 
         # Use most recent position as reference
@@ -563,23 +524,19 @@ class SignalRouter:
             direction = "SELL"
         else:
             log.error(f"{user_tag}Could not determine position direction", position_type=position_type)
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Unknown position type: {position_type}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Unknown position type: {position_type}",
+            )
             return
 
         if not stop_loss or not take_profit:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Reference position has no SL/TP",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Reference position has no SL/TP",
+            )
             return
 
         # Calculate new lot size
@@ -614,52 +571,45 @@ class SignalRouter:
             executions = await executor.execute(mod_signal, new_lot_size)
         except Exception as e:
             log.error(f"{user_tag}Lot modifier execution error", error=str(e))
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason=f"Execution error: {str(e)}",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Execution error: {str(e)}",
+            )
             return
 
         if not executions:
-            async with async_session() as session:
-                await crud.update_signal(
-                    session,
-                    signal_id,
-                    status="failed",
-                    failure_reason="Additional order execution failed",
-                )
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Additional order execution failed",
+            )
             return
 
         # Save trades
-        async with async_session() as session:
-            await crud.update_signal(
-                session,
-                signal_id,
-                direction=direction,
-                entry_price=entry_price,
-                stop_loss=stop_loss,
-                take_profits=[take_profit],
-                status="executed",
-                executed_at=datetime.utcnow(),
-            )
+        await crud.update_signal(
+            signal_id,
+            direction=direction,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profits=[take_profit],
+            status="executed",
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
-            for exe in executions:
-                await crud.create_trade(
-                    session,
-                    signal_id=signal_id,
-                    order_id=exe.order_id,
-                    symbol=exe.symbol,
-                    direction=exe.direction,
-                    lot_size=exe.lot_size,
-                    entry_price=exe.entry_price,
-                    stop_loss=exe.stop_loss,
-                    take_profit=exe.take_profit,
-                    tp_index=exe.tp_index,
-                    user_id=user_id,
-                )
+        for exe in executions:
+            await crud.create_trade(
+                signal_id=signal_id,
+                order_id=exe.order_id,
+                symbol=exe.symbol,
+                direction=exe.direction,
+                lot_size=exe.lot_size,
+                entry_price=exe.entry_price,
+                stop_loss=exe.stop_loss,
+                take_profit=exe.take_profit,
+                tp_index=exe.tp_index,
+                user_id=user_id,
+            )
 
         await event_bus.emit(
             Events.TRADE_OPENED,

@@ -41,6 +41,8 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          purple: "#a855f7",
+          blue: "#3b82f6",
         },
         card: {
           DEFAULT: "hsl(var(--card))",

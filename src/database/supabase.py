@@ -3,10 +3,26 @@ import os
 from typing import Optional
 from supabase import create_client, Client
 
-# Initialize Supabase client
+from ..config import settings as app_settings
+
+# Initialize Supabase clients
 _supabase: Optional[Client] = None
+_supabase_admin: Optional[Client] = None
 
 DEFAULT_USER_ID = "default"
+
+# System user UUID for single-user/legacy mode
+# This is a fixed UUID that represents the "system" user when not in multi-tenant mode
+SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000"
+
+
+def get_default_user_id() -> str:
+    """Get the default user ID for single-user mode.
+
+    Returns a valid UUID that can be used in database operations.
+    In multi-tenant mode, this should be replaced with the actual user's ID.
+    """
+    return SYSTEM_USER_ID
 
 # Default settings (used when creating new user settings)
 DEFAULT_SETTINGS = {
@@ -29,24 +45,42 @@ DEFAULT_SETTINGS = {
 
 
 def get_supabase() -> Client:
-    """Get or create Supabase client."""
+    """Get or create Supabase client (uses anon key, respects RLS)."""
     global _supabase
     if _supabase is None:
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
+        url = app_settings.supabase_url or os.getenv("SUPABASE_URL")
+        key = app_settings.supabase_key or os.getenv("SUPABASE_KEY")
         if not url or not key:
             raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set")
         _supabase = create_client(url, key)
     return _supabase
 
 
-def get_settings(user_id: str = DEFAULT_USER_ID) -> dict:
+def get_supabase_admin() -> Client:
+    """Get or create Supabase admin client (uses service role key, bypasses RLS).
+
+    Use this for backend operations that need to read/write data across all users,
+    such as admin operations, profile lookups during auth, etc.
+    """
+    global _supabase_admin
+    if _supabase_admin is None:
+        url = app_settings.supabase_url or os.getenv("SUPABASE_URL")
+        # Try service role key first, fall back to anon key
+        key = app_settings.supabase_service_key or app_settings.supabase_key or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
+        if not url or not key:
+            raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
+        _supabase_admin = create_client(url, key)
+    return _supabase_admin
+
+
+def get_settings(user_id: str = SYSTEM_USER_ID) -> dict:
     """Get settings for a user, create defaults if not exists."""
     try:
-        supabase = get_supabase()
+        # Use admin client to bypass RLS for backend operations
+        supabase = get_supabase_admin()
 
         # Try to get existing settings
-        result = supabase.table("user_settings") \
+        result = supabase.table("user_settings_v2") \
             .select("*") \
             .eq("user_id", user_id) \
             .execute()
@@ -56,7 +90,7 @@ def get_settings(user_id: str = DEFAULT_USER_ID) -> dict:
 
         # Create default settings for new user
         new_settings = {**DEFAULT_SETTINGS, "user_id": user_id}
-        result = supabase.table("user_settings") \
+        result = supabase.table("user_settings_v2") \
             .insert(new_settings) \
             .execute()
 
@@ -74,7 +108,8 @@ def get_settings(user_id: str = DEFAULT_USER_ID) -> dict:
 def update_settings(user_id: str, settings: dict) -> dict:
     """Update settings for a user."""
     try:
-        supabase = get_supabase()
+        # Use admin client to bypass RLS for backend operations
+        supabase = get_supabase_admin()
 
         # Filter out None values and internal fields
         updates = {k: v for k, v in settings.items()
@@ -84,7 +119,7 @@ def update_settings(user_id: str, settings: dict) -> dict:
             return get_settings(user_id)
 
         # Ensure user exists first
-        existing = supabase.table("user_settings") \
+        existing = supabase.table("user_settings_v2") \
             .select("id") \
             .eq("user_id", user_id) \
             .execute()
@@ -92,12 +127,12 @@ def update_settings(user_id: str, settings: dict) -> dict:
         if not existing.data:
             # Create with provided settings
             new_settings = {**DEFAULT_SETTINGS, **updates, "user_id": user_id}
-            result = supabase.table("user_settings") \
+            result = supabase.table("user_settings_v2") \
                 .insert(new_settings) \
                 .execute()
         else:
             # Update existing
-            result = supabase.table("user_settings") \
+            result = supabase.table("user_settings_v2") \
                 .update(updates) \
                 .eq("user_id", user_id) \
                 .execute()
@@ -150,3 +185,138 @@ def _format_settings(data: dict) -> dict:
         "paused": bool(data.get("paused")) if data.get("paused") is not None else False,
         "telegram_channel_ids": data.get("telegram_channel_ids") or [],
     }
+
+
+# =============================================================================
+# System Configuration (Admin-only settings stored in Supabase)
+# =============================================================================
+
+# Config keys that can be stored in system_config table
+SYSTEM_CONFIG_KEYS = [
+    # LLM
+    "anthropic_api_key",
+    "llm_model",
+    # MetaApi
+    "metaapi_token",
+    "metaapi_account_id",
+    # Telegram
+    "telegram_api_id",
+    "telegram_api_hash",
+    "telegram_phone",
+    "telegram_channel_ids",
+    "telegram_session",  # Saved session string for auto-reconnect
+    # Trading defaults
+    "default_lot_size",
+    "max_lot_size",
+    "max_open_trades",
+    "max_risk_percent",
+    "symbol_suffix",
+    "split_tps",
+    "tp_split_ratios",
+    "enable_breakeven",
+]
+
+
+def get_system_config() -> dict:
+    """Get all system configuration from Supabase ONLY.
+
+    Does NOT fall back to environment variables - config must be set in database via admin panel.
+    Returns empty strings for unconfigured values.
+    """
+    # Default values (no env var fallback)
+    defaults = {
+        # LLM
+        "anthropic_api_key": "",
+        "llm_model": "claude-haiku-4-5-20251001",
+        # MetaApi
+        "metaapi_token": "",
+        "metaapi_account_id": "",
+        # Telegram
+        "telegram_api_id": "",
+        "telegram_api_hash": "",
+        "telegram_phone": "",
+        "telegram_channel_ids": "",
+        # Trading defaults
+        "default_lot_size": "0.01",
+        "max_lot_size": "0.1",
+        "max_open_trades": "5",
+        "max_risk_percent": "2.0",
+        "symbol_suffix": "",
+        "split_tps": "true",
+        "tp_split_ratios": "0.5,0.3,0.2",
+        "enable_breakeven": "true",
+    }
+
+    try:
+        supabase = get_supabase_admin()
+        result = supabase.table("system_config").select("*").execute()
+
+        # Build config dict from database
+        config = dict(defaults)  # Start with defaults
+        for row in (result.data or []):
+            key = row.get("key")
+            value = row.get("value")
+            if key and value:  # Only override if value is not empty
+                config[key] = value
+
+        return config
+
+    except Exception as e:
+        print(f"[Supabase] Error getting system config: {e}")
+        return defaults
+
+
+def get_system_config_value(key: str, default: str = "") -> str:
+    """Get a single system configuration value from database ONLY.
+
+    Does NOT fall back to environment variables.
+    """
+    try:
+        supabase = get_supabase_admin()
+
+        result = supabase.table("system_config").select("value").eq("key", key).execute()
+
+        if result.data and len(result.data) > 0 and result.data[0].get("value"):
+            return result.data[0]["value"]
+
+        return default
+
+    except Exception as e:
+        print(f"[Supabase] Error getting config key {key}: {e}")
+        return default
+
+
+def update_system_config(updates: dict) -> dict:
+    """Update system configuration values.
+
+    Uses upsert to create or update each key.
+    """
+    try:
+        supabase = get_supabase_admin()
+
+        for key, value in updates.items():
+            if key not in SYSTEM_CONFIG_KEYS:
+                continue
+
+            # Upsert the config value
+            supabase.table("system_config").upsert({
+                "key": key,
+                "value": str(value) if value is not None else "",
+            }, on_conflict="key").execute()
+
+        return get_system_config()
+
+    except Exception as e:
+        print(f"[Supabase] Error updating system config: {e}")
+        raise e
+
+
+def delete_system_config_key(key: str) -> bool:
+    """Delete a system configuration key (will fall back to env var)."""
+    try:
+        supabase = get_supabase_admin()
+        supabase.table("system_config").delete().eq("key", key).execute()
+        return True
+    except Exception as e:
+        print(f"[Supabase] Error deleting config key {key}: {e}")
+        return False

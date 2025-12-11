@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/contexts/AuthContext";
 import { transformPositions, transformSignals, transformStats } from "@/lib/transformers";
 import DashboardLayout from "@/components/Layout/DashboardLayout";
 import Sidebar from "@/components/Layout/Sidebar";
@@ -11,6 +12,8 @@ import StatsBar from "@/components/StatsBar";
 import AccountCard from "@/components/AccountCard";
 import PerformanceChart from "@/components/PerformanceChart";
 import SettingsPage from "@/components/Settings/SettingsPage";
+import AdminPanel from "@/components/Admin/AdminPanel";
+import SetupBanner from "@/components/SetupBanner";
 
 export default function Dashboard() {
   const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${
@@ -18,6 +21,8 @@ export default function Dashboard() {
   }/ws`;
   const { events, isConnected, lastMessage } = useWebSocket(wsUrl);
   const { fetchData, postData } = useApi();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === "admin";
 
   const [account, setAccount] = useState({
     balance: 0,
@@ -105,6 +110,9 @@ export default function Dashboard() {
 
   const renderDashboard = () => (
     <div className="space-y-6">
+      {/* Setup Banner - shows if system not configured */}
+      <SetupBanner onNavigateToAdmin={() => setActiveTab("admin")} />
+
       {/* Top Section: Account Overview */}
       <section>
         <AccountCard account={account} />
@@ -160,6 +168,8 @@ export default function Dashboard() {
             <PerformanceChart stats={stats} isLoading={isLoading} />
           </div>
         );
+      case "admin":
+        return isAdmin ? <AdminPanel /> : renderDashboard();
       case "dashboard":
       default:
         return renderDashboard();
@@ -176,6 +186,8 @@ export default function Dashboard() {
         return "Open Positions";
       case "account":
         return "Account";
+      case "admin":
+        return "Admin Dashboard";
       default:
         return "Trading Dashboard";
     }

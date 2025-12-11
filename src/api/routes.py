@@ -4,11 +4,10 @@ from typing import Optional, List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database.database import get_session
-from ..database import crud
-from ..database.models import Signal, Trade
+from ..database import supabase_crud as crud
+from ..database import supabase as supabase_db
+from ..database.supabase import SYSTEM_USER_ID
 
 
 router = APIRouter()
@@ -21,21 +20,18 @@ class SignalResponse(BaseModel):
     id: int
     raw_message: str
     channel_name: str
-    channel_id: Optional[str]
-    direction: Optional[str]
-    symbol: Optional[str]
-    entry_price: Optional[float]
-    stop_loss: Optional[float]
-    take_profits: list
-    confidence: Optional[float]
-    warnings: list
+    channel_id: Optional[str] = None
+    direction: Optional[str] = None
+    symbol: Optional[str] = None
+    entry_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profits: list = []
+    confidence: Optional[float] = None
+    warnings: list = []
     status: str
-    failure_reason: Optional[str]
+    failure_reason: Optional[str] = None
     received_at: datetime
-    parsed_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
+    parsed_at: Optional[datetime] = None
 
 
 class TradeResponse(BaseModel):
@@ -52,14 +48,12 @@ class TradeResponse(BaseModel):
     take_profit: float
     tp_index: int
     status: str
-    open_price: Optional[float]
-    close_price: Optional[float]
-    profit: Optional[float]
-    opened_at: Optional[datetime]
-    closed_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
+    open_price: Optional[float] = None
+    close_price: Optional[float] = None
+    profit: Optional[float] = None
+    created_at: Optional[datetime] = None
+    opened_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
 
 
 class StatsResponse(BaseModel):
@@ -149,20 +143,16 @@ async def get_signals(
     limit: int = Query(50, le=200),
     offset: int = 0,
     status: Optional[str] = None,
-    session: AsyncSession = Depends(get_session),
 ):
     """Get list of signals with optional filtering."""
-    signals = await crud.get_signals(session, limit=limit, offset=offset, status=status)
+    signals = await crud.get_signals(limit=limit, offset=offset, status=status)
     return signals
 
 
 @router.get("/signals/{signal_id}", response_model=SignalResponse)
-async def get_signal(
-    signal_id: int,
-    session: AsyncSession = Depends(get_session),
-):
+async def get_signal(signal_id: int):
     """Get a specific signal by ID."""
-    signal = await crud.get_signal(session, signal_id)
+    signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     return signal
@@ -174,29 +164,24 @@ async def get_trades(
     limit: int = Query(50, le=200),
     offset: int = 0,
     status: Optional[str] = None,
-    session: AsyncSession = Depends(get_session),
 ):
     """Get list of trades with optional filtering."""
-    trades = await crud.get_trades(session, limit=limit, offset=offset, status=status)
+    trades = await crud.get_trades(limit=limit, offset=offset, status=status)
     return trades
 
 
 @router.get("/trades/open", response_model=List[TradeResponse])
-async def get_open_trades(
-    session: AsyncSession = Depends(get_session),
-):
+async def get_open_trades():
     """Get all open trades."""
-    trades = await crud.get_open_trades(session)
+    trades = await crud.get_open_trades()
     return trades
 
 
 # Statistics endpoint
 @router.get("/stats", response_model=StatsResponse)
-async def get_stats(
-    session: AsyncSession = Depends(get_session),
-):
+async def get_stats():
     """Get trading statistics."""
-    stats = await crud.get_stats(session)
+    stats = await crud.get_stats()
     return StatsResponse(**stats)
 
 
@@ -235,7 +220,6 @@ async def get_live_positions():
 async def get_settings_endpoint():
     """Get all application settings from Supabase."""
     try:
-        from ..database import supabase as supabase_db
         settings = supabase_db.get_settings()
         return SettingsResponse(**settings)
     except Exception as e:
@@ -249,9 +233,8 @@ async def update_settings_endpoint(
 ):
     """Update application settings in Supabase."""
     try:
-        from ..database import supabase as supabase_db
         updates = settings.model_dump(exclude_none=True)
-        updated = supabase_db.update_settings("default", updates)
+        updated = supabase_db.update_settings(SYSTEM_USER_ID, updates)
         return SettingsResponse(**updated)
     except Exception as e:
         print(f"[API] Error updating settings: {e}")
@@ -262,16 +245,14 @@ async def update_settings_endpoint(
 @router.post("/control/pause", response_model=StatusResponse)
 async def pause_processing():
     """Pause signal processing."""
-    from ..database import supabase as supabase_db
-    supabase_db.update_settings("default", {"paused": True})
+    supabase_db.update_settings(SYSTEM_USER_ID, {"paused": True})
     return StatusResponse(status="paused")
 
 
 @router.post("/control/resume", response_model=StatusResponse)
 async def resume_processing():
     """Resume signal processing."""
-    from ..database import supabase as supabase_db
-    supabase_db.update_settings("default", {"paused": False})
+    supabase_db.update_settings(SYSTEM_USER_ID, {"paused": False})
     return StatusResponse(status="resumed")
 
 
@@ -298,21 +279,25 @@ def set_copier(copier):
     _copier = copier
 
 
+def get_copier():
+    """Get the copier instance."""
+    return _copier
+
+
 @router.post("/signals/{signal_id}/correct", response_model=SignalCorrectionResponse)
 async def correct_signal(
     signal_id: int,
     correction: SignalCorrectionRequest,
-    session: AsyncSession = Depends(get_session),
 ):
     """Correct a skipped/failed signal's direction and execute it."""
-    signal = await crud.get_signal(session, signal_id)
+    signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
 
-    if signal.status not in ["skipped", "failed"]:
+    if signal.get("status") not in ["skipped", "failed"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Can only correct skipped or failed signals, current status: {signal.status}"
+            detail=f"Can only correct skipped or failed signals, current status: {signal.get('status')}"
         )
 
     if not _copier:
@@ -332,8 +317,8 @@ async def correct_signal(
         )
     else:
         # Get updated signal to see what went wrong
-        updated_signal = await crud.get_signal(session, signal_id)
-        failure_reason = updated_signal.failure_reason if updated_signal else "Unknown error"
+        updated_signal = await crud.get_signal(signal_id)
+        failure_reason = updated_signal.get("failure_reason") if updated_signal else "Unknown error"
         return SignalCorrectionResponse(
             status="failed",
             message=f"Correction failed: {failure_reason}",
@@ -351,17 +336,16 @@ class SignalConfirmRequest(BaseModel):
 async def confirm_signal(
     signal_id: int,
     confirm_request: SignalConfirmRequest = SignalConfirmRequest(),
-    session: AsyncSession = Depends(get_session),
 ):
     """Confirm and execute a pending signal with optional lot size override."""
-    signal = await crud.get_signal(session, signal_id)
+    signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
 
-    if signal.status != "pending_confirmation":
+    if signal.get("status") != "pending_confirmation":
         raise HTTPException(
             status_code=400,
-            detail=f"Signal not pending confirmation, current status: {signal.status}"
+            detail=f"Signal not pending confirmation, current status: {signal.get('status')}"
         )
 
     if not _copier:
@@ -393,8 +377,8 @@ async def confirm_signal(
             executed=True,
         )
     else:
-        updated_signal = await crud.get_signal(session, signal_id)
-        failure_reason = updated_signal.failure_reason if updated_signal else "Unknown error"
+        updated_signal = await crud.get_signal(signal_id)
+        failure_reason = updated_signal.get("failure_reason") if updated_signal else "Unknown error"
         return SignalCorrectionResponse(
             status="failed",
             message=f"Execution failed: {failure_reason}",
@@ -411,17 +395,16 @@ class SignalRejectRequest(BaseModel):
 async def reject_signal(
     signal_id: int,
     rejection: SignalRejectRequest = SignalRejectRequest(),
-    session: AsyncSession = Depends(get_session),
 ):
     """Reject a pending signal."""
-    signal = await crud.get_signal(session, signal_id)
+    signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
 
-    if signal.status != "pending_confirmation":
+    if signal.get("status") != "pending_confirmation":
         raise HTTPException(
             status_code=400,
-            detail=f"Signal not pending confirmation, current status: {signal.status}"
+            detail=f"Signal not pending confirmation, current status: {signal.get('status')}"
         )
 
     if not _copier:
@@ -443,6 +426,51 @@ async def reject_signal(
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+
+# System status endpoint
+class SystemStatusResponse(BaseModel):
+    """System configuration status."""
+    is_configured: bool
+    missing_config: List[str] = []
+    warnings: List[str] = []
+
+
+@router.get("/system/status", response_model=SystemStatusResponse)
+async def get_system_status():
+    """Check if the system is properly configured.
+
+    Returns configuration status and any missing items.
+    """
+    from ..database.supabase import get_system_config
+
+    config = get_system_config()
+    missing = []
+    warnings = []
+
+    # Check required configuration
+    if not config.get("anthropic_api_key"):
+        missing.append("Anthropic API Key")
+    if not config.get("metaapi_token"):
+        missing.append("MetaApi Token")
+    if not config.get("metaapi_account_id"):
+        missing.append("MetaApi Account ID")
+    if not config.get("telegram_api_id"):
+        missing.append("Telegram API ID")
+    if not config.get("telegram_api_hash"):
+        missing.append("Telegram API Hash")
+    if not config.get("telegram_phone"):
+        missing.append("Telegram Phone")
+
+    # Check optional but important config
+    if not config.get("telegram_channel_ids"):
+        warnings.append("No Telegram channels configured - signals won't be received")
+
+    return SystemStatusResponse(
+        is_configured=len(missing) == 0,
+        missing_config=missing,
+        warnings=warnings,
+    )
 
 
 # Lot size preset endpoints
@@ -500,26 +528,16 @@ class LastTradeLotResponse(BaseModel):
 
 
 @router.get("/account/last-trade-lot", response_model=LastTradeLotResponse)
-async def get_last_trade_lot(
-    session: AsyncSession = Depends(get_session),
-):
+async def get_last_trade_lot():
     """Get the lot size of the most recently executed trade."""
-    from sqlalchemy import select, desc
-    from ..database.models import Trade
-
-    result = await session.execute(
-        select(Trade)
-        .order_by(desc(Trade.opened_at))
-        .limit(1)
-    )
-    trade = result.scalar_one_or_none()
+    trade = await crud.get_last_trade()
 
     if trade:
         return LastTradeLotResponse(
-            lot_size=trade.lot_size,
-            symbol=trade.symbol,
-            direction=trade.direction,
-            timestamp=trade.opened_at,
+            lot_size=trade.get("lot_size"),
+            symbol=trade.get("symbol"),
+            direction=trade.get("direction"),
+            timestamp=trade.get("opened_at") or trade.get("created_at"),
         )
 
     return LastTradeLotResponse()

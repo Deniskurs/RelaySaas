@@ -21,14 +21,24 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch profile data
+  // Fetch profile data with timeout
   const fetchProfile = useCallback(async (userId) => {
     try {
-      const { data, error } = await getProfile(userId);
+      console.log("Fetching profile for:", userId);
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Profile fetch timeout")), 5000)
+      );
+
+      const fetchPromise = getProfile(userId);
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+
       if (error) {
         console.error("Error fetching profile:", error);
         return null;
       }
+      console.log("Profile fetched:", data);
       return data;
     } catch (e) {
       console.error("Error fetching profile:", e);
@@ -38,29 +48,87 @@ export function AuthProvider({ children }) {
 
   // Initialize auth state
   useEffect(() => {
+    let mounted = true;
+
     // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    const initAuth = async () => {
+      console.log("initAuth: Starting...");
+      try {
+        console.log("initAuth: Getting session...");
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log("initAuth: Session result:", { hasSession: !!session, error });
 
-      if (session?.user) {
-        const profileData = await fetchProfile(session.user.id);
-        setProfile(profileData);
+        if (error) {
+          console.error("Error getting session:", error);
+          if (mounted) {
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        if (mounted) {
+          console.log("initAuth: Setting session and user...");
+          setSession(session);
+          setUser(session?.user ?? null);
+
+          if (session?.user) {
+            console.log("initAuth: Fetching profile...");
+            try {
+              const profileData = await fetchProfile(session.user.id);
+              console.log("initAuth: Profile result:", profileData);
+              if (mounted) {
+                setProfile(profileData);
+              }
+            } catch (profileError) {
+              // Profile fetch failed but user is authenticated - continue without profile
+              console.warn("initAuth: Profile fetch failed, continuing without profile:", profileError);
+              if (mounted) {
+                // Create a minimal profile from user metadata
+                setProfile({
+                  id: session.user.id,
+                  email: session.user.email,
+                  full_name: session.user.user_metadata?.full_name || null,
+                  role: "user",  // Default role
+                  status: "active",
+                });
+              }
+            }
+          }
+
+          console.log("initAuth: Setting isLoading to false");
+          setIsLoading(false);
+        }
+      } catch (e) {
+        console.error("Error initializing auth:", e);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
+    };
 
-      setIsLoading(false);
-    });
+    initAuth();
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event);
+
+      if (!mounted) return;
+
+      // Skip INITIAL_SESSION as we handle it in initAuth
+      if (event === "INITIAL_SESSION") {
+        return;
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
         const profileData = await fetchProfile(session.user.id);
-        setProfile(profileData);
+        if (mounted) {
+          setProfile(profileData);
+        }
       } else {
         setProfile(null);
       }
@@ -69,9 +137,22 @@ export function AuthProvider({ children }) {
       if (event === "SIGNED_OUT") {
         setProfile(null);
       }
+
+      // Token refreshed - no action needed, session is already updated
+      if (event === "TOKEN_REFRESHED") {
+        console.log("Token refreshed successfully");
+      }
+
+      // Ensure loading is false after auth state changes
+      if (mounted) {
+        setIsLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [fetchProfile]);
 
   // Sign in with email

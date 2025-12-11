@@ -4,8 +4,7 @@ from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.types import Channel, Chat
 
-from .client import create_telegram_client
-from ..config import settings
+from .client import create_telegram_client, get_telegram_config, TelegramConfigError
 from ..utils.logger import log
 
 
@@ -64,11 +63,19 @@ class TelegramListener:
 
     def _get_phone(self) -> str:
         """Get phone number based on mode."""
-        return self._phone if self._is_multi_tenant else settings.telegram_phone
+        if self._is_multi_tenant:
+            return self._phone
+        # Get from database config
+        config = get_telegram_config()
+        return config["phone"]
 
     def _get_channel_list(self) -> List[str]:
         """Get channel list based on mode."""
-        return self._channel_ids if self._is_multi_tenant and self._channel_ids else settings.channel_list
+        if self._is_multi_tenant and self._channel_ids:
+            return self._channel_ids
+        # Get from database config
+        config = get_telegram_config()
+        return config["channel_ids"]
 
     async def start(self, on_message: Callable):
         """Start the Telegram listener.

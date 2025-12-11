@@ -187,17 +187,26 @@ Already configured, but ensure these are set:
 
 ```env
 SUPABASE_URL=https://jvgeyxoiekgvfwiixvql.supabase.co
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...  # anon key
 
-# Optional: For JWT verification (more secure)
+# REQUIRED for admin features and auth:
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...  # service_role key
 SUPABASE_JWT_SECRET=+wOF1M6KyEMRR2s98hcF/HEK3bTm/zMDtfFs9fFuDL+osZn342sxF9E+LgePkmnAAQF+9dt1ER241+PaCXze3Q==
 ```
 
-To get JWT secret:
+To get these keys:
 
-1. Go to **Project Settings** > **API**
-2. Find **JWT Secret** under "JWT Settings"
-3. Copy and add to .env
+1. Go to **Project Settings** > **API** in Supabase Dashboard
+2. **anon key** (SUPABASE_KEY): Under "Project API keys" - public, safe for client
+3. **service_role key** (SUPABASE_SERVICE_KEY): Under "Project API keys" - SECRET, bypasses RLS
+4. **JWT Secret** (SUPABASE_JWT_SECRET): Under "JWT Settings"
+
+**IMPORTANT:** The `SUPABASE_SERVICE_KEY` is required for the backend to:
+- Fetch user profiles during authentication
+- Access all data in admin endpoints
+- Bypass Row Level Security policies
+
+Never expose the service_role key to the frontend!
 
 ### Frontend (dashboard/.env)
 

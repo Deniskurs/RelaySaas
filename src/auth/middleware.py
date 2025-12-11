@@ -8,11 +8,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from .models import AuthUser
-from ..database.supabase import get_supabase
+from ..config import settings as app_settings
+from ..database.supabase import get_supabase_admin
 
-# JWT settings from Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+# JWT settings from Supabase (using pydantic settings first, fallback to env vars)
+SUPABASE_URL = app_settings.supabase_url or os.getenv("SUPABASE_URL", "")
+SUPABASE_JWT_SECRET = app_settings.supabase_jwt_secret or os.getenv("SUPABASE_JWT_SECRET", "")
 
 # Extract project ref from URL for JWT verification
 PROJECT_REF = SUPABASE_URL.replace("https://", "").split(".")[0] if SUPABASE_URL else ""
@@ -33,7 +34,7 @@ async def verify_jwt(token: str) -> Optional[dict]:
     try:
         # Supabase JWTs can be verified with the anon key as secret
         # or with the JWT secret (preferred for production)
-        secret = SUPABASE_JWT_SECRET or os.getenv("SUPABASE_KEY", "")
+        secret = SUPABASE_JWT_SECRET or app_settings.supabase_key or os.getenv("SUPABASE_KEY", "")
 
         # Try to decode with HS256
         payload = jwt.decode(
@@ -62,13 +63,15 @@ async def get_user_profile(user_id: str) -> Optional[dict]:
         Profile dict if found, None otherwise.
     """
     try:
-        supabase = get_supabase()
+        # Use admin client to bypass RLS - backend needs to read any user's profile
+        supabase = get_supabase_admin()
         result = supabase.table("profiles").select("*").eq("id", user_id).execute()
 
         if result.data and len(result.data) > 0:
             return result.data[0]
         return None
-    except Exception:
+    except Exception as e:
+        print(f"[Auth] Error fetching profile for {user_id}: {e}")
         return None
 
 

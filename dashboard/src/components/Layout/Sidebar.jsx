@@ -54,11 +54,8 @@ export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
   };
 
   const handleNavClick = (itemId) => {
-    if (itemId === "admin") {
-      navigate("/admin");
-    } else {
-      onTabChange(itemId);
-    }
+    // All navigation now goes through the tab system
+    onTabChange(itemId);
   };
 
   return (

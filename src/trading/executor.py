@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from metaapi_cloud_sdk import MetaApi
 
-from ..config import settings
+from ..database.supabase import get_system_config
 from ..parser.models import ParsedSignal, TradeExecution
 from ..utils.logger import log
 
@@ -23,12 +23,28 @@ class ExecutorSettings:
         if self.tp_ratios is None:
             self.tp_ratios = [0.5, 0.3, 0.2]
 
+    @classmethod
+    def from_system_config(cls) -> "ExecutorSettings":
+        """Create ExecutorSettings from database system config."""
+        config = get_system_config()
+        tp_ratios_str = config.get("tp_split_ratios", "0.5,0.3,0.2")
+        tp_ratios = [float(r.strip()) for r in tp_ratios_str.split(",") if r.strip()]
+
+        return cls(
+            symbol_suffix=config.get("symbol_suffix", ""),
+            split_tps=config.get("split_tps", "true").lower() == "true",
+            tp_ratios=tp_ratios,
+            gold_market_threshold=float(config.get("gold_market_threshold", "3.0")),
+            max_lot_size=float(config.get("max_lot_size", "0.1")),
+            default_lot_size=float(config.get("default_lot_size", "0.01")),
+        )
+
 
 class TradeExecutor:
     """Execute trades via MetaApi.
 
     Supports two modes:
-    1. Single-user (legacy): Uses global settings from environment
+    1. Single-user (legacy): Uses global settings from database
     2. Multi-user: Uses per-user account ID and settings
     """
 
@@ -43,19 +59,49 @@ class TradeExecutor:
 
         Args:
             user_id: User UUID for multi-tenant mode (None for legacy single-user).
-            account_id: MetaApi account ID (None uses global settings).
-            api_token: MetaApi token (None uses global settings - owner's token).
-            executor_settings: Per-user trading settings.
+            account_id: MetaApi account ID (None reads from database config).
+            api_token: MetaApi token (None reads from database config).
+            executor_settings: Per-user trading settings (None reads from database config).
         """
         self.user_id = user_id
-        self._account_id = account_id or settings.metaapi_account_id
-        self._api_token = api_token or settings.metaapi_token
-        self._settings = executor_settings or ExecutorSettings()
+        self._account_id = account_id
+        self._api_token = api_token
+        self._settings = executor_settings
         self._is_multi_tenant = user_id is not None
 
         self.api: Optional[MetaApi] = None
         self.account = None
         self.connection = None
+
+    def _get_config(self) -> dict:
+        """Get system config from database."""
+        return get_system_config()
+
+    def _get_account_id(self) -> str:
+        """Get MetaApi account ID from config or database."""
+        if self._account_id:
+            return self._account_id
+        config = self._get_config()
+        account_id = config.get("metaapi_account_id", "")
+        if not account_id:
+            raise ValueError("MetaApi Account ID not configured. Set it in Admin > System Config.")
+        return account_id
+
+    def _get_api_token(self) -> str:
+        """Get MetaApi token from config or database."""
+        if self._api_token:
+            return self._api_token
+        config = self._get_config()
+        token = config.get("metaapi_token", "")
+        if not token:
+            raise ValueError("MetaApi Token not configured. Set it in Admin > System Config.")
+        return token
+
+    def _get_settings(self) -> ExecutorSettings:
+        """Get executor settings from config or database."""
+        if self._settings:
+            return self._settings
+        return ExecutorSettings.from_system_config()
 
     def _get_user_tag(self) -> str:
         """Get user tag for logging."""
@@ -66,9 +112,13 @@ class TradeExecutor:
         user_tag = self._get_user_tag()
         log.info(f"{user_tag}Connecting to MetaApi...")
 
-        self.api = MetaApi(self._api_token)
+        # Get credentials dynamically from config/database
+        api_token = self._get_api_token()
+        account_id = self._get_account_id()
+
+        self.api = MetaApi(api_token)
         self.account = await self.api.metatrader_account_api.get_account(
-            self._account_id
+            account_id
         )
 
         # Deploy if needed
@@ -130,8 +180,9 @@ class TradeExecutor:
 
         executions = []
 
-        # Apply broker symbol suffix (use per-user settings in multi-tenant, global otherwise)
-        symbol_suffix = self._settings.symbol_suffix if self._is_multi_tenant else settings.symbol_suffix
+        # Apply broker symbol suffix (always use dynamic settings)
+        executor_settings = self._get_settings()
+        symbol_suffix = executor_settings.symbol_suffix
         broker_symbol = signal.symbol + symbol_suffix
 
         # Get current price for order type determination
@@ -141,9 +192,9 @@ class TradeExecutor:
         # Determine threshold for pending vs market order
         threshold = self._get_price_threshold(signal.symbol)
 
-        # Use per-user settings for split TPs
-        split_tps = self._settings.split_tps if self._is_multi_tenant else settings.split_tps
-        tp_ratios = self._settings.tp_ratios if self._is_multi_tenant else settings.tp_ratios
+        # Use dynamic settings for split TPs
+        split_tps = executor_settings.split_tps
+        tp_ratios = executor_settings.tp_ratios
 
         if split_tps and len(signal.take_profits) > 1:
             # Split across multiple TPs
@@ -361,10 +412,8 @@ class TradeExecutor:
         elif symbol in ["XAUUSD", "GOLD"]:
             # Smart execution: use configurable threshold (default $3)
             # This means if price is within $3 of entry, use market order
-            # Use per-user setting in multi-tenant mode
-            if self._is_multi_tenant:
-                return self._settings.gold_market_threshold
-            return settings.gold_market_threshold
+            executor_settings = self._get_settings()
+            return executor_settings.gold_market_threshold
         elif symbol in ["DJ30", "US30", "USTEC", "NAS100"]:
             return 10.0
         else:
