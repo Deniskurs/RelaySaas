@@ -2,25 +2,34 @@
 from typing import Optional, Dict, Any, List
 
 from ..parser.models import ParsedSignal, ValidationResult
-from ..config import settings
+from ..config import settings as static_settings  # Keep for non-overridable settings
+from ..database.supabase import get_settings, SYSTEM_USER_ID
 from ..utils.logger import log
 
 
-def get_reference_lot_for_symbol(symbol: str) -> float:
+def get_reference_lot_for_symbol(symbol: str, db_settings: dict = None) -> float:
     """Get the reference lot size for a given symbol.
 
     GOLD/XAUUSD uses higher base lot (0.04 on £500), others use lower (0.01 on £500).
 
     Args:
         symbol: Trading symbol.
+        db_settings: Optional settings dict from database.
 
     Returns:
         Reference lot size for the symbol.
     """
     symbol_upper = symbol.upper()
+    if db_settings:
+        gold_ref = db_settings.get("lot_reference_size_gold", 0.04)
+        default_ref = db_settings.get("lot_reference_size_default", 0.01)
+    else:
+        gold_ref = static_settings.lot_reference_size
+        default_ref = static_settings.lot_reference_size_default
+    
     if symbol_upper in ["XAUUSD", "GOLD"]:
-        return settings.lot_reference_size  # 0.04 for GOLD
-    return settings.lot_reference_size_default  # 0.01 for others
+        return gold_ref
+    return default_ref
 
 
 def calculate_dynamic_lot_size(
@@ -56,6 +65,7 @@ def calculate_lot_for_symbol(
     account_balance: float,
     min_lot: float = 0.01,
     max_lot: float = 0.1,
+    db_settings: dict = None,
 ) -> float:
     """Calculate lot size for a specific symbol based on account balance.
 
@@ -66,14 +76,16 @@ def calculate_lot_for_symbol(
         account_balance: Current account balance.
         min_lot: Minimum allowed lot size.
         max_lot: Maximum allowed lot size.
+        db_settings: Optional settings dict from database.
 
     Returns:
         Calculated lot size for the symbol.
     """
-    reference_lot = get_reference_lot_for_symbol(symbol)
+    reference_lot = get_reference_lot_for_symbol(symbol, db_settings)
+    ref_balance = db_settings.get("lot_reference_balance", 500.0) if db_settings else static_settings.lot_reference_balance
     return calculate_dynamic_lot_size(
         account_balance=account_balance,
-        reference_balance=settings.lot_reference_balance,
+        reference_balance=ref_balance,
         reference_lot=reference_lot,
         min_lot=min_lot,
         max_lot=max_lot,
@@ -108,22 +120,30 @@ class TradeValidator:
         errors: List[str] = []
         warnings: List[str] = []
 
+        # Fetch current settings from database (dynamic, not static config)
+        db_settings = get_settings(SYSTEM_USER_ID)
+        max_lot_size = db_settings.get("max_lot_size", 0.1)
+        max_open_trades = db_settings.get("max_open_trades", 5)
+        max_risk_percent = db_settings.get("max_risk_percent", 2.0)
+        symbol_suffix = db_settings.get("symbol_suffix", "")
+
         # Calculate dynamic base lot size from account balance (symbol-specific)
         balance = account_info.get("balance", 0)
         base_lot_size = calculate_lot_for_symbol(
             symbol=signal.symbol,
             account_balance=balance,
             min_lot=0.01,
-            max_lot=settings.max_lot_size,
+            max_lot=max_lot_size,
+            db_settings=db_settings,
         )
         adjusted_lot_size = base_lot_size
 
-        # 1. Symbol whitelist check
-        if settings.symbol_whitelist and signal.symbol not in settings.symbol_whitelist:
+        # 1. Symbol whitelist check (still use static config for this)
+        if static_settings.symbol_whitelist and signal.symbol not in static_settings.symbol_whitelist:
             errors.append(f"Symbol {signal.symbol} not in allowed list")
 
         # 2. Get current price and validate entry
-        broker_symbol = signal.symbol + settings.symbol_suffix
+        broker_symbol = signal.symbol + symbol_suffix
         if self.connection:
             try:
                 price = await self.connection.get_symbol_price(broker_symbol)
@@ -158,7 +178,7 @@ class TradeValidator:
             pip_value = self._get_pip_value(signal.symbol)
             sl_pips = abs(signal.entry_price - signal.stop_loss) / pip_value
 
-            max_risk_amount = balance * (settings.max_risk_percent / 100)
+            max_risk_amount = balance * (max_risk_percent / 100)
             # Approximate pip value per lot (varies by pair and account currency)
             pip_value_per_lot = self._estimate_pip_value_per_lot(signal.symbol)
             risk_per_lot = sl_pips * pip_value_per_lot
@@ -178,13 +198,13 @@ class TradeValidator:
                     )
 
         # Ensure lot size is within bounds
-        adjusted_lot_size = max(0.01, min(adjusted_lot_size, settings.max_lot_size))
+        adjusted_lot_size = max(0.01, min(adjusted_lot_size, max_lot_size))
 
         # 5. Position limit check
         open_positions = account_info.get("positions", [])
-        if len(open_positions) >= settings.max_open_trades:
+        if len(open_positions) >= max_open_trades:
             errors.append(
-                f"Max open trades ({settings.max_open_trades}) reached - "
+                f"Max open trades ({max_open_trades}) reached - "
                 f"currently have {len(open_positions)}"
             )
 

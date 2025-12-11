@@ -1,30 +1,24 @@
 import { useState } from "react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
 const COLORS = {
-  success: "hsl(152, 45%, 45%)",
-  destructive: "hsl(0, 55%, 55%)",
-  primary: "hsl(215, 20%, 55%)",
-  warning: "hsl(38, 70%, 50%)",
-  muted: "hsl(0, 0%, 45%)",
+  success: "#10b981", // emerald-500
+  destructive: "#f43f5e", // rose-500
+  primary: "#3b82f6", // blue-500
+  warning: "#eab308", // yellow-500
+  muted: "#71717a", // zinc-500
 };
 
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-card border border-border rounded-md p-2 text-xs">
-        <p className="font-medium text-foreground">{data.name}</p>
-        <p className="text-foreground-muted">{data.value} trades</p>
+      <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded px-2 py-1 text-xs shadow-xl">
+        <p className="font-medium text-white">{data.name}</p>
+        <p className="text-white/70">{data.value} trades</p>
       </div>
     );
   }
@@ -32,12 +26,17 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 const StatRow = ({ label, value, color }) => (
-  <div className="flex items-center justify-between py-2 border-b border-border last:border-0">
+  <div className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
     <div className="flex items-center gap-2">
-      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-sm text-foreground-muted">{label}</span>
+      <div
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-xs text-foreground-muted">{label}</span>
     </div>
-    <span className="text-sm font-mono text-foreground">{value}</span>
+    <span className="text-sm font-mono text-foreground font-medium">
+      {value}
+    </span>
   </div>
 );
 
@@ -56,78 +55,109 @@ export default function PerformanceChart({ stats, isLoading = false }) {
       { name: "Winning", value: winning, fill: COLORS.success },
       { name: "Losing", value: losing, fill: COLORS.destructive },
       { name: "Open", value: open, fill: COLORS.primary },
-    ].filter(d => d.value > 0);
+    ].filter((d) => d.value > 0);
   };
 
   const tradeData = getTradeData();
   const closedTrades = (stats?.winningTrades || 0) + (stats?.losingTrades || 0);
-  const winRate = closedTrades > 0 ? ((stats?.winningTrades || 0) / closedTrades) * 100 : 0;
+  const winRate =
+    closedTrades > 0 ? ((stats?.winningTrades || 0) / closedTrades) * 100 : 0;
   const totalProfit = stats?.totalProfit || 0;
-  const totalTrades = stats?.totalTrades || 0;
 
   return (
-    <Card className="bg-card border border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-foreground">Performance</CardTitle>
+    <Card className="glass-card border-border/40 bg-black/40 shadow-none">
+      <CardHeader className="py-3 px-4 border-b border-white/5">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium text-foreground/90 font-sans tracking-tight">
+            Performance
+          </CardTitle>
+          {stats && (
+            <div
+              className={cn(
+                "text-sm font-mono font-medium",
+                totalProfit >= 0 ? "text-emerald-500" : "text-rose-500"
+              )}
+            >
+              {formatPnL(totalProfit)}
+            </div>
+          )}
+        </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="p-4">
         {isLoading ? (
-          <div className="flex items-center justify-center h-[200px]">
-            <div className="animate-pulse w-24 h-24 rounded-full bg-muted" />
+          <div className="flex items-center justify-center h-[160px]">
+            <div className="w-24 h-24 rounded-full border-4 border-white/5 border-t-emerald-500/50 animate-spin" />
           </div>
         ) : !stats ? (
-          <div className="flex items-center justify-center h-[200px] text-foreground-muted text-sm">
+          <div className="flex items-center justify-center h-[160px] text-foreground-muted text-sm">
             Loading stats...
           </div>
         ) : tradeData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-[200px] text-foreground-muted">
-            <p className="text-sm">No trades yet</p>
-            <p className="text-xs mt-1">{stats.totalSignals || 0} signals received</p>
+          <div className="flex flex-col items-center justify-center h-[160px] text-foreground-muted">
+            <p className="text-xs">No trades yet</p>
+            <p className="text-[10px] mt-1 opacity-50">
+              {stats.totalSignals || 0} signals received
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-6">
-            <div className="h-[180px]">
+          <div className="grid grid-cols-2 gap-8 items-center">
+            <div className="h-[160px] relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={tradeData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={45}
+                    innerRadius={55}
                     outerRadius={70}
-                    paddingAngle={2}
+                    paddingAngle={3}
                     dataKey="value"
+                    stroke="none"
                   >
                     {tradeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
                     ))}
                   </Pie>
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    cursor={{ fill: "transparent" }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                <span className="text-2xl font-bold text-foreground font-mono">
+                  {winRate.toFixed(0)}%
+                </span>
+                <span className="text-[10px] text-foreground-muted uppercase tracking-wider">
+                  Win Rate
+                </span>
+              </div>
             </div>
 
-            <div className="flex flex-col justify-center">
-              <StatRow label="Winning" value={stats.winningTrades || 0} color={COLORS.success} />
-              <StatRow label="Losing" value={stats.losingTrades || 0} color={COLORS.destructive} />
-              <StatRow label="Open" value={stats.openTrades || 0} color={COLORS.primary} />
-              <div className="mt-3 pt-3 border-t border-border space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-foreground-muted">Win Rate</span>
-                  <span className="text-sm font-semibold font-mono text-foreground">
-                    {winRate.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-foreground-muted">Total P&L</span>
-                  <span className={cn(
-                    "text-sm font-semibold font-mono",
-                    totalProfit >= 0 ? "text-success" : "text-destructive"
-                  )}>
-                    {formatPnL(totalProfit)}
-                  </span>
-                </div>
+            <div className="space-y-1">
+              <StatRow
+                label="Winning"
+                value={stats.winningTrades || 0}
+                color={COLORS.success}
+              />
+              <StatRow
+                label="Losing"
+                value={stats.losingTrades || 0}
+                color={COLORS.destructive}
+              />
+              <StatRow
+                label="Open"
+                value={stats.openTrades || 0}
+                color={COLORS.primary}
+              />
+              <div className="pt-2 mt-2 border-t border-white/5 flex items-center justify-between">
+                <span className="text-xs text-foreground-muted">
+                  Total Trades
+                </span>
+                <span className="text-sm font-mono text-foreground">
+                  {stats.totalTrades || 0}
+                </span>
               </div>
             </div>
           </div>

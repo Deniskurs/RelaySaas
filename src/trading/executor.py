@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from metaapi_cloud_sdk import MetaApi
 
-from ..database.supabase import get_system_config
+from ..database.supabase import get_system_config, get_settings, SYSTEM_USER_ID
 from ..parser.models import ParsedSignal, TradeExecution
 from ..utils.logger import log
 
@@ -24,20 +24,35 @@ class ExecutorSettings:
             self.tp_ratios = [0.5, 0.3, 0.2]
 
     @classmethod
-    def from_system_config(cls) -> "ExecutorSettings":
-        """Create ExecutorSettings from database system config."""
-        config = get_system_config()
-        tp_ratios_str = config.get("tp_split_ratios", "0.5,0.3,0.2")
-        tp_ratios = [float(r.strip()) for r in tp_ratios_str.split(",") if r.strip()]
+    def from_user_settings(cls, user_id: str = SYSTEM_USER_ID) -> "ExecutorSettings":
+        """Create ExecutorSettings from user settings in database.
+        
+        Reads trading parameters from user_settings_v2 table, NOT system_config.
+        This allows per-user configuration of trading behavior.
+        """
+        settings = get_settings(user_id)
+        
+        # tp_split_ratios comes as list from user_settings
+        tp_ratios = settings.get("tp_split_ratios", [0.5, 0.3, 0.2])
+        if isinstance(tp_ratios, str):
+            tp_ratios = [float(r.strip()) for r in tp_ratios.split(",") if r.strip()]
 
         return cls(
-            symbol_suffix=config.get("symbol_suffix", ""),
-            split_tps=config.get("split_tps", "true").lower() == "true",
+            symbol_suffix=settings.get("symbol_suffix", ""),
+            split_tps=settings.get("split_tps", True),
             tp_ratios=tp_ratios,
-            gold_market_threshold=float(config.get("gold_market_threshold", "3.0")),
-            max_lot_size=float(config.get("max_lot_size", "0.1")),
-            default_lot_size=float(config.get("default_lot_size", "0.01")),
+            gold_market_threshold=float(settings.get("gold_market_threshold", 3.0)),
+            max_lot_size=float(settings.get("max_lot_size", 0.1)),
+            default_lot_size=float(settings.get("lot_reference_size_default", 0.01)),
         )
+
+    @classmethod
+    def from_system_config(cls) -> "ExecutorSettings":
+        """DEPRECATED: Use from_user_settings() instead.
+        
+        Kept for backward compatibility during migration.
+        """
+        return cls.from_user_settings(SYSTEM_USER_ID)
 
 
 class TradeExecutor:
@@ -195,6 +210,16 @@ class TradeExecutor:
         # Use dynamic settings for split TPs
         split_tps = executor_settings.split_tps
         tp_ratios = executor_settings.tp_ratios
+        
+        # Debug logging
+        log.info(
+            "Trade execution settings",
+            split_tps=split_tps,
+            split_tps_type=type(split_tps).__name__,
+            num_tps=len(signal.take_profits),
+            tp_ratios=tp_ratios,
+            will_split=split_tps and len(signal.take_profits) > 1,
+        )
 
         if split_tps and len(signal.take_profits) > 1:
             # Split across multiple TPs

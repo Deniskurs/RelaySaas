@@ -39,11 +39,18 @@ function StatCard({ title, value, icon: Icon, trend, className }) {
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-foreground-muted uppercase tracking-wider">{title}</p>
+            <p className="text-xs text-foreground-muted uppercase tracking-wider">
+              {title}
+            </p>
             <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
             {trend && (
-              <p className={`text-xs mt-1 ${trend > 0 ? "text-success" : "text-destructive"}`}>
-                {trend > 0 ? "+" : ""}{trend}% from yesterday
+              <p
+                className={`text-xs mt-1 ${
+                  trend > 0 ? "text-success" : "text-destructive"
+                }`}
+              >
+                {trend > 0 ? "+" : ""}
+                {trend}% from yesterday
               </p>
             )}
           </div>
@@ -106,7 +113,9 @@ function TelegramVerification({ onStatusChange }) {
       setMessage(result.message);
       if (onStatusChange) onStatusChange(result.status);
     } else {
-      setError("Failed to send verification code. Please check your credentials.");
+      setError(
+        "Failed to send verification code. Please check your credentials."
+      );
     }
     setIsLoading(false);
   };
@@ -139,7 +148,9 @@ function TelegramVerification({ onStatusChange }) {
     setIsLoading(true);
     setError("");
 
-    const result = await postData("/admin/telegram/verify-password", { password });
+    const result = await postData("/admin/telegram/verify-password", {
+      password,
+    });
 
     if (result) {
       setStatus(result.status);
@@ -194,7 +205,9 @@ function TelegramVerification({ onStatusChange }) {
         <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 border border-success/20">
           <CheckCircle2 className="w-5 h-5 text-success" />
           <div className="flex-1">
-            <p className="text-sm font-medium text-success">Telegram Connected</p>
+            <p className="text-sm font-medium text-success">
+              Telegram Connected
+            </p>
             <p className="text-xs text-foreground-muted mt-0.5">{message}</p>
           </div>
           <div className="flex gap-2">
@@ -206,7 +219,11 @@ function TelegramVerification({ onStatusChange }) {
               className="text-primary hover:bg-primary/10"
               title="Reconnect Telegram listener"
             >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
             </Button>
             <Button
               variant="outline"
@@ -243,7 +260,9 @@ function TelegramVerification({ onStatusChange }) {
         )}
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Telegram Password</label>
+          <label className="text-sm font-medium text-foreground">
+            Telegram Password
+          </label>
           <div className="relative">
             <Input
               type={showPassword ? "text" : "password"}
@@ -262,7 +281,11 @@ function TelegramVerification({ onStatusChange }) {
           </div>
         </div>
 
-        <Button onClick={handleVerifyPassword} disabled={isLoading} className="w-full">
+        <Button
+          onClick={handleVerifyPassword}
+          disabled={isLoading}
+          className="w-full"
+        >
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin mr-2" />
           ) : (
@@ -280,7 +303,9 @@ function TelegramVerification({ onStatusChange }) {
         <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20">
           <MessageSquare className="w-5 h-5 text-primary" />
           <div>
-            <p className="text-sm font-medium text-foreground">Enter Verification Code</p>
+            <p className="text-sm font-medium text-foreground">
+              Enter Verification Code
+            </p>
             <p className="text-xs text-foreground-muted mt-0.5">{message}</p>
           </div>
         </div>
@@ -293,7 +318,9 @@ function TelegramVerification({ onStatusChange }) {
         )}
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Verification Code</label>
+          <label className="text-sm font-medium text-foreground">
+            Verification Code
+          </label>
           <Input
             placeholder="Enter the code from Telegram"
             value={code}
@@ -303,7 +330,11 @@ function TelegramVerification({ onStatusChange }) {
           />
         </div>
 
-        <Button onClick={handleVerifyCode} disabled={isLoading} className="w-full">
+        <Button
+          onClick={handleVerifyCode}
+          disabled={isLoading}
+          className="w-full"
+        >
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin mr-2" />
           ) : (
@@ -349,7 +380,9 @@ function TelegramVerification({ onStatusChange }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">API Hash</label>
+          <label className="text-sm font-medium text-foreground">
+            API Hash
+          </label>
           <div className="relative">
             <Input
               type={showApiHash ? "text" : "password"}
@@ -370,7 +403,9 @@ function TelegramVerification({ onStatusChange }) {
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">Phone Number</label>
+        <label className="text-sm font-medium text-foreground">
+          Phone Number
+        </label>
         <div className="flex items-center gap-2">
           <Phone size={14} className="text-foreground-muted" />
           <Input
@@ -428,15 +463,7 @@ function SystemConfig() {
         telegram_api_hash: "",
         telegram_phone: data.telegram_phone || "",
         telegram_channel_ids: data.telegram_channel_ids || "",
-        // Trading settings
-        default_lot_size: data.default_lot_size || "0.01",
-        max_lot_size: data.max_lot_size || "0.1",
-        max_open_trades: data.max_open_trades || "5",
-        max_risk_percent: data.max_risk_percent || "2.0",
-        symbol_suffix: data.symbol_suffix || "",
-        split_tps: data.split_tps === "true",
-        tp_split_ratios: data.tp_split_ratios || "0.5,0.3,0.2",
-        enable_breakeven: data.enable_breakeven === "true",
+        // Note: Trading settings (max_lot_size, symbol_suffix, etc.) are now in user Settings
       });
     }
     setIsLoading(false);
@@ -472,23 +499,16 @@ function SystemConfig() {
     // Always send channel_ids (even if empty string)
     updates.telegram_channel_ids = formData.telegram_channel_ids || "";
 
-    // Trading settings
+    // LLM model (admin-only setting)
     updates.llm_model = formData.llm_model;
-    updates.default_lot_size = formData.default_lot_size;
-    updates.max_lot_size = formData.max_lot_size;
-    updates.max_open_trades = formData.max_open_trades;
-    updates.max_risk_percent = formData.max_risk_percent;
-    updates.symbol_suffix = formData.symbol_suffix;
-    updates.split_tps = formData.split_tps ? "true" : "false";
-    updates.tp_split_ratios = formData.tp_split_ratios;
-    updates.enable_breakeven = formData.enable_breakeven ? "true" : "false";
+    // Note: Trading settings (max_lot_size, symbol_suffix, etc.) are now saved via user Settings page
 
     console.log("Saving config updates:", updates);
     const result = await putData("/admin/config", updates);
     console.log("Save result:", result);
     if (result) {
       setConfig(result);
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         anthropic_api_key: "",
         metaapi_token: "",
@@ -519,14 +539,25 @@ function SystemConfig() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Anthropic API Key</label>
+            <label className="text-sm font-medium text-foreground">
+              Anthropic API Key
+            </label>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Input
                   type={showApiKey ? "text" : "password"}
-                  placeholder={config?.anthropic_api_key_set ? "************" : "Enter API key"}
+                  placeholder={
+                    config?.anthropic_api_key_set
+                      ? "************"
+                      : "Enter API key"
+                  }
                   value={formData.anthropic_api_key}
-                  onChange={(e) => setFormData(prev => ({ ...prev, anthropic_api_key: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      anthropic_api_key: e.target.value,
+                    }))
+                  }
                   className="bg-background/50 pr-10"
                 />
                 <button
@@ -538,7 +569,10 @@ function SystemConfig() {
                 </button>
               </div>
               {config?.anthropic_api_key_set && (
-                <Badge variant="outline" className="text-success border-success/30 bg-success/10">
+                <Badge
+                  variant="outline"
+                  className="text-success border-success/30 bg-success/10"
+                >
                   <Check size={12} className="mr-1" /> Set
                 </Badge>
               )}
@@ -551,14 +585,25 @@ function SystemConfig() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">MetaApi Token</label>
+            <label className="text-sm font-medium text-foreground">
+              MetaApi Token
+            </label>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Input
                   type={showMetaApiToken ? "text" : "password"}
-                  placeholder={config?.metaapi_token_set ? "************" : "Enter MetaApi token"}
+                  placeholder={
+                    config?.metaapi_token_set
+                      ? "************"
+                      : "Enter MetaApi token"
+                  }
                   value={formData.metaapi_token}
-                  onChange={(e) => setFormData(prev => ({ ...prev, metaapi_token: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      metaapi_token: e.target.value,
+                    }))
+                  }
                   className="bg-background/50 pr-10"
                 />
                 <button
@@ -570,7 +615,10 @@ function SystemConfig() {
                 </button>
               </div>
               {config?.metaapi_token_set && (
-                <Badge variant="outline" className="text-success border-success/30 bg-success/10">
+                <Badge
+                  variant="outline"
+                  className="text-success border-success/30 bg-success/10"
+                >
                   <Check size={12} className="mr-1" /> Set
                 </Badge>
               )}
@@ -583,10 +631,17 @@ function SystemConfig() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">MetaApi Account ID</label>
+            <label className="text-sm font-medium text-foreground">
+              MetaApi Account ID
+            </label>
             <Input
               value={formData.metaapi_account_id}
-              onChange={(e) => setFormData(prev => ({ ...prev, metaapi_account_id: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  metaapi_account_id: e.target.value,
+                }))
+              }
               placeholder="Enter MetaApi account ID"
               className="bg-background/50"
             />
@@ -598,10 +653,14 @@ function SystemConfig() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">LLM Model</label>
+            <label className="text-sm font-medium text-foreground">
+              LLM Model
+            </label>
             <Input
               value={formData.llm_model}
-              onChange={(e) => setFormData(prev => ({ ...prev, llm_model: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, llm_model: e.target.value }))
+              }
               placeholder="claude-haiku-4-5-20251001"
               className="bg-background/50"
             />
@@ -633,10 +692,17 @@ function SystemConfig() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Channel IDs</label>
+            <label className="text-sm font-medium text-foreground">
+              Channel IDs
+            </label>
             <Input
               value={formData.telegram_channel_ids}
-              onChange={(e) => setFormData(prev => ({ ...prev, telegram_channel_ids: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  telegram_channel_ids: e.target.value,
+                }))
+              }
               placeholder="e.g., -1001234567890,-1009876543210"
               className="bg-background/50"
             />
@@ -647,113 +713,15 @@ function SystemConfig() {
         </CardContent>
       </Card>
 
+      {/* Trading settings have been moved to Settings page */}
       <Card className="glass-card border-0">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-foreground uppercase tracking-wider flex items-center gap-2">
-            <Settings size={16} className="text-primary" />
-            Default Trading Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Default Lot Size</label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={formData.default_lot_size}
-                onChange={(e) => setFormData(prev => ({ ...prev, default_lot_size: e.target.value }))}
-                className="bg-background/50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Max Lot Size</label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={formData.max_lot_size}
-                onChange={(e) => setFormData(prev => ({ ...prev, max_lot_size: e.target.value }))}
-                className="bg-background/50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Max Open Trades</label>
-              <Input
-                type="number"
-                step="1"
-                min="1"
-                value={formData.max_open_trades}
-                onChange={(e) => setFormData(prev => ({ ...prev, max_open_trades: e.target.value }))}
-                className="bg-background/50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Max Risk %</label>
-              <Input
-                type="number"
-                step="0.1"
-                min="0.1"
-                value={formData.max_risk_percent}
-                onChange={(e) => setFormData(prev => ({ ...prev, max_risk_percent: e.target.value }))}
-                className="bg-background/50"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Symbol Suffix</label>
-            <Input
-              value={formData.symbol_suffix}
-              onChange={(e) => setFormData(prev => ({ ...prev, symbol_suffix: e.target.value }))}
-              placeholder=".ecn"
-              className="bg-background/50"
-            />
-            <p className="text-xs text-foreground-muted">
-              Broker-specific suffix (e.g., .ecn, .pro)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">TP Split Ratios</label>
-            <Input
-              value={formData.tp_split_ratios}
-              onChange={(e) => setFormData(prev => ({ ...prev, tp_split_ratios: e.target.value }))}
-              placeholder="0.5,0.3,0.2"
-              className="bg-background/50"
-            />
-            <p className="text-xs text-foreground-muted">
-              Comma-separated ratios for splitting positions at TPs
-            </p>
-          </div>
-
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-sm font-medium text-foreground">Split Take Profits</label>
-                <p className="text-xs text-foreground-muted">Split positions across multiple TPs</p>
-              </div>
-              <Switch
-                checked={formData.split_tps}
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, split_tps: checked }))}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-sm font-medium text-foreground">Enable Breakeven</label>
-                <p className="text-xs text-foreground-muted">Move SL to entry after first TP hit</p>
-              </div>
-              <Switch
-                checked={formData.enable_breakeven}
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, enable_breakeven: checked }))}
-              />
-            </div>
-          </div>
+        <CardContent className="p-4">
+          <p className="text-sm text-foreground-muted">
+            <span className="font-medium text-foreground">Note:</span> Trading
+            settings (lot sizes, max trades, symbol suffix, etc.) are now
+            configured in the <span className="text-primary">Settings</span>{" "}
+            page for each user.
+          </p>
         </CardContent>
       </Card>
 
@@ -790,7 +758,11 @@ function UserRow({ user, onSuspend, onActivate }) {
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt="" className="w-10 h-10 rounded-full" />
+            <img
+              src={user.avatar_url}
+              alt=""
+              className="w-10 h-10 rounded-full"
+            />
           ) : (
             <span className="text-sm font-medium text-primary">
               {(user.full_name || user.email)?.[0]?.toUpperCase()}
@@ -805,7 +777,11 @@ function UserRow({ user, onSuspend, onActivate }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Badge className={statusColors[user.status] || "bg-muted text-muted-foreground"}>
+        <Badge
+          className={
+            statusColors[user.status] || "bg-muted text-muted-foreground"
+          }
+        >
           {user.status}
         </Badge>
         <Badge variant="outline" className="text-xs">
@@ -871,14 +847,18 @@ export default function AdminPanel() {
   const handleSuspendUser = async (userId) => {
     const result = await postData(`/admin/users/${userId}/suspend`);
     if (result) {
-      setUsers(users.map(u => u.id === userId ? { ...u, status: "suspended" } : u));
+      setUsers(
+        users.map((u) => (u.id === userId ? { ...u, status: "suspended" } : u))
+      );
     }
   };
 
   const handleActivateUser = async (userId) => {
     const result = await postData(`/admin/users/${userId}/activate`);
     if (result) {
-      setUsers(users.map(u => u.id === userId ? { ...u, status: "active" } : u));
+      setUsers(
+        users.map((u) => (u.id === userId ? { ...u, status: "active" } : u))
+      );
     }
   };
 
@@ -905,15 +885,24 @@ export default function AdminPanel() {
     <div className="space-y-6">
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList className="bg-surface/50 border border-border/50">
-          <TabsTrigger value="overview" className="data-[state=active]:bg-primary/10">
+          <TabsTrigger
+            value="overview"
+            className="data-[state=active]:bg-primary/10"
+          >
             <Activity size={14} className="mr-2" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="users" className="data-[state=active]:bg-primary/10">
+          <TabsTrigger
+            value="users"
+            className="data-[state=active]:bg-primary/10"
+          >
             <Users size={14} className="mr-2" />
             Users
           </TabsTrigger>
-          <TabsTrigger value="config" className="data-[state=active]:bg-primary/10">
+          <TabsTrigger
+            value="config"
+            className="data-[state=active]:bg-primary/10"
+          >
             <Settings size={14} className="mr-2" />
             System Config
           </TabsTrigger>
@@ -921,8 +910,16 @@ export default function AdminPanel() {
 
         <TabsContent value="overview" className="space-y-6">
           <div className="flex items-center justify-end">
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-              <RefreshCw size={14} className={`mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isLoading}
+            >
+              <RefreshCw
+                size={14}
+                className={`mr-2 ${isLoading ? "animate-spin" : ""}`}
+              />
               Refresh
             </Button>
           </div>
@@ -975,7 +972,9 @@ export default function AdminPanel() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-foreground">{log.action}</p>
                         {log.user_email && (
-                          <p className="text-xs text-foreground-muted">{log.user_email}</p>
+                          <p className="text-xs text-foreground-muted">
+                            {log.user_email}
+                          </p>
                         )}
                         <p className="text-xs text-foreground-muted mt-1">
                           {new Date(log.created_at).toLocaleString()}
@@ -996,8 +995,16 @@ export default function AdminPanel() {
 
         <TabsContent value="users" className="space-y-6">
           <div className="flex items-center justify-end">
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-              <RefreshCw size={14} className={`mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isLoading}
+            >
+              <RefreshCw
+                size={14}
+                className={`mr-2 ${isLoading ? "animate-spin" : ""}`}
+              />
               Refresh
             </Button>
           </div>
@@ -1023,12 +1030,17 @@ export default function AdminPanel() {
               <ScrollArea className="h-[500px]">
                 <div className="space-y-1">
                   {users
-                    .filter(u =>
-                      !searchQuery ||
-                      u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+                    .filter(
+                      (u) =>
+                        !searchQuery ||
+                        u.email
+                          ?.toLowerCase()
+                          .includes(searchQuery.toLowerCase()) ||
+                        u.full_name
+                          ?.toLowerCase()
+                          .includes(searchQuery.toLowerCase())
                     )
-                    .map(user => (
+                    .map((user) => (
                       <UserRow
                         key={user.id}
                         user={user}

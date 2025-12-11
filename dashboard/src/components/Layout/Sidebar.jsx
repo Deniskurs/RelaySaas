@@ -31,7 +31,12 @@ const baseNavItems = [
   { icon: Settings, label: "Settings", id: "settings" },
 ];
 
-const adminNavItem = { icon: Shield, label: "Admin", id: "admin", isAdmin: true };
+const adminNavItem = {
+  icon: Shield,
+  label: "Admin",
+  id: "admin",
+  isAdmin: true,
+};
 
 export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -39,9 +44,8 @@ export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
   const navigate = useNavigate();
 
   // Build nav items - include admin if user is admin
-  const navItems = profile?.role === "admin"
-    ? [...baseNavItems, adminNavItem]
-    : baseNavItems;
+  const navItems =
+    profile?.role === "admin" ? [...baseNavItems, adminNavItem] : baseNavItems;
 
   const handleCollapse = (value) => {
     setCollapsed(value);
@@ -91,10 +95,14 @@ export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
                 transition={{ duration: 0.2 }}
                 className="flex items-center gap-2"
               >
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent-purple flex items-center justify-center shadow-glow-sm">
-                  <Zap size={16} className="text-white" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+                  <img
+                    src="/logo.png"
+                    alt="Logo"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <span className="text-lg font-semibold text-gradient tracking-tight">
+                <span className="text-lg font-bold font-sans text-gradient tracking-tight">
                   SignalCopier
                 </span>
               </motion.div>
@@ -105,9 +113,13 @@ export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.2 }}
-                className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent-purple flex items-center justify-center shadow-glow-sm"
+                className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden"
               >
-                <Zap size={16} className="text-white" />
+                <img
+                  src="/logo.png"
+                  alt="Logo"
+                  className="w-full h-full object-cover"
+                />
               </motion.div>
             )}
           </AnimatePresence>

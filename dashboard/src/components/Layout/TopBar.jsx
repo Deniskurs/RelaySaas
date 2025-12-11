@@ -22,7 +22,9 @@ export default function TopBar({
     >
       {/* Left: Title */}
       <div className="flex items-center gap-4">
-        <h1 className="text-sm font-medium text-foreground">{title}</h1>
+        <h1 className="text-sm font-bold font-sans text-foreground tracking-tight">
+          {title}
+        </h1>
       </div>
 
       {/* Right: Controls */}
