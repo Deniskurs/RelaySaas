@@ -1,147 +1,61 @@
-import { useState, useEffect } from "react";
-import { useWebSocket } from "./hooks/useWebSocket";
-import { useApi } from "./hooks/useApi";
-import { transformPositions, transformSignals, transformStats } from "./lib/transformers";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
-import DashboardLayout from "./components/Layout/DashboardLayout";
-import LiveFeed from "./components/LiveFeed";
-import OpenPositions from "./components/OpenPositions";
-import RecentSignals from "./components/RecentSignals";
-import StatsBar from "./components/StatsBar";
-import AccountCard from "./components/AccountCard";
-import PerformanceChart from "./components/PerformanceChart";
+import { SettingsProvider } from "./contexts/SettingsContext";
+import ProtectedRoute from "./components/Auth/ProtectedRoute";
+
+// Pages
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import AuthCallback from "./pages/AuthCallback";
+import Dashboard from "./pages/Dashboard";
+import Onboarding from "./pages/Onboarding";
+import AdminDashboard from "./pages/Admin";
 
 export default function App() {
-  const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${
-    window.location.host
-  }/ws`;
-  const { events, isConnected, lastMessage } = useWebSocket(wsUrl);
-  const { fetchData, postData } = useApi();
-
-  const [account, setAccount] = useState({
-    balance: 0,
-    equity: 0,
-    margin: 0,
-    freeMargin: 0,
-  });
-  const [stats, setStats] = useState(null);
-  const [signals, setSignals] = useState([]);
-  const [openTrades, setOpenTrades] = useState([]);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Initial data fetch
-  useEffect(() => {
-    const loadData = async (showLoader = false) => {
-      if (showLoader) setIsLoading(true);
-
-      try {
-        const [statsData, signalsData, positionsData, settingsData, accountData] =
-          await Promise.all([
-            fetchData("/stats"),
-            fetchData("/signals?limit=20"),
-            fetchData("/positions"),
-            fetchData("/settings"),
-            fetchData("/account"),
-          ]);
-
-        if (statsData) setStats(transformStats(statsData));
-        if (signalsData) setSignals(transformSignals(signalsData));
-        if (positionsData) setOpenTrades(transformPositions(positionsData));
-        if (settingsData) setIsPaused(settingsData.paused);
-        if (accountData) setAccount(accountData);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData(true);
-    const interval = setInterval(() => loadData(false), 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
-
-  // Handle WebSocket updates
-  useEffect(() => {
-    if (!lastMessage) return;
-
-    const { type, data } = lastMessage;
-
-    switch (type) {
-      case "account.updated":
-        setAccount(data);
-        // Positions are updated along with account info
-        fetchData("/positions").then((d) => d && setOpenTrades(transformPositions(d)));
-        break;
-      case "signal.received":
-      case "signal.parsed":
-      case "signal.validated":
-      case "signal.executed":
-      case "signal.failed":
-      case "signal.skipped":
-        fetchData("/signals?limit=20").then((d) => d && setSignals(transformSignals(d)));
-        fetchData("/stats").then((d) => d && setStats(transformStats(d)));
-        break;
-      case "trade.opened":
-      case "trade.closed":
-      case "trade.updated":
-        fetchData("/positions").then((d) => d && setOpenTrades(transformPositions(d)));
-        fetchData("/stats").then((d) => d && setStats(transformStats(d)));
-        break;
-    }
-  }, [lastMessage, fetchData]);
-
-  const handlePause = async () => {
-    await postData("/control/pause");
-    setIsPaused(true);
-  };
-
-  const handleResume = async () => {
-    await postData("/control/resume");
-    setIsPaused(false);
-  };
-
   return (
-    <CurrencyProvider>
-      <DashboardLayout
-        title="Trading Dashboard"
-        isPaused={isPaused}
-        onPause={handlePause}
-        onResume={handleResume}
-        isConnected={isConnected}
-      >
-        <div className="space-y-6">
-          {/* Top Section: Account Overview */}
-          <section>
-            <AccountCard account={account} />
-            {stats && <StatsBar stats={stats} />}
-          </section>
+    <AuthProvider>
+      <CurrencyProvider>
+        <SettingsProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
 
-          {/* Main Grid - 3 Columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {/* Column 1: Recent Signals (Detailed) */}
-            <div className="lg:col-span-1">
-              <RecentSignals
-                signals={signals}
-                isLoading={isLoading}
-                onRefresh={() => fetchData("/signals?limit=20").then((d) => d && setSignals(transformSignals(d)))}
-              />
-            </div>
+            {/* Protected routes */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <Onboarding />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-            {/* Column 2: Open Positions */}
-            <div className="lg:col-span-1">
-              <OpenPositions trades={openTrades} isLoading={isLoading} />
-            </div>
-
-            {/* Column 3: Activity (Live Feed) */}
-            <div className="lg:col-span-2 xl:col-span-1">
-              <LiveFeed events={events} />
-            </div>
-          </div>
-
-          {/* Performance - Full Width Below */}
-          <PerformanceChart stats={stats} isLoading={isLoading} />
-        </div>
-      </DashboardLayout>
-    </CurrencyProvider>
+            {/* Catch all - redirect to dashboard */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </SettingsProvider>
+      </CurrencyProvider>
+    </AuthProvider>
   );
 }

@@ -78,19 +78,63 @@ class StatsResponse(BaseModel):
 
 
 class SettingsResponse(BaseModel):
-    """Settings response model."""
+    """Settings response model - all configurable settings."""
 
-    paused: bool
-    default_lot_size: float
+    # Risk Management
     max_risk_percent: float
+    max_lot_size: float
+    max_open_trades: int
+
+    # Lot Sizing
+    lot_reference_balance: float
+    lot_reference_size_gold: float
+    lot_reference_size_default: float
+
+    # Execution
+    auto_accept_symbols: List[str]
+    gold_market_threshold: float
+    split_tps: bool
+    tp_split_ratios: List[float]
+    enable_breakeven: bool
+
+    # Broker
+    symbol_suffix: str
+
+    # System
+    paused: bool
+
+    # Telegram
+    telegram_channel_ids: List[str]
 
 
 class SettingsUpdate(BaseModel):
-    """Settings update model."""
+    """Settings update model - all fields optional."""
 
-    paused: Optional[bool] = None
-    default_lot_size: Optional[float] = None
+    # Risk Management
     max_risk_percent: Optional[float] = None
+    max_lot_size: Optional[float] = None
+    max_open_trades: Optional[int] = None
+
+    # Lot Sizing
+    lot_reference_balance: Optional[float] = None
+    lot_reference_size_gold: Optional[float] = None
+    lot_reference_size_default: Optional[float] = None
+
+    # Execution
+    auto_accept_symbols: Optional[List[str]] = None
+    gold_market_threshold: Optional[float] = None
+    split_tps: Optional[bool] = None
+    tp_split_ratios: Optional[List[float]] = None
+    enable_breakeven: Optional[bool] = None
+
+    # Broker
+    symbol_suffix: Optional[str] = None
+
+    # System
+    paused: Optional[bool] = None
+
+    # Telegram
+    telegram_channel_ids: Optional[List[str]] = None
 
 
 class StatusResponse(BaseModel):
@@ -188,49 +232,46 @@ async def get_live_positions():
 
 # Settings endpoints
 @router.get("/settings", response_model=SettingsResponse)
-async def get_settings(
-    session: AsyncSession = Depends(get_session),
-):
-    """Get application settings."""
-    paused = await crud.get_app_state(session, "paused")
-    lot_size = await crud.get_app_state(session, "default_lot_size")
-    risk_percent = await crud.get_app_state(session, "max_risk_percent")
-
-    return SettingsResponse(
-        paused=(paused == "true") if paused else False,
-        default_lot_size=float(lot_size) if lot_size else 0.01,
-        max_risk_percent=float(risk_percent) if risk_percent else 2.0,
-    )
+async def get_settings_endpoint():
+    """Get all application settings from Supabase."""
+    try:
+        from ..database import supabase as supabase_db
+        settings = supabase_db.get_settings()
+        return SettingsResponse(**settings)
+    except Exception as e:
+        print(f"[API] Error getting settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/settings", response_model=StatusResponse)
-async def update_settings(
+@router.put("/settings", response_model=SettingsResponse)
+async def update_settings_endpoint(
     settings: SettingsUpdate,
-    session: AsyncSession = Depends(get_session),
 ):
-    """Update application settings."""
-    updates = settings.model_dump(exclude_none=True)
-    for key, value in updates.items():
-        await crud.set_app_state(session, key, str(value).lower())
-    return StatusResponse(status="updated")
+    """Update application settings in Supabase."""
+    try:
+        from ..database import supabase as supabase_db
+        updates = settings.model_dump(exclude_none=True)
+        updated = supabase_db.update_settings("default", updates)
+        return SettingsResponse(**updated)
+    except Exception as e:
+        print(f"[API] Error updating settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Control endpoints
 @router.post("/control/pause", response_model=StatusResponse)
-async def pause_processing(
-    session: AsyncSession = Depends(get_session),
-):
+async def pause_processing():
     """Pause signal processing."""
-    await crud.set_app_state(session, "paused", "true")
+    from ..database import supabase as supabase_db
+    supabase_db.update_settings("default", {"paused": True})
     return StatusResponse(status="paused")
 
 
 @router.post("/control/resume", response_model=StatusResponse)
-async def resume_processing(
-    session: AsyncSession = Depends(get_session),
-):
+async def resume_processing():
     """Resume signal processing."""
-    await crud.set_app_state(session, "paused", "false")
+    from ..database import supabase as supabase_db
+    supabase_db.update_settings("default", {"paused": False})
     return StatusResponse(status="resumed")
 
 

@@ -1,5 +1,6 @@
 """Main application entry point and orchestration."""
 import asyncio
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -16,6 +17,10 @@ from .trading.validator import TradeValidator
 from .trading.executor import TradeExecutor
 from .utils.events import event_bus, Events
 from .utils.logger import log
+
+# Multi-tenant imports
+from .users.manager import user_manager
+from .signal_router import signal_router
 
 
 class SignalCopier:
@@ -1088,12 +1093,12 @@ class SignalCopier:
         await self.executor.disconnect()
 
 
-# Global copier instance
+# Global copier instance (for legacy single-user mode)
 copier = SignalCopier()
 
 
 async def run_copier():
-    """Run the signal copier (Telegram listener)."""
+    """Run the signal copier (Telegram listener) in legacy single-user mode."""
     try:
         await copier.start()
     except Exception as e:
@@ -1101,10 +1106,69 @@ async def run_copier():
         raise
 
 
+async def run_multi_tenant():
+    """Run the multi-tenant signal copier."""
+    log.info("Starting multi-tenant signal copier")
+
+    # Initialize database
+    await init_db()
+
+    # Set up signal router as the message handler
+    user_manager.set_message_handler(signal_router.route_message)
+
+    # Start the user connection manager
+    await user_manager.start()
+
+    # Load and connect active users from Supabase
+    try:
+        from .database.supabase import get_supabase
+        supabase = get_supabase()
+
+        # Get all active users who have completed onboarding
+        result = supabase.table("profiles").select("id").eq("status", "active").execute()
+
+        if result.data:
+            for profile in result.data:
+                user_id = profile["id"]
+                success = await user_manager.connect_user(user_id)
+                if success:
+                    log.info("Connected user", user_id=user_id[:8])
+                else:
+                    log.warning("Failed to connect user", user_id=user_id[:8])
+
+            log.info(
+                "Multi-tenant startup complete",
+                active_users=user_manager.active_users,
+                connected_users=user_manager.connected_users,
+            )
+        else:
+            log.info("No active users found - waiting for users to onboard")
+
+    except Exception as e:
+        log.error("Error loading users from Supabase", error=str(e))
+
+    # Keep running
+    while True:
+        await asyncio.sleep(60)  # Heartbeat every minute
+
+
 async def main():
-    """Main entry point - runs API server and signal copier."""
-    # Start signal copier in background
-    copier_task = asyncio.create_task(run_copier())
+    """Main entry point - runs API server and signal copier.
+
+    Supports two modes based on MULTI_TENANT_MODE environment variable:
+    - Single-user (legacy): Uses environment variables for credentials
+    - Multi-tenant: Uses Supabase for per-user credentials
+    """
+    multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
+
+    if multi_tenant:
+        log.info("Running in MULTI-TENANT mode")
+        # Start multi-tenant copier in background
+        copier_task = asyncio.create_task(run_multi_tenant())
+    else:
+        log.info("Running in SINGLE-USER mode (legacy)")
+        # Start legacy signal copier in background
+        copier_task = asyncio.create_task(run_copier())
 
     # Start API server
     config = uvicorn.Config(
@@ -1123,7 +1187,11 @@ async def main():
             await copier_task
         except asyncio.CancelledError:
             pass
-        await copier.stop()
+
+        if multi_tenant:
+            await user_manager.stop()
+        else:
+            await copier.stop()
 
 
 if __name__ == "__main__":

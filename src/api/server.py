@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .routes import router
+from .onboarding_routes import router as onboarding_router
+from .admin_routes import router as admin_router
 from .websocket import websocket_endpoint, setup_websocket_events
 from ..database.database import init_db, close_db
 from ..utils.logger import log
@@ -42,6 +44,8 @@ app.add_middleware(
 
 # API routes
 app.include_router(router, prefix="/api")
+app.include_router(onboarding_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 # WebSocket endpoint
 app.add_api_websocket_route("/ws", websocket_endpoint)

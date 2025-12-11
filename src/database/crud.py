@@ -13,9 +13,11 @@ async def create_signal(
     channel_name: str,
     channel_id: Optional[str] = None,
     message_id: Optional[int] = None,
+    user_id: Optional[str] = None,
 ) -> Signal:
     """Create a new signal record."""
     signal = Signal(
+        user_id=user_id,
         raw_message=raw_message,
         channel_name=channel_name,
         channel_id=channel_id,
@@ -79,9 +81,11 @@ async def create_trade(
     stop_loss: float,
     take_profit: float,
     tp_index: int,
+    user_id: Optional[str] = None,
 ) -> Trade:
     """Create a new trade record."""
     trade = Trade(
+        user_id=user_id,
         signal_id=signal_id,
         order_id=order_id,
         symbol=symbol,

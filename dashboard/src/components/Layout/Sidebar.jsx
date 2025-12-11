@@ -7,10 +7,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  LogOut,
+  User,
+  Shield,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Tooltip,
   TooltipContent,
@@ -18,7 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const navItems = [
+const baseNavItems = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard" },
   { icon: Radio, label: "Signals", id: "signals" },
   { icon: BarChart2, label: "Positions", id: "positions" },
@@ -26,12 +31,34 @@ const navItems = [
   { icon: Settings, label: "Settings", id: "settings" },
 ];
 
+const adminNavItem = { icon: Shield, label: "Admin", id: "admin", isAdmin: true };
+
 export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
   const [collapsed, setCollapsed] = useState(false);
+  const { user, profile, logout } = useAuth();
+  const navigate = useNavigate();
+
+  // Build nav items - include admin if user is admin
+  const navItems = profile?.role === "admin"
+    ? [...baseNavItems, adminNavItem]
+    : baseNavItems;
 
   const handleCollapse = (value) => {
     setCollapsed(value);
     onCollapsedChange?.(value);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
+  const handleNavClick = (itemId) => {
+    if (itemId === "admin") {
+      navigate("/admin");
+    } else {
+      onTabChange(itemId);
+    }
   };
 
   return (
@@ -118,7 +145,7 @@ export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
             const button = (
               <motion.button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05, duration: 0.3 }}
@@ -239,27 +266,95 @@ export default function Sidebar({ activeTab, onTabChange, onCollapsedChange }) {
           </div>
         )}
 
-        {/* Bottom section */}
-        {!collapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="p-4 border-t border-border-subtle"
-          >
-            <div
-              className={cn(
-                "p-3 rounded-xl",
-                "bg-gradient-to-br from-primary/10 via-primary/5 to-transparent",
-                "border border-primary/10"
-              )}
+        {/* User Profile & Logout */}
+        <div className="p-3 border-t border-border-subtle">
+          {!collapsed ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="space-y-2"
             >
-              <p className="text-xs text-foreground-muted">
-                Pro tip: Use keyboard shortcuts to navigate faster
-              </p>
+              {/* User info */}
+              <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-hover/50">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  {profile?.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt=""
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <User size={14} className="text-primary" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {profile?.full_name || user?.email?.split("@")[0] || "User"}
+                  </p>
+                  <p className="text-xs text-foreground-muted truncate">
+                    {user?.email}
+                  </p>
+                </div>
+              </div>
+
+              {/* Logout button */}
+              <button
+                onClick={handleLogout}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl",
+                  "transition-all duration-200",
+                  "text-foreground-muted hover:text-destructive hover:bg-destructive/10"
+                )}
+              >
+                <LogOut size={18} />
+                <span className="text-sm font-medium">Sign Out</span>
+              </button>
+            </motion.div>
+          ) : (
+            <div className="space-y-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="w-full flex justify-center p-2">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                      {profile?.avatar_url ? (
+                        <img
+                          src={profile.avatar_url}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <User size={14} className="text-primary" />
+                      )}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs">
+                  {profile?.full_name || user?.email}
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleLogout}
+                    className={cn(
+                      "w-full p-2.5 rounded-xl transition-all duration-200",
+                      "text-foreground-subtle hover:text-destructive",
+                      "hover:bg-destructive/10 active:scale-95",
+                      "flex items-center justify-center"
+                    )}
+                  >
+                    <LogOut size={16} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs">
+                  Sign Out
+                </TooltipContent>
+              </Tooltip>
             </div>
-          </motion.div>
-        )}
+          )}
+        </div>
       </motion.aside>
     </TooltipProvider>
   );

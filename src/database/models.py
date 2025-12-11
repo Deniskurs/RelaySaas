@@ -16,6 +16,7 @@ class Signal(Base):
     __tablename__ = "signals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)  # For multi-tenant
     raw_message: Mapped[str] = mapped_column(String)
     channel_name: Mapped[str] = mapped_column(String)
     channel_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -52,6 +53,7 @@ class Signal(Base):
         """Convert to dictionary for JSON serialization."""
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "raw_message": self.raw_message,
             "channel_name": self.channel_name,
             "channel_id": self.channel_id,
@@ -76,6 +78,7 @@ class Trade(Base):
     __tablename__ = "trades"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)  # For multi-tenant
     signal_id: Mapped[int] = mapped_column(ForeignKey("signals.id"))
 
     # Order details
@@ -111,6 +114,7 @@ class Trade(Base):
         """Convert to dictionary for JSON serialization."""
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "signal_id": self.signal_id,
             "order_id": self.order_id,
             "position_id": self.position_id,

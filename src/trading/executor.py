@@ -1,5 +1,6 @@
 """MetaApi trade execution."""
 from typing import List, Optional, Dict, Any
+from dataclasses import dataclass
 
 from metaapi_cloud_sdk import MetaApi
 
@@ -8,30 +9,75 @@ from ..parser.models import ParsedSignal, TradeExecution
 from ..utils.logger import log
 
 
-class TradeExecutor:
-    """Execute trades via MetaApi."""
+@dataclass
+class ExecutorSettings:
+    """Per-user trading settings for the executor."""
+    symbol_suffix: str = ""
+    split_tps: bool = True
+    tp_ratios: List[float] = None
+    gold_market_threshold: float = 3.0
+    max_lot_size: float = 0.1
+    default_lot_size: float = 0.01
 
-    def __init__(self):
+    def __post_init__(self):
+        if self.tp_ratios is None:
+            self.tp_ratios = [0.5, 0.3, 0.2]
+
+
+class TradeExecutor:
+    """Execute trades via MetaApi.
+
+    Supports two modes:
+    1. Single-user (legacy): Uses global settings from environment
+    2. Multi-user: Uses per-user account ID and settings
+    """
+
+    def __init__(
+        self,
+        user_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+        api_token: Optional[str] = None,
+        executor_settings: Optional[ExecutorSettings] = None,
+    ):
+        """Initialize the trade executor.
+
+        Args:
+            user_id: User UUID for multi-tenant mode (None for legacy single-user).
+            account_id: MetaApi account ID (None uses global settings).
+            api_token: MetaApi token (None uses global settings - owner's token).
+            executor_settings: Per-user trading settings.
+        """
+        self.user_id = user_id
+        self._account_id = account_id or settings.metaapi_account_id
+        self._api_token = api_token or settings.metaapi_token
+        self._settings = executor_settings or ExecutorSettings()
+        self._is_multi_tenant = user_id is not None
+
         self.api: Optional[MetaApi] = None
         self.account = None
         self.connection = None
 
+    def _get_user_tag(self) -> str:
+        """Get user tag for logging."""
+        return f"[user:{self.user_id[:8]}] " if self.user_id else ""
+
     async def connect(self):
         """Connect to MetaApi and synchronize."""
-        log.info("Connecting to MetaApi...")
+        user_tag = self._get_user_tag()
+        log.info(f"{user_tag}Connecting to MetaApi...")
 
-        self.api = MetaApi(settings.metaapi_token)
+        self.api = MetaApi(self._api_token)
         self.account = await self.api.metatrader_account_api.get_account(
-            settings.metaapi_account_id
+            self._account_id
         )
 
         # Deploy if needed
         if self.account.state != "DEPLOYED":
-            log.info("Deploying MetaApi account...")
+            log.info(f"{user_tag}Deploying MetaApi account...")
             await self.account.deploy()
 
         # Wait for connection
-        log.info("Waiting for account connection...")
+        log.info(f"{user_tag}Waiting for account connection...")
         await self.account.wait_connected()
 
         # Get RPC connection
@@ -40,8 +86,8 @@ class TradeExecutor:
         await self.connection.wait_synchronized()
 
         log.info(
-            "Connected to MetaApi",
-            account_id=settings.metaapi_account_id,
+            f"{user_tag}Connected to MetaApi",
+            account_id=self._account_id,
             state=self.account.state,
         )
 
@@ -84,8 +130,9 @@ class TradeExecutor:
 
         executions = []
 
-        # Apply broker symbol suffix
-        broker_symbol = signal.symbol + settings.symbol_suffix
+        # Apply broker symbol suffix (use per-user settings in multi-tenant, global otherwise)
+        symbol_suffix = self._settings.symbol_suffix if self._is_multi_tenant else settings.symbol_suffix
+        broker_symbol = signal.symbol + symbol_suffix
 
         # Get current price for order type determination
         price = await self.connection.get_symbol_price(broker_symbol)
@@ -94,9 +141,13 @@ class TradeExecutor:
         # Determine threshold for pending vs market order
         threshold = self._get_price_threshold(signal.symbol)
 
-        if settings.split_tps and len(signal.take_profits) > 1:
+        # Use per-user settings for split TPs
+        split_tps = self._settings.split_tps if self._is_multi_tenant else settings.split_tps
+        tp_ratios = self._settings.tp_ratios if self._is_multi_tenant else settings.tp_ratios
+
+        if split_tps and len(signal.take_profits) > 1:
             # Split across multiple TPs
-            ratios = settings.tp_ratios[: len(signal.take_profits)]
+            ratios = tp_ratios[: len(signal.take_profits)]
             # Normalize ratios
             total = sum(ratios)
             ratios = [r / total for r in ratios]
@@ -164,7 +215,11 @@ class TradeExecutor:
                 threshold,
             )
 
-            comment = f"Signal TP{tp_index}"
+            # Include user_id in comment for trade tracking (multi-tenant only)
+            if self.user_id:
+                comment = f"U:{self.user_id[:8]} TP{tp_index}"
+            else:
+                comment = f"Signal TP{tp_index}"
 
             if order_type == "ORDER_TYPE_BUY":
                 result = await self.connection.create_market_buy_order(
@@ -224,8 +279,9 @@ class TradeExecutor:
 
             order_id = result.get("orderId") or result.get("positionId") or "unknown"
 
+            user_tag = self._get_user_tag()
             log.info(
-                "Order placed",
+                f"{user_tag}Order placed",
                 order_id=order_id,
                 symbol=signal.symbol,
                 direction=signal.direction,
@@ -246,8 +302,9 @@ class TradeExecutor:
             )
 
         except Exception as e:
+            user_tag = self._get_user_tag()
             log.error(
-                "Order failed",
+                f"{user_tag}Order failed",
                 error=str(e),
                 symbol=signal.symbol,
                 direction=signal.direction,
@@ -304,6 +361,9 @@ class TradeExecutor:
         elif symbol in ["XAUUSD", "GOLD"]:
             # Smart execution: use configurable threshold (default $3)
             # This means if price is within $3 of entry, use market order
+            # Use per-user setting in multi-tenant mode
+            if self._is_multi_tenant:
+                return self._settings.gold_market_threshold
             return settings.gold_market_threshold
         elif symbol in ["DJ30", "US30", "USTEC", "NAS100"]:
             return 10.0
@@ -320,15 +380,16 @@ class TradeExecutor:
         if not self.connection:
             raise RuntimeError("Not connected to MetaApi")
 
+        user_tag = self._get_user_tag()
         try:
             await self.connection.modify_position(
                 position_id=position_id,
                 stop_loss=new_sl,
             )
-            log.info("Position SL modified", position_id=position_id, new_sl=new_sl)
+            log.info(f"{user_tag}Position SL modified", position_id=position_id, new_sl=new_sl)
         except Exception as e:
             log.error(
-                "Failed to modify position",
+                f"{user_tag}Failed to modify position",
                 error=str(e),
                 position_id=position_id,
             )
@@ -342,21 +403,23 @@ class TradeExecutor:
         if not self.connection:
             raise RuntimeError("Not connected to MetaApi")
 
+        user_tag = self._get_user_tag()
         try:
             await self.connection.close_position(position_id=position_id)
-            log.info("Position closed", position_id=position_id)
+            log.info(f"{user_tag}Position closed", position_id=position_id)
         except Exception as e:
             log.error(
-                "Failed to close position",
+                f"{user_tag}Failed to close position",
                 error=str(e),
                 position_id=position_id,
             )
 
     async def disconnect(self):
         """Disconnect from MetaApi."""
+        user_tag = self._get_user_tag()
         if self.connection:
             try:
                 await self.connection.close()
-                log.info("Disconnected from MetaApi")
+                log.info(f"{user_tag}Disconnected from MetaApi")
             except Exception as e:
-                log.error("Error disconnecting", error=str(e))
+                log.error(f"{user_tag}Error disconnecting", error=str(e))
