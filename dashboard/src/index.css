@@ -1,0 +1,107 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+
+    /* PayloadCMS-inspired neutral palette */
+    --background: 0 0% 7%;
+    --background-elevated: 0 0% 9%;
+
+    --foreground: 0 0% 95%;
+    --foreground-muted: 0 0% 63%;
+    --foreground-subtle: 0 0% 45%;
+
+    --surface: 0 0% 11%;
+    --surface-hover: 0 0% 13%;
+
+    --border: 0 0% 16%;
+    --border-subtle: 0 0% 13%;
+
+    /* Single accent - muted blue-gray */
+    --primary: 215 20% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Semantic colors - muted */
+    --success: 152 45% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 70% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --destructive: 0 55% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* shadcn compatibility */
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 95%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 63%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 95%;
+    --input: 0 0% 15%;
+    --ring: 215 20% 55%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+}
+
+/* Minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-white/15;
+}
+
+/* Simple glass effect */
+@layer utilities {
+  .glass-card {
+    @apply bg-card border border-border rounded-lg;
+  }
+
+  .glass-subtle {
+    @apply bg-surface border border-border-subtle rounded-md;
+  }
+}
+
+/* Focus styles */
+@layer utilities {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  }
+}
+
+/* Mono numbers */
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
