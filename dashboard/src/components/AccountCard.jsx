@@ -1,11 +1,5 @@
 import { cn } from "@/lib/utils";
-
-const formatCurrency = (val) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(val);
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const MetricCard = ({ label, value }) => (
   <div className="p-4 glass-card">
@@ -18,13 +12,14 @@ const MetricCard = ({ label, value }) => (
 
 export default function AccountCard({ account }) {
   const { balance, equity, margin, freeMargin } = account;
+  const { format } = useCurrency();
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-      <MetricCard label="Balance" value={formatCurrency(balance)} />
-      <MetricCard label="Equity" value={formatCurrency(equity)} />
-      <MetricCard label="Free Margin" value={formatCurrency(freeMargin)} />
-      <MetricCard label="Used Margin" value={formatCurrency(margin)} />
+      <MetricCard label="Balance" value={format(balance)} />
+      <MetricCard label="Equity" value={format(equity)} />
+      <MetricCard label="Free Margin" value={format(freeMargin)} />
+      <MetricCard label="Used Margin" value={format(margin)} />
     </div>
   );
 }

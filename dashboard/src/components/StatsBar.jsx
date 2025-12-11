@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const StatItem = ({ label, value, variant = "neutral" }) => {
   const variantStyles = {
@@ -25,6 +26,8 @@ const StatItem = ({ label, value, variant = "neutral" }) => {
 };
 
 export default function StatsBar({ stats }) {
+  const { formatPnL } = useCurrency();
+
   if (!stats) return null;
 
   const todayPnL = stats.todayPnL || stats.today_pnl || 0;
@@ -38,7 +41,7 @@ export default function StatsBar({ stats }) {
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <StatItem
         label="Today's P&L"
-        value={`${todayPnL >= 0 ? "+" : ""}$${Math.abs(todayPnL).toFixed(2)}`}
+        value={formatPnL(todayPnL)}
         variant={pnlVariant}
       />
       <StatItem

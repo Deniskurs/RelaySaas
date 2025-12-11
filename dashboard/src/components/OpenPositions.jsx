@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const TableSkeleton = ({ rows = 3 }) => (
   <>
@@ -41,6 +42,8 @@ const TableSkeleton = ({ rows = 3 }) => (
 );
 
 export default function OpenPositions({ trades = [], isLoading = false }) {
+  const { formatPnL } = useCurrency();
+
   return (
     <Card className="glass-card h-full flex flex-col border-0">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -135,7 +138,7 @@ export default function OpenPositions({ trades = [], isLoading = false }) {
                             profit >= 0 ? "text-success" : "text-destructive"
                           )}
                         >
-                          {profit >= 0 ? "+" : ""}${Math.abs(profit).toFixed(2)}
+                          {formatPnL(profit)}
                         </span>
                       </TableCell>
                     </TableRow>

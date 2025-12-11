@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useApi } from "./hooks/useApi";
 import { transformPositions, transformSignals, transformStats } from "./lib/transformers";
+import { CurrencyProvider } from "./contexts/CurrencyContext";
 import DashboardLayout from "./components/Layout/DashboardLayout";
 import LiveFeed from "./components/LiveFeed";
 import OpenPositions from "./components/OpenPositions";
@@ -100,45 +101,47 @@ export default function App() {
   };
 
   return (
-    <DashboardLayout
-      title="Trading Dashboard"
-      isPaused={isPaused}
-      onPause={handlePause}
-      onResume={handleResume}
-      isConnected={isConnected}
-    >
-      <div className="space-y-6">
-        {/* Top Section: Account Overview */}
-        <section>
-          <AccountCard account={account} />
-          {stats && <StatsBar stats={stats} />}
-        </section>
+    <CurrencyProvider>
+      <DashboardLayout
+        title="Trading Dashboard"
+        isPaused={isPaused}
+        onPause={handlePause}
+        onResume={handleResume}
+        isConnected={isConnected}
+      >
+        <div className="space-y-6">
+          {/* Top Section: Account Overview */}
+          <section>
+            <AccountCard account={account} />
+            {stats && <StatsBar stats={stats} />}
+          </section>
 
-        {/* Main Grid - 3 Columns */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {/* Column 1: Recent Signals (Detailed) */}
-          <div className="lg:col-span-1">
-            <RecentSignals
-              signals={signals}
-              isLoading={isLoading}
-              onRefresh={() => fetchData("/signals?limit=20").then((d) => d && setSignals(transformSignals(d)))}
-            />
+          {/* Main Grid - 3 Columns */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {/* Column 1: Recent Signals (Detailed) */}
+            <div className="lg:col-span-1">
+              <RecentSignals
+                signals={signals}
+                isLoading={isLoading}
+                onRefresh={() => fetchData("/signals?limit=20").then((d) => d && setSignals(transformSignals(d)))}
+              />
+            </div>
+
+            {/* Column 2: Open Positions */}
+            <div className="lg:col-span-1">
+              <OpenPositions trades={openTrades} isLoading={isLoading} />
+            </div>
+
+            {/* Column 3: Activity (Live Feed) */}
+            <div className="lg:col-span-2 xl:col-span-1">
+              <LiveFeed events={events} />
+            </div>
           </div>
 
-          {/* Column 2: Open Positions */}
-          <div className="lg:col-span-1">
-            <OpenPositions trades={openTrades} isLoading={isLoading} />
-          </div>
-
-          {/* Column 3: Activity (Live Feed) */}
-          <div className="lg:col-span-2 xl:col-span-1">
-            <LiveFeed events={events} />
-          </div>
+          {/* Performance - Full Width Below */}
+          <PerformanceChart stats={stats} isLoading={isLoading} />
         </div>
-
-        {/* Performance - Full Width Below */}
-        <PerformanceChart stats={stats} isLoading={isLoading} />
-      </div>
-    </DashboardLayout>
+      </DashboardLayout>
+    </CurrencyProvider>
   );
 }

@@ -2,6 +2,7 @@ import { PauseCircle, PlayCircle, Circle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import CurrencySelector from "@/components/CurrencySelector";
 
 export default function TopBar({
   title,
@@ -26,6 +27,12 @@ export default function TopBar({
 
       {/* Right: Controls */}
       <div className="flex items-center gap-3">
+        {/* Currency Selector */}
+        <CurrencySelector />
+
+        {/* Divider */}
+        <div className="h-4 w-px bg-border" />
+
         {/* Connection Status - minimal */}
         <div className="flex items-center gap-2 text-xs text-foreground-muted">
           <Circle

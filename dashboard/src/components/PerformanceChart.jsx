@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const COLORS = {
   success: "hsl(152, 45%, 45%)",
@@ -41,6 +42,8 @@ const StatRow = ({ label, value, color }) => (
 );
 
 export default function PerformanceChart({ stats, isLoading = false }) {
+  const { formatPnL } = useCurrency();
+
   const getTradeData = () => {
     if (!stats) return [];
     const winning = stats.winningTrades || 0;
@@ -122,7 +125,7 @@ export default function PerformanceChart({ stats, isLoading = false }) {
                     "text-sm font-semibold font-mono",
                     totalProfit >= 0 ? "text-success" : "text-destructive"
                   )}>
-                    {totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(2)}
+                    {formatPnL(totalProfit)}
                   </span>
                 </div>
               </div>

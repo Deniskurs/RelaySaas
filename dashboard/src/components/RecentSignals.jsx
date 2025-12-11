@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useApi } from "@/hooks/useApi";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const formatTime = (timestamp) => {
   if (!timestamp) return "--:--";
@@ -48,6 +49,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
   const [customLot, setCustomLot] = useState("");
   const [lastTradeLot, setLastTradeLot] = useState(null);
   const { fetchData } = useApi();
+  const { format: formatCurrency } = useCurrency();
 
   // Check if there's a suggested correction in warnings
   const suggestedCorrection = signal.warnings
@@ -358,7 +360,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
               </div>
 
               <div className="text-[10px] text-foreground-muted">
-                Balance: {lotPresets.balance?.toFixed(2)} | Base: {lotPresets.base_lot}
+                Balance: {formatCurrency(lotPresets.balance || 0)} | Base: {lotPresets.base_lot}
               </div>
             </div>
           )}
