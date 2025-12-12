@@ -1,16 +1,7 @@
 """Configuration management using Pydantic settings."""
-from pydantic_settings import BaseSettings
-from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Optional
 from functools import lru_cache
-import os
-import sys
-
-# Early debug - print immediately on module load
-print("=== STARTUP DEBUG ===", file=sys.stderr)
-print(f"SUPABASE_URL in env: {'SUPABASE_URL' in os.environ}", file=sys.stderr)
-print(f"SUPABASE_KEY in env: {'SUPABASE_KEY' in os.environ}", file=sys.stderr)
-print(f"Total env vars: {len(os.environ)}", file=sys.stderr)
-print("=====================", file=sys.stderr)
 
 
 class Settings(BaseSettings):
@@ -19,6 +10,14 @@ class Settings(BaseSettings):
     Only Supabase credentials are required at startup.
     All other settings are loaded from Supabase tables at runtime.
     """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        # Explicitly enable reading from environment variables
+        env_nested_delimiter="__",
+    )
 
     # Telegram (optional - loaded from user_credentials table)
     telegram_api_id: int = 0
@@ -60,11 +59,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Supabase (required for bootstrap) - read directly from os.environ as fallback
-    supabase_url: str = os.environ.get("SUPABASE_URL", "")
-    supabase_key: str = os.environ.get("SUPABASE_KEY", "")
-    supabase_service_key: str = os.environ.get("SUPABASE_SERVICE_KEY", "")
-    supabase_jwt_secret: str = os.environ.get("SUPABASE_JWT_SECRET", "")
+    # Supabase - use Optional with None default, then validate
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
+    supabase_service_key: str = ""
+    supabase_jwt_secret: str = ""
 
     @property
     def channel_list(self) -> List[str]:
@@ -86,28 +85,30 @@ class Settings(BaseSettings):
         """Parse comma-separated TP ratios into a list of floats."""
         return [float(r.strip()) for r in self.tp_split_ratios.split(",") if r.strip()]
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
-
 
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
+    import os
+    import sys
+
+    # Debug: show what env vars are available
+    print(f"[config] Loading settings, SUPABASE_URL in env: {'SUPABASE_URL' in os.environ}", file=sys.stderr)
+
     s = Settings()
 
     # Validate required Supabase credentials
     if not s.supabase_url or not s.supabase_key:
-        import sys
         print("=" * 50, file=sys.stderr)
         print("FATAL: Missing required Supabase credentials!", file=sys.stderr)
         print(f"  SUPABASE_URL set: {bool(s.supabase_url)}", file=sys.stderr)
         print(f"  SUPABASE_KEY set: {bool(s.supabase_key)}", file=sys.stderr)
-        print(f"  ENV keys available: {list(os.environ.keys())}", file=sys.stderr)
+        print(f"  ENV vars count: {len(os.environ)}", file=sys.stderr)
+        print(f"  ENV keys: {[k for k in os.environ.keys() if 'SUPA' in k or 'RAIL' in k]}", file=sys.stderr)
         print("=" * 50, file=sys.stderr)
         sys.exit(1)
 
+    print(f"[config] Settings loaded successfully, supabase_url: {s.supabase_url[:30]}...", file=sys.stderr)
     return s
 
 
