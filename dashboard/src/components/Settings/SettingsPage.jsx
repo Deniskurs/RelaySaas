@@ -652,54 +652,6 @@ export default function SettingsPage() {
           };
           setTelegramCreds(creds);
           setTelegramCredsOriginal(creds);
-
-          // Load trading settings from admin config if user_settings has defaults
-          // This migrates any settings that were configured via old AdminPanel
-          const tradingSettingsFromAdmin = {};
-
-          // Check each trading setting - use admin config if it differs from defaults
-          if (adminConfig.max_lot_size && adminConfig.max_lot_size !== "0.1") {
-            tradingSettingsFromAdmin.max_lot_size = parseFloat(adminConfig.max_lot_size);
-          }
-          if (adminConfig.max_open_trades && adminConfig.max_open_trades !== "5") {
-            tradingSettingsFromAdmin.max_open_trades = parseInt(adminConfig.max_open_trades);
-          }
-          if (adminConfig.max_risk_percent && adminConfig.max_risk_percent !== "2.0") {
-            tradingSettingsFromAdmin.max_risk_percent = parseFloat(adminConfig.max_risk_percent);
-          }
-          if (adminConfig.symbol_suffix) {
-            tradingSettingsFromAdmin.symbol_suffix = adminConfig.symbol_suffix;
-          }
-          if (adminConfig.split_tps !== undefined && adminConfig.split_tps !== "true") {
-            tradingSettingsFromAdmin.split_tps = adminConfig.split_tps === "true";
-          }
-          if (adminConfig.tp_split_ratios && adminConfig.tp_split_ratios !== "0.5,0.3,0.2") {
-            tradingSettingsFromAdmin.tp_split_ratios = adminConfig.tp_split_ratios
-              .split(",")
-              .map(r => parseFloat(r.trim()));
-          }
-          if (adminConfig.enable_breakeven !== undefined && adminConfig.enable_breakeven !== "true") {
-            tradingSettingsFromAdmin.enable_breakeven = adminConfig.enable_breakeven === "true";
-          }
-
-          // Load channels from admin config if user_settings has none
-          if (adminConfig.telegram_channel_ids && !settings.telegram_channel_ids?.length) {
-            const channelArray = adminConfig.telegram_channel_ids
-              .split(",")
-              .map(id => id.trim())
-              .filter(id => id);
-            if (channelArray.length > 0) {
-              tradingSettingsFromAdmin.telegram_channel_ids = channelArray;
-            }
-          }
-
-          // Apply admin config values if we found any
-          if (Object.keys(tradingSettingsFromAdmin).length > 0) {
-            setLocalSettings(prev => ({
-              ...prev,
-              ...tradingSettingsFromAdmin
-            }));
-          }
         }
       } catch (e) {
         console.error("Error loading admin config:", e);
@@ -709,7 +661,7 @@ export default function SettingsPage() {
     };
 
     loadAdminConfig();
-  }, [fetchData, settings.telegram_channel_ids?.length]);
+  }, [fetchData]);
 
   const updateLocal = (key, value) => {
     setLocalSettings((prev) => ({ ...prev, [key]: value }));

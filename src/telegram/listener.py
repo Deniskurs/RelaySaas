@@ -65,6 +65,7 @@ class TelegramListener:
         self._reconnect_attempts = 0
         self._started_at: Optional[datetime] = None
         self._health_task: Optional[asyncio.Task] = None
+        self._should_stop = False  # Flag to stop the reconnect loop
 
     def _create_client(self) -> TelegramClient:
         """Create Telegram client based on mode."""
@@ -130,17 +131,23 @@ class TelegramListener:
         """
         self._on_message = on_message
         self._started_at = datetime.utcnow()
+        self._should_stop = False
         user_tag = f"[user:{self.user_id[:8]}] " if self.user_id else ""
-        
+
         # Reconnect loop with exponential backoff
-        while True:
+        while not self._should_stop:
             try:
                 await self._connect_and_listen(user_tag)
             except Exception as e:
+                # Check if we should stop before reconnecting
+                if self._should_stop:
+                    log.info(f"{user_tag}Telegram listener stopped")
+                    break
+
                 self._is_connected = False
                 self._is_reconnecting = True
                 self._reconnect_attempts += 1
-                
+
                 if self._reconnect_attempts > MAX_RECONNECT_ATTEMPTS:
                     log.error(
                         f"{user_tag}Max reconnection attempts reached",
@@ -149,7 +156,7 @@ class TelegramListener:
                     )
                     self._is_reconnecting = False
                     raise
-                
+
                 # Exponential backoff with jitter
                 delay = min(
                     INITIAL_RECONNECT_DELAY * (2 ** (self._reconnect_attempts - 1)),
@@ -161,8 +168,10 @@ class TelegramListener:
                     delay=delay,
                     error=str(e),
                 )
-                
+
                 await asyncio.sleep(delay)
+
+        log.info(f"{user_tag}Telegram listener loop exited")
     
     async def _connect_and_listen(self, user_tag: str):
         """Internal method to connect and start listening."""
@@ -365,6 +374,9 @@ class TelegramListener:
     async def stop(self):
         """Stop the Telegram listener."""
         user_tag = f"[user:{self.user_id[:8]}] " if self.user_id else ""
+
+        # Signal the reconnect loop to stop
+        self._should_stop = True
 
         # Cancel health check task first
         if self._health_task and not self._health_task.done():
