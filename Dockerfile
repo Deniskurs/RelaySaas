@@ -30,5 +30,5 @@ COPY src/ ./src/
 # Expose port
 EXPOSE 8000
 
-# Start server - use PORT env var if set (Railway), otherwise default to 8000
-CMD ["sh", "-c", "echo Starting on port ${PORT:-8000} && python -m uvicorn src.api.server:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Start the full application (API + Telegram listener)
+CMD ["sh", "-c", "echo Starting Signal Copier on port ${PORT:-8000} && python -m src.main"]

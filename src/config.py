@@ -1,4 +1,5 @@
 """Configuration management using Pydantic settings."""
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 from functools import lru_cache
@@ -55,9 +56,9 @@ class Settings(BaseSettings):
     tp_split_ratios: str = "0.5,0.3,0.2"  # Comma-separated
     enable_breakeven: bool = True
 
-    # API
+    # API - PORT is set by Railway, API_PORT is for local dev
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = int(os.environ.get("PORT", os.environ.get("API_PORT", "8000")))
 
     # Supabase - use Optional with None default, then validate
     supabase_url: Optional[str] = None
