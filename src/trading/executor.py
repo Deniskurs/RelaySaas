@@ -525,8 +525,11 @@ class TradeExecutor:
 
         user_tag = self._get_user_tag()
         try:
-            deals = await self.connection.get_deals_by_position(position_id)
-            return deals or []
+            result = await self.connection.get_deals_by_position(position_id)
+            # MetaApi returns {'deals': [...], 'synchronizing': bool}
+            if isinstance(result, dict):
+                return result.get("deals", []) or []
+            return result or []
         except Exception as e:
             log.warning(
                 f"{user_tag}Failed to get deals for position {position_id}",

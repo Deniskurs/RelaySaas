@@ -1092,11 +1092,12 @@ class SignalCopier:
 
             # Extract close data
             close_price = close_deal.get("price", 0) if close_deal else 0
-            closed_at = (
-                close_deal.get("time", datetime.utcnow().isoformat())
-                if close_deal
-                else datetime.utcnow().isoformat()
-            )
+            # Handle datetime object or string for closed_at
+            close_time = close_deal.get("time") if close_deal else None
+            if close_time:
+                closed_at = close_time.isoformat() if hasattr(close_time, "isoformat") else str(close_time)
+            else:
+                closed_at = datetime.utcnow().isoformat()
             open_price = open_deal.get("price") if open_deal else None
 
             # Update database
