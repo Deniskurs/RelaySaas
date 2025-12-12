@@ -1,10 +1,17 @@
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/dashboard
+
+# Vite env vars need to be available at build time
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 COPY dashboard/package*.json ./
 RUN npm ci
 COPY dashboard/ ./
-RUN npm run build
+RUN echo "Building with VITE_SUPABASE_URL=$VITE_SUPABASE_URL" && npm run build
 
 # Stage 2: Python runtime
 FROM python:3.11-slim-bookworm
