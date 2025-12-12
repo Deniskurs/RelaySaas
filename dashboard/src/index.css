@@ -246,3 +246,30 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 }
+
+/* Terminal Monitor Styles */
+@layer utilities {
+  .terminal-scanline {
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.015),
+      rgba(0, 0, 0, 0.015) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    pointer-events: none;
+  }
+
+  .terminal-glow {
+    text-shadow: 0 0 8px currentColor;
+  }
+}
+
+@keyframes terminal-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.terminal-cursor {
+  animation: terminal-blink 1s step-end infinite;
+}
