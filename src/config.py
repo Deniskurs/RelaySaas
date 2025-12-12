@@ -5,21 +5,25 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Application settings loaded from environment variables.
 
-    # Telegram
-    telegram_api_id: int
-    telegram_api_hash: str
-    telegram_phone: str
+    Only Supabase credentials are required at startup.
+    All other settings are loaded from Supabase tables at runtime.
+    """
+
+    # Telegram (optional - loaded from user_credentials table)
+    telegram_api_id: int = 0
+    telegram_api_hash: str = ""
+    telegram_phone: str = ""
     channel_ids: str = ""  # Comma-separated
 
-    # Anthropic
-    anthropic_api_key: str
+    # Anthropic (optional - loaded from system_config table)
+    anthropic_api_key: str = ""
     llm_model: str = "claude-haiku-4-5-20251001"
 
-    # MetaApi
-    metaapi_token: str
-    metaapi_account_id: str
+    # MetaApi (optional - loaded from user_credentials table)
+    metaapi_token: str = ""
+    metaapi_account_id: str = ""
 
     # Trading
     default_lot_size: float = 0.01
@@ -47,11 +51,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Supabase (required)
-    supabase_url: str = ""
-    supabase_key: str = ""
-    supabase_service_key: str = ""
-    supabase_jwt_secret: str = ""
+    # Supabase (required for bootstrap)
+    supabase_url: str
+    supabase_key: str
+    supabase_service_key: str = ""  # Optional for read-only mode
+    supabase_jwt_secret: str = ""   # Optional for JWT verification
 
     @property
     def channel_list(self) -> List[str]:
