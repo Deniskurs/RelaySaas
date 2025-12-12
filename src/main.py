@@ -1203,11 +1203,13 @@ async def main():
         # Start legacy signal copier in background
         copier_task = asyncio.create_task(run_copier())
 
-    # Start API server
+    # Start API server - use PORT env var (Railway) or fall back to settings
+    port = int(os.getenv("PORT", settings.api_port))
+    log.info(f"Starting API server on port {port}")
     config = uvicorn.Config(
         app,
         host=settings.api_host,
-        port=settings.api_port,
+        port=port,
         log_level="info",
     )
     server = uvicorn.Server(config)

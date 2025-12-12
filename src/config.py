@@ -56,9 +56,9 @@ class Settings(BaseSettings):
     tp_split_ratios: str = "0.5,0.3,0.2"  # Comma-separated
     enable_breakeven: bool = True
 
-    # API - PORT is set by Railway, API_PORT is for local dev
+    # API
     api_host: str = "0.0.0.0"
-    api_port: int = int(os.environ.get("PORT", os.environ.get("API_PORT", "8000")))
+    api_port: int = 8000
 
     # Supabase - use Optional with None default, then validate
     supabase_url: Optional[str] = None
