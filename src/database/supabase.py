@@ -67,7 +67,15 @@ def get_supabase_admin() -> Client:
     if _supabase_admin is None:
         url = app_settings.supabase_url or os.getenv("SUPABASE_URL")
         # Try service role key first, fall back to anon key
-        key = app_settings.supabase_service_key or app_settings.supabase_key or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
+        service_key = app_settings.supabase_service_key or os.getenv("SUPABASE_SERVICE_KEY")
+        anon_key = app_settings.supabase_key or os.getenv("SUPABASE_KEY")
+        key = service_key or anon_key
+
+        if service_key:
+            print(f"[Supabase] Using service role key (bypasses RLS)")
+        else:
+            print(f"[Supabase] WARNING: Using anon key for admin client (RLS will apply)")
+
         if not url or not key:
             raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
         _supabase_admin = create_client(url, key)

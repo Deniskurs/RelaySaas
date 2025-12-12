@@ -63,8 +63,8 @@ class Settings(BaseSettings):
     # Supabase - use Optional with None default, then validate
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
-    supabase_service_key: str = ""
-    supabase_jwt_secret: str = ""
+    supabase_service_key: Optional[str] = None
+    supabase_jwt_secret: Optional[str] = None
 
     @property
     def channel_list(self) -> List[str]:
@@ -110,6 +110,7 @@ def get_settings() -> Settings:
         sys.exit(1)
 
     print(f"[config] Settings loaded successfully, supabase_url: {s.supabase_url[:30]}...", file=sys.stderr)
+    print(f"[config] Service key loaded: {bool(s.supabase_service_key)}", file=sys.stderr)
     return s
 
 
