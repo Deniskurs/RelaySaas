@@ -1,10 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
-import { transformPositions, transformSignals, transformStats } from "@/lib/transformers";
-import DashboardLayout from "@/components/Layout/DashboardLayout";
-import Sidebar from "@/components/Layout/Sidebar";
+import {
+  transformPositions,
+  transformSignals,
+  transformStats,
+} from "@/lib/transformers";
+import PremiumTopBar from "@/components/Navigation/PremiumTopBar";
+import CommandPalette from "@/components/Navigation/CommandPalette";
+import { useCommandPalette } from "@/components/Navigation/useCommandPalette";
 import LiveFeed from "@/components/LiveFeed";
 import OpenPositions from "@/components/OpenPositions";
 import RecentSignals from "@/components/RecentSignals";
@@ -14,6 +19,8 @@ import PerformanceChart from "@/components/PerformanceChart";
 import SettingsPage from "@/components/Settings/SettingsPage";
 import AdminPanel from "@/components/Admin/AdminPanel";
 import SetupBanner from "@/components/SetupBanner";
+import ProfilePage from "@/components/Profile/ProfilePage";
+import { motion } from "framer-motion";
 
 export default function Dashboard() {
   const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${
@@ -36,7 +43,11 @@ export default function Dashboard() {
   const [isPaused, setIsPaused] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [telegramStatus, setTelegramStatus] = useState(null);
+
+  // Command palette keyboard shortcut
+  useCommandPalette(() => setCommandPaletteOpen(true));
 
   // Initial data fetch
   useEffect(() => {
@@ -44,14 +55,19 @@ export default function Dashboard() {
       if (showLoader) setIsLoading(true);
 
       try {
-        const [statsData, signalsData, positionsData, settingsData, accountData] =
-          await Promise.all([
-            fetchData("/stats"),
-            fetchData("/signals?limit=20"),
-            fetchData("/positions"),
-            fetchData("/settings"),
-            fetchData("/account"),
-          ]);
+        const [
+          statsData,
+          signalsData,
+          positionsData,
+          settingsData,
+          accountData,
+        ] = await Promise.all([
+          fetchData("/stats"),
+          fetchData("/signals?limit=20"),
+          fetchData("/positions"),
+          fetchData("/settings"),
+          fetchData("/account"),
+        ]);
 
         if (statsData) setStats(transformStats(statsData));
         if (signalsData) setSignals(transformSignals(signalsData));
@@ -68,6 +84,22 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  // Telegram connection status polling
+  useEffect(() => {
+    const loadTelegramStatus = async () => {
+      try {
+        const status = await fetchData("/telegram/connection-status");
+        if (status) setTelegramStatus(status);
+      } catch (e) {
+        // Silently fail - endpoint may not be available
+      }
+    };
+
+    loadTelegramStatus();
+    const interval = setInterval(loadTelegramStatus, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
   // Handle WebSocket updates
   useEffect(() => {
     if (!lastMessage) return;
@@ -78,7 +110,9 @@ export default function Dashboard() {
       case "account.updated":
         setAccount(data);
         // Positions are updated along with account info
-        fetchData("/positions").then((d) => d && setOpenTrades(transformPositions(d)));
+        fetchData("/positions").then(
+          (d) => d && setOpenTrades(transformPositions(d))
+        );
         break;
       case "signal.received":
       case "signal.parsed":
@@ -86,13 +120,17 @@ export default function Dashboard() {
       case "signal.executed":
       case "signal.failed":
       case "signal.skipped":
-        fetchData("/signals?limit=20").then((d) => d && setSignals(transformSignals(d)));
+        fetchData("/signals?limit=20").then(
+          (d) => d && setSignals(transformSignals(d))
+        );
         fetchData("/stats").then((d) => d && setStats(transformStats(d)));
         break;
       case "trade.opened":
       case "trade.closed":
       case "trade.updated":
-        fetchData("/positions").then((d) => d && setOpenTrades(transformPositions(d)));
+        fetchData("/positions").then(
+          (d) => d && setOpenTrades(transformPositions(d))
+        );
         fetchData("/stats").then((d) => d && setStats(transformStats(d)));
         break;
     }
@@ -107,6 +145,40 @@ export default function Dashboard() {
     await postData("/control/resume");
     setIsPaused(false);
   };
+
+  const [isReconnecting, setIsReconnecting] = useState(false);
+
+  const handleTelegramReconnect = async () => {
+    if (isReconnecting) return; // Prevent multiple clicks
+    setIsReconnecting(true);
+    try {
+      await postData("/admin/telegram/reconnect");
+      // Refresh status after reconnect attempt
+      const status = await fetchData("/telegram/connection-status");
+      if (status) setTelegramStatus(status);
+    } catch (e) {
+      console.error("Reconnect failed:", e);
+    } finally {
+      // Add delay before allowing another reconnect
+      setTimeout(() => setIsReconnecting(false), 3000);
+    }
+  };
+
+  // Refresh all data - used by command palette
+  const handleRefresh = useCallback(async () => {
+    const [statsData, signalsData, positionsData, accountData] =
+      await Promise.all([
+        fetchData("/stats"),
+        fetchData("/signals?limit=20"),
+        fetchData("/positions"),
+        fetchData("/account"),
+      ]);
+
+    if (statsData) setStats(transformStats(statsData));
+    if (signalsData) setSignals(transformSignals(signalsData));
+    if (positionsData) setOpenTrades(transformPositions(positionsData));
+    if (accountData) setAccount(accountData);
+  }, [fetchData]);
 
   const renderDashboard = () => (
     <div className="space-y-6">
@@ -126,7 +198,14 @@ export default function Dashboard() {
           <RecentSignals
             signals={signals}
             isLoading={isLoading}
-            onRefresh={() => fetchData("/signals?limit=20").then((d) => d && setSignals(transformSignals(d)))}
+            onRefresh={() =>
+              fetchData("/signals?limit=20").then(
+                (d) => d && setSignals(transformSignals(d))
+              )
+            }
+            telegramStatus={telegramStatus}
+            onReconnect={isAdmin ? handleTelegramReconnect : null}
+            isReconnecting={isReconnecting}
           />
         </div>
 
@@ -155,12 +234,21 @@ export default function Dashboard() {
           <RecentSignals
             signals={signals}
             isLoading={isLoading}
-            onRefresh={() => fetchData("/signals?limit=20").then((d) => d && setSignals(transformSignals(d)))}
+            onRefresh={() =>
+              fetchData("/signals?limit=20").then(
+                (d) => d && setSignals(transformSignals(d))
+              )
+            }
+            telegramStatus={telegramStatus}
+            onReconnect={isAdmin ? handleTelegramReconnect : null}
+            isReconnecting={isReconnecting}
             fullPage
           />
         );
       case "positions":
-        return <OpenPositions trades={openTrades} isLoading={isLoading} fullPage />;
+        return (
+          <OpenPositions trades={openTrades} isLoading={isLoading} fullPage />
+        );
       case "account":
         return (
           <div className="space-y-6">
@@ -168,6 +256,8 @@ export default function Dashboard() {
             <PerformanceChart stats={stats} isLoading={isLoading} />
           </div>
         );
+      case "profile":
+        return <ProfilePage />;
       case "admin":
         return isAdmin ? <AdminPanel /> : renderDashboard();
       case "dashboard":
@@ -186,6 +276,8 @@ export default function Dashboard() {
         return "Open Positions";
       case "account":
         return "Account";
+      case "profile":
+        return "Profile";
       case "admin":
         return "Admin Dashboard";
       default:
@@ -194,26 +286,39 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar
+    <div className="min-h-screen bg-background font-sans selection:bg-primary/20">
+      {/* Premium Top Navigation */}
+      <PremiumTopBar
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onCollapsedChange={setSidebarCollapsed}
+        isPaused={isPaused}
+        onPause={handlePause}
+        onResume={handleResume}
+        isConnected={isConnected}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       />
-      <div
-        className="flex-1 transition-all duration-300"
-        style={{ marginLeft: sidebarCollapsed ? 72 : 260 }}
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onTabChange={setActiveTab}
+        isPaused={isPaused}
+        onPause={handlePause}
+        onResume={handleResume}
+        onRefresh={handleRefresh}
+      />
+
+      {/* Main Content */}
+      <motion.main
+        key={activeTab}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="px-4 md:px-6 py-6 max-w-[1600px] mx-auto min-h-[calc(100vh-64px)]"
       >
-        <DashboardLayout
-          title={getPageTitle()}
-          isPaused={isPaused}
-          onPause={handlePause}
-          onResume={handleResume}
-          isConnected={isConnected}
-        >
-          {renderPage()}
-        </DashboardLayout>
-      </div>
+        {renderPage()}
+      </motion.main>
     </div>
   );
 }

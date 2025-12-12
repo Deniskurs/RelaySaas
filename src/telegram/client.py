@@ -84,6 +84,11 @@ def create_telegram_client() -> TelegramClient:
         session,
         config["api_id"],
         config["api_hash"],
+        # Connection stability settings
+        connection_retries=10,       # Retry connection up to 10 times
+        retry_delay=1,               # Start with 1 second delay between retries
+        auto_reconnect=True,         # Automatically reconnect on disconnect
+        request_retries=5,           # Retry failed requests
     )
-    log.debug("Telegram client created")
+    log.debug("Telegram client created with auto-reconnect enabled")
     return client

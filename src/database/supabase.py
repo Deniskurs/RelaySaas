@@ -37,6 +37,7 @@ DEFAULT_SETTINGS = {
     "gold_market_threshold": 3.0,
     "split_tps": True,
     "tp_split_ratios": [0.5, 0.3, 0.2],
+    "tp_lot_mode": "split",  # "split" = divide lot across TPs, "equal" = same lot for each TP
     "enable_breakeven": True,
     "symbol_suffix": "",
     "paused": False,
@@ -160,6 +161,7 @@ def _get_default_response() -> dict:
         "gold_market_threshold": 3.0,
         "split_tps": True,
         "tp_split_ratios": [0.5, 0.3, 0.2],
+        "tp_lot_mode": "split",
         "enable_breakeven": True,
         "symbol_suffix": "",
         "paused": False,
@@ -180,6 +182,7 @@ def _format_settings(data: dict) -> dict:
         "gold_market_threshold": float(data.get("gold_market_threshold") or 3.0),
         "split_tps": bool(data.get("split_tps")) if data.get("split_tps") is not None else True,
         "tp_split_ratios": data.get("tp_split_ratios") or [0.5, 0.3, 0.2],
+        "tp_lot_mode": str(data.get("tp_lot_mode") or "split"),  # "split" or "equal"
         "enable_breakeven": bool(data.get("enable_breakeven")) if data.get("enable_breakeven") is not None else True,
         "symbol_suffix": str(data.get("symbol_suffix") or ""),
         "paused": bool(data.get("paused")) if data.get("paused") is not None else False,

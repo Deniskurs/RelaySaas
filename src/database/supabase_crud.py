@@ -21,12 +21,23 @@ async def create_signal(
         user_id: User UUID. If None, uses system user for single-user mode.
 
     Returns:
-        The created signal record.
+        The created signal record, or None if duplicate.
     """
     supabase = get_supabase_admin()
 
     # Use system user ID if none provided (single-user/legacy mode)
     effective_user_id = user_id or get_default_user_id()
+
+    # Check for duplicate message to prevent double-processing
+    if message_id and channel_id:
+        existing = supabase.table("signals_v2") \
+            .select("id") \
+            .eq("channel_id", channel_id) \
+            .eq("message_id", message_id) \
+            .execute()
+        if existing.data and len(existing.data) > 0:
+            # Already processed this message
+            return None
 
     data = {
         "user_id": effective_user_id,

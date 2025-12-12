@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { AlertTriangle, Clock, CheckCircle, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+} from "lucide-react";
 import { format, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -35,6 +43,129 @@ const StatusDot = ({ status }) => {
         colorMap[status?.toLowerCase()] || "bg-gray-500"
       )}
     />
+  );
+};
+
+// Telegram connection status indicator
+const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconnecting }) => {
+  if (!status) return null;
+
+  const { connected, reconnecting, last_activity, last_health_check, channels_count, reconnect_attempts } = status;
+
+  // Calculate time since timestamp
+  const getTimeAgo = (timestamp) => {
+    if (!timestamp) return null;
+    const lastTime = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - lastTime;
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffSecs < 60) return `${diffSecs}s ago`;
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return format(lastTime, "MMM d");
+  };
+
+  const lastActivity = getTimeAgo(last_activity);
+  const lastHealthCheck = getTimeAgo(last_health_check);
+
+  const statusConfig = reconnecting
+    ? {
+        color: "bg-yellow-500",
+        pulseColor: "bg-yellow-400",
+        icon: RefreshCw,
+        text: reconnect_attempts > 0 ? `Reconnecting (${reconnect_attempts})...` : "Reconnecting...",
+        textColor: "text-yellow-500",
+      }
+    : connected
+    ? {
+        color: "bg-emerald-500",
+        pulseColor: "bg-emerald-400",
+        icon: Wifi,
+        text: `Live${channels_count > 0 ? ` · ${channels_count}ch` : ""}`,
+        textColor: "text-emerald-500",
+      }
+    : {
+        color: "bg-red-500",
+        pulseColor: "bg-red-400",
+        icon: WifiOff,
+        text: "Disconnected",
+        textColor: "text-red-500",
+      };
+
+  const Icon = statusConfig.icon;
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Animated status dot */}
+      <div className="relative flex items-center justify-center">
+        {(connected || reconnecting) && (
+          <span
+            className={cn(
+              "absolute w-2 h-2 rounded-full animate-ping opacity-75",
+              statusConfig.pulseColor
+            )}
+          />
+        )}
+        <span
+          className={cn(
+            "relative w-2 h-2 rounded-full",
+            statusConfig.color,
+            reconnecting && "animate-pulse"
+          )}
+        />
+      </div>
+
+      {/* Status text with tooltip */}
+      <div className="flex items-center gap-1.5 group relative">
+        <Icon
+          className={cn(
+            "w-3 h-3",
+            statusConfig.textColor,
+            reconnecting && "animate-spin"
+          )}
+        />
+        <span className={cn("text-[10px] font-medium", statusConfig.textColor)}>
+          {statusConfig.text}
+        </span>
+
+        {/* Tooltip with connection details */}
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 border border-white/10 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-xl">
+          <div className="space-y-1">
+            {lastActivity && (
+              <div className="flex justify-between gap-4">
+                <span className="text-white/60">Last signal:</span>
+                <span className="font-mono">{lastActivity}</span>
+              </div>
+            )}
+            {lastHealthCheck && (
+              <div className="flex justify-between gap-4">
+                <span className="text-white/60">Health check:</span>
+                <span className="font-mono text-emerald-400">{lastHealthCheck}</span>
+              </div>
+            )}
+            {!lastActivity && !lastHealthCheck && (
+              <span className="text-white/60">Waiting for activity...</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Reconnect button when disconnected */}
+      {!connected && !reconnecting && onReconnect && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 hover:bg-white/10"
+          onClick={onReconnect}
+          disabled={propIsReconnecting}
+        >
+          <RefreshCw className={cn("w-3 h-3 text-foreground-muted", propIsReconnecting && "animate-spin")} />
+        </Button>
+      )}
+    </div>
   );
 };
 
@@ -307,6 +438,9 @@ export default function RecentSignals({
   signals = [],
   isLoading = false,
   onRefresh,
+  telegramStatus = null,
+  onReconnect = null,
+  isReconnecting = false,
 }) {
   const { postData } = useApi();
 
@@ -335,9 +469,16 @@ export default function RecentSignals({
   return (
     <Card className="glass-card border-border/40 bg-black/40 h-full flex flex-col shadow-none">
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b border-white/5">
-        <CardTitle className="text-sm font-medium text-foreground/90 font-sans tracking-tight">
-          Recent Signals
-        </CardTitle>
+        <div className="flex items-center gap-3">
+          <CardTitle className="text-sm font-medium text-foreground/90 font-sans tracking-tight">
+            Recent Signals
+          </CardTitle>
+          <ConnectionIndicator
+            status={telegramStatus}
+            onReconnect={onReconnect}
+            isReconnecting={isReconnecting}
+          />
+        </div>
         <Badge
           variant="secondary"
           className="bg-white/5 hover:bg-white/10 text-foreground-muted font-mono text-[10px]"

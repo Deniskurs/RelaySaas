@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
 import {
   Users,
   Activity,
@@ -23,14 +22,6 @@ import {
   Check,
   Eye,
   EyeOff,
-  MessageSquare,
-  Phone,
-  Send,
-  Shield,
-  Unplug,
-  CheckCircle2,
-  AlertCircle,
-  Lock,
 } from "lucide-react";
 
 function StatCard({ title, value, icon: Icon, trend, className }) {
@@ -63,375 +54,6 @@ function StatCard({ title, value, icon: Icon, trend, className }) {
   );
 }
 
-function TelegramVerification({ onStatusChange }) {
-  const { fetchData, postData } = useApi();
-  const [status, setStatus] = useState("loading"); // loading, not_configured, pending_code, pending_password, connected
-  const [message, setMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Credentials for initial setup
-  const [apiId, setApiId] = useState("");
-  const [apiHash, setApiHash] = useState("");
-  const [phone, setPhone] = useState("");
-  const [showApiHash, setShowApiHash] = useState(false);
-
-  // Verification
-  const [code, setCode] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    checkStatus();
-  }, []);
-
-  const checkStatus = async () => {
-    const result = await fetchData("/admin/telegram/status");
-    if (result) {
-      setStatus(result.status);
-      setMessage(result.message);
-      if (onStatusChange) onStatusChange(result.status);
-    }
-  };
-
-  const handleSendCode = async () => {
-    if (!apiId || !apiHash || !phone) {
-      setError("Please fill in all fields");
-      return;
-    }
-    setIsLoading(true);
-    setError("");
-
-    const result = await postData("/admin/telegram/send-code", {
-      api_id: apiId,
-      api_hash: apiHash,
-      phone: phone,
-    });
-
-    if (result) {
-      setStatus(result.status);
-      setMessage(result.message);
-      if (onStatusChange) onStatusChange(result.status);
-    } else {
-      setError(
-        "Failed to send verification code. Please check your credentials."
-      );
-    }
-    setIsLoading(false);
-  };
-
-  const handleVerifyCode = async () => {
-    if (!code) {
-      setError("Please enter the verification code");
-      return;
-    }
-    setIsLoading(true);
-    setError("");
-
-    const result = await postData("/admin/telegram/verify-code", { code });
-
-    if (result) {
-      setStatus(result.status);
-      setMessage(result.message);
-      if (onStatusChange) onStatusChange(result.status);
-    } else {
-      setError("Invalid code. Please try again.");
-    }
-    setIsLoading(false);
-  };
-
-  const handleVerifyPassword = async () => {
-    if (!password) {
-      setError("Please enter your 2FA password");
-      return;
-    }
-    setIsLoading(true);
-    setError("");
-
-    const result = await postData("/admin/telegram/verify-password", {
-      password,
-    });
-
-    if (result) {
-      setStatus(result.status);
-      setMessage(result.message);
-      if (onStatusChange) onStatusChange(result.status);
-    } else {
-      setError("Invalid password. Please try again.");
-    }
-    setIsLoading(false);
-  };
-
-  const handleDisconnect = async () => {
-    setIsLoading(true);
-    const result = await postData("/admin/telegram/disconnect", {});
-    if (result) {
-      setStatus(result.status);
-      setMessage(result.message);
-      setApiId("");
-      setApiHash("");
-      setPhone("");
-      setCode("");
-      setPassword("");
-      if (onStatusChange) onStatusChange(result.status);
-    }
-    setIsLoading(false);
-  };
-
-  if (status === "loading") {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const handleReconnect = async () => {
-    setIsLoading(true);
-    setError("");
-    try {
-      const result = await postData("/admin/telegram/reconnect");
-      setMessage(result.message || "Reconnected successfully!");
-    } catch (err) {
-      setError(err.message || "Failed to reconnect");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (status === "connected") {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 border border-success/20">
-          <CheckCircle2 className="w-5 h-5 text-success" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-success">
-              Telegram Connected
-            </p>
-            <p className="text-xs text-foreground-muted mt-0.5">{message}</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReconnect}
-              disabled={isLoading}
-              className="text-primary hover:bg-primary/10"
-              title="Reconnect Telegram listener"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDisconnect}
-              disabled={isLoading}
-              className="text-destructive hover:bg-destructive/10"
-              title="Disconnect Telegram"
-            >
-              <Unplug className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "pending_password") {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20">
-          <Lock className="w-5 h-5 text-primary" />
-          <div>
-            <p className="text-sm font-medium text-foreground">2FA Required</p>
-            <p className="text-xs text-foreground-muted mt-0.5">{message}</p>
-          </div>
-        </div>
-
-        {error && (
-          <div className="flex items-center gap-2 text-destructive text-sm">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">
-            Telegram Password
-          </label>
-          <div className="relative">
-            <Input
-              type={showPassword ? "text" : "password"}
-              placeholder="Enter your 2FA password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-background/50 pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground"
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
-
-        <Button
-          onClick={handleVerifyPassword}
-          disabled={isLoading}
-          className="w-full"
-        >
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-          ) : (
-            <Shield className="w-4 h-4 mr-2" />
-          )}
-          Verify Password
-        </Button>
-      </div>
-    );
-  }
-
-  if (status === "pending_code") {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20">
-          <MessageSquare className="w-5 h-5 text-primary" />
-          <div>
-            <p className="text-sm font-medium text-foreground">
-              Enter Verification Code
-            </p>
-            <p className="text-xs text-foreground-muted mt-0.5">{message}</p>
-          </div>
-        </div>
-
-        {error && (
-          <div className="flex items-center gap-2 text-destructive text-sm">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">
-            Verification Code
-          </label>
-          <Input
-            placeholder="Enter the code from Telegram"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="bg-background/50 text-center text-lg tracking-widest"
-            maxLength={6}
-          />
-        </div>
-
-        <Button
-          onClick={handleVerifyCode}
-          disabled={isLoading}
-          className="w-full"
-        >
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-          ) : (
-            <Check className="w-4 h-4 mr-2" />
-          )}
-          Verify Code
-        </Button>
-      </div>
-    );
-  }
-
-  // not_configured - show setup form
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-foreground-muted">
-        Get your API ID and Hash from{" "}
-        <a
-          href="https://my.telegram.org/apps"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
-          my.telegram.org/apps
-        </a>
-      </p>
-
-      {error && (
-        <div className="flex items-center gap-2 text-destructive text-sm">
-          <AlertCircle className="w-4 h-4" />
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">API ID</label>
-          <Input
-            value={apiId}
-            onChange={(e) => setApiId(e.target.value)}
-            placeholder="e.g., 12345678"
-            className="bg-background/50"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">
-            API Hash
-          </label>
-          <div className="relative">
-            <Input
-              type={showApiHash ? "text" : "password"}
-              placeholder="Enter API hash"
-              value={apiHash}
-              onChange={(e) => setApiHash(e.target.value)}
-              className="bg-background/50 pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowApiHash(!showApiHash)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground"
-            >
-              {showApiHash ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">
-          Phone Number
-        </label>
-        <div className="flex items-center gap-2">
-          <Phone size={14} className="text-foreground-muted" />
-          <Input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+1234567890"
-            className="bg-background/50"
-          />
-        </div>
-        <p className="text-xs text-foreground-muted">
-          International format with country code
-        </p>
-      </div>
-
-      <Button onClick={handleSendCode} disabled={isLoading} className="w-full">
-        {isLoading ? (
-          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-        ) : (
-          <Send className="w-4 h-4 mr-2" />
-        )}
-        Send Verification Code
-      </Button>
-    </div>
-  );
-}
-
 function SystemConfig() {
   const { fetchData, putData } = useApi();
   const [config, setConfig] = useState(null);
@@ -441,7 +63,6 @@ function SystemConfig() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showMetaApiToken, setShowMetaApiToken] = useState(false);
-  const [showTelegramHash, setShowTelegramHash] = useState(false);
 
   useEffect(() => {
     loadConfig();
@@ -453,17 +74,10 @@ function SystemConfig() {
     if (data) {
       setConfig(data);
       setFormData({
-        // API Keys
         anthropic_api_key: "",
         llm_model: data.llm_model || "claude-haiku-4-5-20251001",
         metaapi_token: "",
         metaapi_account_id: data.metaapi_account_id || "",
-        // Telegram
-        telegram_api_id: data.telegram_api_id || "",
-        telegram_api_hash: "",
-        telegram_phone: data.telegram_phone || "",
-        telegram_channel_ids: data.telegram_channel_ids || "",
-        // Note: Trading settings (max_lot_size, symbol_suffix, etc.) are now in user Settings
       });
     }
     setIsLoading(false);
@@ -475,7 +89,6 @@ function SystemConfig() {
 
     const updates = {};
 
-    // API Keys (only include if user entered new values)
     if (formData.anthropic_api_key) {
       updates.anthropic_api_key = formData.anthropic_api_key;
     }
@@ -485,34 +98,15 @@ function SystemConfig() {
     if (formData.metaapi_account_id) {
       updates.metaapi_account_id = formData.metaapi_account_id;
     }
-
-    // Telegram - always include these
-    if (formData.telegram_api_id) {
-      updates.telegram_api_id = formData.telegram_api_id;
-    }
-    if (formData.telegram_api_hash) {
-      updates.telegram_api_hash = formData.telegram_api_hash;
-    }
-    if (formData.telegram_phone) {
-      updates.telegram_phone = formData.telegram_phone;
-    }
-    // Always send channel_ids (even if empty string)
-    updates.telegram_channel_ids = formData.telegram_channel_ids || "";
-
-    // LLM model (admin-only setting)
     updates.llm_model = formData.llm_model;
-    // Note: Trading settings (max_lot_size, symbol_suffix, etc.) are now saved via user Settings page
 
-    console.log("Saving config updates:", updates);
     const result = await putData("/admin/config", updates);
-    console.log("Save result:", result);
     if (result) {
       setConfig(result);
       setFormData((prev) => ({
         ...prev,
         anthropic_api_key: "",
         metaapi_token: "",
-        telegram_api_hash: "",
       }));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -672,55 +266,11 @@ function SystemConfig() {
       </Card>
 
       <Card className="glass-card border-0">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-foreground uppercase tracking-wider flex items-center gap-2">
-            <MessageSquare size={16} className="text-primary" />
-            Telegram Connection
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <TelegramVerification />
-        </CardContent>
-      </Card>
-
-      <Card className="glass-card border-0">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-foreground uppercase tracking-wider flex items-center gap-2">
-            <Radio size={16} className="text-primary" />
-            Telegram Channels
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Channel IDs
-            </label>
-            <Input
-              value={formData.telegram_channel_ids}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  telegram_channel_ids: e.target.value,
-                }))
-              }
-              placeholder="e.g., -1001234567890,-1009876543210"
-              className="bg-background/50"
-            />
-            <p className="text-xs text-foreground-muted">
-              Comma-separated Telegram channel IDs to monitor for signals
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Trading settings have been moved to Settings page */}
-      <Card className="glass-card border-0">
         <CardContent className="p-4">
           <p className="text-sm text-foreground-muted">
-            <span className="font-medium text-foreground">Note:</span> Trading
-            settings (lot sizes, max trades, symbol suffix, etc.) are now
-            configured in the <span className="text-primary">Settings</span>{" "}
-            page for each user.
+            <span className="font-medium text-foreground">Note:</span> Telegram
+            connection and channel settings have been moved to the{" "}
+            <span className="text-primary">Settings</span> page.
           </p>
         </CardContent>
       </Card>

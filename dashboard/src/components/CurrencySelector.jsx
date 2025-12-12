@@ -30,7 +30,7 @@ export default function CurrencySelector() {
           )}
         >
           <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+            <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-foreground">
               {currencyData.symbol}
             </span>
             <span className="text-sm font-medium tracking-tight">
@@ -69,7 +69,7 @@ export default function CurrencySelector() {
                 className={cn(
                   "cursor-pointer rounded-md my-1 px-3 py-2.5",
                   "focus:bg-white/5 focus:text-white transition-colors",
-                  "data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
+                  "data-[state=checked]:bg-white/10 data-[state=checked]:text-foreground"
                 )}
               >
                 <div className="flex items-center w-full gap-3">
@@ -77,7 +77,7 @@ export default function CurrencySelector() {
                     className={cn(
                       "w-6 h-6 rounded-md flex items-center justify-center text-xs font-mono border",
                       isSelected
-                        ? "bg-primary/20 border-primary/20 text-primary"
+                        ? "bg-white/15 border-white/15 text-foreground"
                         : "bg-white/5 border-white/5 text-foreground-muted group-hover:border-white/10"
                     )}
                   >
@@ -94,7 +94,7 @@ export default function CurrencySelector() {
                   </div>
 
                   {isSelected && (
-                    <Check className="ml-auto w-4 h-4 text-primary" />
+                    <Check className="ml-auto w-4 h-4 text-foreground" />
                   )}
                 </div>
               </DropdownMenuRadioItem>

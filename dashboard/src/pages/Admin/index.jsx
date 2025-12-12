@@ -33,15 +33,15 @@ import {
 function StatCard({ title, value, icon: Icon, trend, className, index }) {
   return (
     <Card className="glass-card border-0 overflow-hidden relative group">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <CardContent className="p-6 relative">
         <div className="flex items-center justify-between mb-4">
           <div
             className={`p-3 rounded-xl ${
-              className || "bg-primary/10"
+              className || "bg-white/10"
             } group-hover:scale-110 transition-transform duration-300`}
           >
-            <Icon className="w-6 h-6 text-primary" />
+            <Icon className="w-6 h-6 text-foreground" />
           </div>
           {trend && (
             <div
@@ -153,7 +153,7 @@ function SystemConfig() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <Loader2 className="w-8 h-8 animate-spin text-foreground" />
       </div>
     );
   }
@@ -178,7 +178,7 @@ function SystemConfig() {
           <Button
             onClick={handleSave}
             disabled={isSaving}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:scale-105"
+            className="transition-all hover:scale-105"
           >
             {isSaving ? (
               <Loader2 size={16} className="animate-spin mr-2" />
@@ -193,11 +193,11 @@ function SystemConfig() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* API Credentials */}
         <Card className="glass-card md:col-span-2 overflow-hidden border-0">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-white/[0.02] to-transparent pointer-events-none" />
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5 text-lg">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Key size={20} className="text-primary" />
+              <div className="p-2 bg-white/10 rounded-lg">
+                <Key size={20} className="text-foreground" />
               </div>
               API Credentials
             </CardTitle>
@@ -224,12 +224,12 @@ function SystemConfig() {
                         anthropic_api_key: e.target.value,
                       }))
                     }
-                    className="bg-background/40 border-primary/20 focus:border-primary/50 pr-10 transition-all"
+                    className="bg-background/40 border-white/10 focus:border-white/20 pr-10 transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-primary transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground transition-colors"
                   >
                     {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -261,12 +261,12 @@ function SystemConfig() {
                         metaapi_token: e.target.value,
                       }))
                     }
-                    className="bg-background/40 border-primary/20 focus:border-primary/50 pr-10 transition-all"
+                    className="bg-background/40 border-white/10 focus:border-white/20 pr-10 transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowMetaApiToken(!showMetaApiToken)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-primary transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground transition-colors"
                   >
                     {showMetaApiToken ? (
                       <EyeOff size={16} />
@@ -479,9 +479,9 @@ function UserRow({ user, onSuspend, onActivate }) {
       icon: Loader2,
     },
     onboarding: {
-      color: "text-primary",
-      bg: "bg-primary/10",
-      border: "border-primary/20",
+      color: "text-foreground",
+      bg: "bg-white/10",
+      border: "border-white/20",
       icon: Activity,
     },
     suspended: {
@@ -496,9 +496,9 @@ function UserRow({ user, onSuspend, onActivate }) {
   const StatusIcon = config.icon;
 
   return (
-    <div className="group flex items-center justify-between p-4 rounded-xl border border-border/40 bg-card/30 hover:bg-card/50 hover:border-primary/20 transition-all duration-300">
+    <div className="group flex items-center justify-between p-4 rounded-xl border border-border/40 bg-card/30 hover:bg-card/50 hover:border-white/20 transition-all duration-300">
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-full ring-2 ring-border/50 group-hover:ring-primary/20 transition-all overflow-hidden bg-surface flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full ring-2 ring-border/50 group-hover:ring-white/20 transition-all overflow-hidden bg-surface flex items-center justify-center">
           {user.avatar_url ? (
             <img
               src={user.avatar_url}
@@ -506,7 +506,7 @@ function UserRow({ user, onSuspend, onActivate }) {
               className="w-full h-full object-cover"
             />
           ) : (
-            <span className="text-lg font-semibold text-primary/80">
+            <span className="text-lg font-semibold text-foreground/80">
               {(user.full_name || user.email)?.[0]?.toUpperCase()}
             </span>
           )}
@@ -515,7 +515,7 @@ function UserRow({ user, onSuspend, onActivate }) {
           <h4 className="font-semibold text-foreground flex items-center gap-2">
             {user.full_name || user.email.split("@")[0]}
             {user.status === "active" && (
-              <Shield size={12} className="text-primary" />
+              <Shield size={12} className="text-foreground" />
             )}
           </h4>
           <p className="text-sm text-foreground-muted">{user.email}</p>
@@ -639,7 +639,7 @@ export default function AdminDashboard() {
   if (authLoading || (!isAdmin && !authLoading)) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <Loader2 className="w-8 h-8 animate-spin text-foreground" />
       </div>
     );
   }
@@ -649,8 +649,8 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-primary via-primary/80 to-accent-purple shadow-lg shadow-primary/20">
-            <Shield className="w-8 h-8 text-white" />
+          <div className="p-3 rounded-2xl bg-white/10 border border-white/10">
+            <Shield className="w-8 h-8 text-foreground" />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight">
@@ -668,21 +668,21 @@ export default function AdminDashboard() {
         <TabsList className="bg-surface/50 border border-white/5 p-1 h-12 w-fit rounded-xl self-start">
           <TabsTrigger
             value="overview"
-            className="rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-sm px-6 h-10"
+            className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
           >
             <Activity size={16} className="mr-2" />
             Overview
           </TabsTrigger>
           <TabsTrigger
             value="users"
-            className="rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-sm px-6 h-10"
+            className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
           >
             <Users size={16} className="mr-2" />
             Users
           </TabsTrigger>
           <TabsTrigger
             value="config"
-            className="rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary text-sm px-6 h-10"
+            className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
           >
             <Settings size={16} className="mr-2" />
             System Config
@@ -751,7 +751,7 @@ export default function AdminDashboard() {
               <CardHeader className="border-b border-white/5 bg-white/5 pb-4">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
-                    <Activity size={18} className="text-primary" />
+                    <Activity size={18} className="text-foreground" />
                     Recent Activity
                   </CardTitle>
                 </div>
@@ -764,10 +764,10 @@ export default function AdminDashboard() {
                         key={log.id}
                         className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors group"
                       >
-                        <div className="p-2.5 rounded-xl bg-surface border border-white/10 group-hover:border-primary/30 transition-colors">
+                        <div className="p-2.5 rounded-xl bg-surface border border-white/10 group-hover:border-white/30 transition-colors">
                           <Activity
                             size={16}
-                            className="text-foreground-muted group-hover:text-primary transition-colors"
+                            className="text-foreground-muted group-hover:text-foreground transition-colors"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -784,7 +784,7 @@ export default function AdminDashboard() {
                           </div>
                           {log.user_email && (
                             <p className="text-xs text-foreground-muted flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-primary/50"></span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-white/50"></span>
                               {log.user_email}
                             </p>
                           )}
@@ -814,7 +814,7 @@ export default function AdminDashboard() {
                   placeholder="Search users by name or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-surface/50 border-white/10 focus:bg-surface focus:border-primary/50 transition-all"
+                  className="pl-10 bg-surface/50 border-white/10 focus:bg-surface focus:border-white/20 transition-all"
                 />
               </div>
               <Button

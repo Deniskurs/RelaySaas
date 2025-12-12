@@ -14,7 +14,9 @@ from ..database.supabase import (
     get_supabase_admin,
     get_system_config,
     update_system_config,
+    update_settings,
     SYSTEM_CONFIG_KEYS,
+    SYSTEM_USER_ID,
 )
 from ..users.manager import user_manager
 from ..utils.logger import log
@@ -443,8 +445,9 @@ class MaskedSystemConfigResponse(BaseModel):
     metaapi_token_set: bool = False
     metaapi_token_preview: str = ""
     metaapi_account_id: str = ""
-    # Telegram
+    # Telegram - return actual values for admin to see/edit
     telegram_api_id: str = ""
+    telegram_api_hash: str = ""  # Actual value for admin editing
     telegram_api_hash_set: bool = False
     telegram_api_hash_preview: str = ""
     telegram_phone: str = ""
@@ -491,8 +494,9 @@ async def get_system_config_endpoint(
             metaapi_token_set=metaapi_set,
             metaapi_token_preview=metaapi_preview,
             metaapi_account_id=config.get("metaapi_account_id", ""),
-            # Telegram
+            # Telegram - return actual hash for admin editing
             telegram_api_id=config.get("telegram_api_id", ""),
+            telegram_api_hash=config.get("telegram_api_hash", ""),
             telegram_api_hash_set=telegram_hash_set,
             telegram_api_hash_preview=telegram_hash_preview,
             telegram_phone=config.get("telegram_phone", ""),
@@ -530,6 +534,33 @@ async def update_system_config_endpoint(
         # Update config
         updated_config = update_system_config(updates)
 
+        # SYNC trading settings to user_settings_v2 (executor reads from there!)
+        trading_settings_sync = {}
+        if "split_tps" in updates:
+            trading_settings_sync["split_tps"] = updates["split_tps"] == "true"
+        if "tp_split_ratios" in updates:
+            # Convert comma-separated string to list of floats
+            ratios_str = updates["tp_split_ratios"]
+            trading_settings_sync["tp_split_ratios"] = [
+                float(r.strip()) for r in ratios_str.split(",") if r.strip()
+            ]
+        if "max_lot_size" in updates:
+            trading_settings_sync["max_lot_size"] = float(updates["max_lot_size"])
+        if "max_open_trades" in updates:
+            trading_settings_sync["max_open_trades"] = int(updates["max_open_trades"])
+        if "max_risk_percent" in updates:
+            trading_settings_sync["max_risk_percent"] = float(updates["max_risk_percent"])
+        if "symbol_suffix" in updates:
+            trading_settings_sync["symbol_suffix"] = updates["symbol_suffix"]
+        if "enable_breakeven" in updates:
+            trading_settings_sync["enable_breakeven"] = updates["enable_breakeven"] == "true"
+        if "tp_lot_mode" in updates:
+            trading_settings_sync["tp_lot_mode"] = updates["tp_lot_mode"]
+
+        if trading_settings_sync:
+            update_settings(SYSTEM_USER_ID, trading_settings_sync)
+            log.info("Synced trading settings to user_settings_v2", keys=list(trading_settings_sync.keys()))
+
         # Log activity
         # Don't include actual values in log for security
         await _log_activity(
@@ -554,8 +585,9 @@ async def update_system_config_endpoint(
             metaapi_token_set=metaapi_set,
             metaapi_token_preview=metaapi_preview,
             metaapi_account_id=updated_config.get("metaapi_account_id", ""),
-            # Telegram
+            # Telegram - return actual hash for admin editing
             telegram_api_id=updated_config.get("telegram_api_id", ""),
+            telegram_api_hash=updated_config.get("telegram_api_hash", ""),
             telegram_api_hash_set=telegram_hash_set,
             telegram_api_hash_preview=telegram_hash_preview,
             telegram_phone=updated_config.get("telegram_phone", ""),

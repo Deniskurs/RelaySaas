@@ -89,6 +89,7 @@ class SettingsResponse(BaseModel):
     gold_market_threshold: float
     split_tps: bool
     tp_split_ratios: List[float]
+    tp_lot_mode: str  # "split" or "equal"
     enable_breakeven: bool
 
     # Broker
@@ -119,6 +120,7 @@ class SettingsUpdate(BaseModel):
     gold_market_threshold: Optional[float] = None
     split_tps: Optional[bool] = None
     tp_split_ratios: Optional[List[float]] = None
+    tp_lot_mode: Optional[str] = None  # "split" or "equal"
     enable_breakeven: Optional[bool] = None
 
     # Broker
@@ -541,3 +543,41 @@ async def get_last_trade_lot():
         )
 
     return LastTradeLotResponse()
+
+
+# Telegram connection status endpoint (for dashboard indicator)
+class TelegramConnectionStatus(BaseModel):
+    """Telegram connection status for dashboard display."""
+    connected: bool = False
+    reconnecting: bool = False
+    last_activity: Optional[str] = None
+    last_health_check: Optional[str] = None
+    started_at: Optional[str] = None
+    reconnect_attempts: int = 0
+    channels_count: int = 0
+
+
+@router.get("/telegram/connection-status", response_model=TelegramConnectionStatus)
+async def get_telegram_connection_status():
+    """Get Telegram listener connection status for dashboard display.
+    
+    This is a lightweight endpoint that returns the current connection state
+    without requiring admin authentication.
+    """
+    if not _copier or not hasattr(_copier, 'telegram'):
+        return TelegramConnectionStatus()
+    
+    try:
+        status = _copier.telegram.get_connection_status()
+        return TelegramConnectionStatus(
+            connected=status.get("connected", False),
+            reconnecting=status.get("reconnecting", False),
+            last_activity=status.get("last_activity"),
+            last_health_check=status.get("last_health_check"),
+            started_at=status.get("started_at"),
+            reconnect_attempts=status.get("reconnect_attempts", 0),
+            channels_count=status.get("channels_count", 0),
+        )
+    except Exception:
+        return TelegramConnectionStatus()
+

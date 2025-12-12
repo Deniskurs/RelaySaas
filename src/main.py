@@ -122,13 +122,20 @@ class SignalCopier:
 
         log.info("Processing signal message", channel=channel_name, preview=text[:50])
 
-        # Create signal record
+        # Create signal record (returns None if duplicate message)
         signal = await crud.create_signal(
             raw_message=text,
             channel_name=channel_name,
             channel_id=message.get("channel_id"),
             message_id=message.get("message_id"),
         )
+        
+        # Skip if duplicate message already processed
+        if not signal:
+            log.debug("Duplicate message detected, skipping", 
+                     channel=channel_name, message_id=message.get("message_id"))
+            return
+        
         signal_id = signal["id"]
 
         await event_bus.emit(
@@ -343,15 +350,16 @@ class SignalCopier:
             return
 
         if not executions:
+            error_msg = self.executor.last_error or "Order execution failed"
             await crud.update_signal(
                 signal_id,
                 status="failed",
-                failure_reason="Order execution failed",
+                failure_reason=error_msg,
             )
 
             await event_bus.emit(
                 Events.SIGNAL_FAILED,
-                {"id": signal_id, "errors": ["Order execution failed"]},
+                {"id": signal_id, "errors": [error_msg]},
             )
             return
 
@@ -482,7 +490,7 @@ class SignalCopier:
             await crud.update_signal(
                 signal_id,
                 status="failed",
-                failure_reason="Order execution failed",
+                failure_reason=self.executor.last_error or "Order execution failed",
             )
             return False
 
@@ -656,7 +664,7 @@ class SignalCopier:
             await crud.update_signal(
                 signal_id,
                 status="failed",
-                failure_reason="Order execution failed",
+                failure_reason=self.executor.last_error or "Order execution failed",
             )
             return False
 

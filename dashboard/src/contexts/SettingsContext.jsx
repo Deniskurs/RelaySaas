@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   gold_market_threshold: 3.0,
   split_tps: true,
   tp_split_ratios: [0.5, 0.3, 0.2],
+  tp_lot_mode: "split", // "split" = divide lot across TPs, "equal" = same lot for each TP
   enable_breakeven: true,
   // Broker
   symbol_suffix: "",

@@ -23,7 +23,7 @@ const SetupStep = ({ icon: Icon, label, isComplete, isActive }) => (
         isComplete
           ? "bg-success/20 text-success"
           : isActive
-          ? "bg-primary/20 text-primary"
+          ? "bg-white/10 text-foreground"
           : "bg-surface text-foreground-muted"
       )}
     >
@@ -33,7 +33,7 @@ const SetupStep = ({ icon: Icon, label, isComplete, isActive }) => (
         <Icon size={18} />
       )}
       {isActive && !isComplete && (
-        <span className="absolute inset-0 rounded-xl animate-ping bg-primary/20" />
+        <span className="absolute inset-0 rounded-xl animate-ping bg-white/10" />
       )}
     </div>
     <span
@@ -91,12 +91,12 @@ export default function SetupBanner({ onNavigateToAdmin }) {
   return (
     <div className="relative overflow-hidden rounded-2xl mb-6">
       {/* Gradient background with glass effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent-purple/10" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] via-transparent to-white/[0.02]" />
       <div className="absolute inset-0 backdrop-blur-xl bg-surface/40" />
 
       {/* Animated gradient orbs */}
-      <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-accent-purple/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
+      <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/10 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-white/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
 
       {/* Content */}
       <div className="relative p-6 md:p-8">
@@ -110,8 +110,8 @@ export default function SetupBanner({ onNavigateToAdmin }) {
 
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20">
-            <Sparkles className="w-6 h-6 text-primary" />
+          <div className="p-3 rounded-2xl bg-white/[0.06] border border-white/10">
+            <Sparkles className="w-6 h-6 text-foreground" />
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground mb-1">
@@ -129,13 +129,13 @@ export default function SetupBanner({ onNavigateToAdmin }) {
             <span className="text-xs font-medium text-foreground-muted">
               Setup Progress
             </span>
-            <span className="text-xs font-mono text-primary">
+            <span className="text-xs font-mono text-foreground">
               {completedSteps}/{totalSteps} complete
             </span>
           </div>
           <div className="h-2 bg-surface rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-primary to-accent-purple rounded-full transition-all duration-500 ease-out"
+              className="h-full bg-gradient-to-r from-white/60 to-white/40 rounded-full transition-all duration-500 ease-out"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -189,7 +189,7 @@ export default function SetupBanner({ onNavigateToAdmin }) {
             <>
               <Button
                 onClick={onNavigateToAdmin}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6 group"
+                className="font-medium px-6 group"
               >
                 <Zap size={16} className="mr-2" />
                 Configure Now

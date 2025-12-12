@@ -15,6 +15,7 @@ class ExecutorSettings:
     symbol_suffix: str = ""
     split_tps: bool = True
     tp_ratios: List[float] = None
+    tp_lot_mode: str = "split"  # "split" = divide lot across TPs, "equal" = same lot for each TP
     gold_market_threshold: float = 3.0
     max_lot_size: float = 0.1
     default_lot_size: float = 0.01
@@ -26,12 +27,12 @@ class ExecutorSettings:
     @classmethod
     def from_user_settings(cls, user_id: str = SYSTEM_USER_ID) -> "ExecutorSettings":
         """Create ExecutorSettings from user settings in database.
-        
+
         Reads trading parameters from user_settings_v2 table, NOT system_config.
         This allows per-user configuration of trading behavior.
         """
         settings = get_settings(user_id)
-        
+
         # tp_split_ratios comes as list from user_settings
         tp_ratios = settings.get("tp_split_ratios", [0.5, 0.3, 0.2])
         if isinstance(tp_ratios, str):
@@ -41,6 +42,7 @@ class ExecutorSettings:
             symbol_suffix=settings.get("symbol_suffix", ""),
             split_tps=settings.get("split_tps", True),
             tp_ratios=tp_ratios,
+            tp_lot_mode=settings.get("tp_lot_mode", "split"),
             gold_market_threshold=float(settings.get("gold_market_threshold", 3.0)),
             max_lot_size=float(settings.get("max_lot_size", 0.1)),
             default_lot_size=float(settings.get("lot_reference_size_default", 0.01)),
@@ -87,6 +89,7 @@ class TradeExecutor:
         self.api: Optional[MetaApi] = None
         self.account = None
         self.connection = None
+        self.last_error: Optional[str] = None  # Track last execution error
 
     def _get_config(self) -> dict:
         """Get system config from database."""
@@ -210,7 +213,8 @@ class TradeExecutor:
         # Use dynamic settings for split TPs
         split_tps = executor_settings.split_tps
         tp_ratios = executor_settings.tp_ratios
-        
+        tp_lot_mode = executor_settings.tp_lot_mode
+
         # Debug logging
         log.info(
             "Trade execution settings",
@@ -218,31 +222,48 @@ class TradeExecutor:
             split_tps_type=type(split_tps).__name__,
             num_tps=len(signal.take_profits),
             tp_ratios=tp_ratios,
+            tp_lot_mode=tp_lot_mode,
             will_split=split_tps and len(signal.take_profits) > 1,
         )
 
         if split_tps and len(signal.take_profits) > 1:
-            # Split across multiple TPs
-            ratios = tp_ratios[: len(signal.take_profits)]
-            # Normalize ratios
-            total = sum(ratios)
-            ratios = [r / total for r in ratios]
+            # Multiple TP orders
+            if tp_lot_mode == "equal":
+                # EQUAL MODE: Each TP gets the FULL calculated lot size
+                for i, tp in enumerate(signal.take_profits):
+                    execution = await self._place_order(
+                        signal=signal,
+                        broker_symbol=broker_symbol,
+                        lot_size=lot_size,  # Full lot for each TP
+                        take_profit=tp,
+                        tp_index=i + 1,
+                        current_price=current_price,
+                        threshold=threshold,
+                    )
+                    if execution:
+                        executions.append(execution)
+            else:
+                # SPLIT MODE (default): Divide lot across TPs using ratios
+                ratios = tp_ratios[: len(signal.take_profits)]
+                # Normalize ratios
+                total = sum(ratios)
+                ratios = [r / total for r in ratios]
 
-            for i, (tp, ratio) in enumerate(zip(signal.take_profits, ratios)):
-                tp_lot = round(lot_size * ratio, 2)
-                tp_lot = max(0.01, tp_lot)
+                for i, (tp, ratio) in enumerate(zip(signal.take_profits, ratios)):
+                    tp_lot = round(lot_size * ratio, 2)
+                    tp_lot = max(0.01, tp_lot)
 
-                execution = await self._place_order(
-                    signal=signal,
-                    broker_symbol=broker_symbol,
-                    lot_size=tp_lot,
-                    take_profit=tp,
-                    tp_index=i + 1,
-                    current_price=current_price,
-                    threshold=threshold,
-                )
-                if execution:
-                    executions.append(execution)
+                    execution = await self._place_order(
+                        signal=signal,
+                        broker_symbol=broker_symbol,
+                        lot_size=tp_lot,
+                        take_profit=tp,
+                        tp_index=i + 1,
+                        current_price=current_price,
+                        threshold=threshold,
+                    )
+                    if execution:
+                        executions.append(execution)
         else:
             # Single order with TP1
             execution = await self._place_order(
@@ -379,9 +400,11 @@ class TradeExecutor:
 
         except Exception as e:
             user_tag = self._get_user_tag()
+            error_msg = str(e)
+            self.last_error = error_msg  # Store error for caller to retrieve
             log.error(
                 f"{user_tag}Order failed",
-                error=str(e),
+                error=error_msg,
                 symbol=signal.symbol,
                 direction=signal.direction,
                 lot=lot_size,

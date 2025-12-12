@@ -1,9 +1,26 @@
 import { useState, useEffect } from "react";
-import { Save, RotateCcw, AlertCircle, Check, Loader2, X, ExternalLink, Eye, EyeOff } from "lucide-react";
+import {
+  Save,
+  RotateCcw,
+  AlertCircle,
+  Check,
+  Loader2,
+  X,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Send,
+  Shield,
+  RefreshCw,
+  Unplug,
+  Lock,
+  MessageSquare,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserCredentials, updateUserCredentials } from "@/lib/supabase";
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { useApi } from "@/hooks/useApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,21 +32,21 @@ function SettingRow({ label, description, children, className }) {
   return (
     <div
       className={cn(
-        "flex items-center justify-between py-5 first:pt-0 last:pb-0",
+        "flex items-center justify-between py-4 first:pt-0 last:pb-0",
         className
       )}
     >
-      <div className="flex flex-col gap-1 pr-8">
-        <span className="text-[15px] font-medium text-foreground">
+      <div className="flex flex-col gap-0.5 pr-6 min-w-0">
+        <span className="text-[14px] font-medium text-foreground">
           {label}
         </span>
         {description && (
-          <span className="text-[13px] text-foreground-muted/70 italic leading-relaxed max-w-sm">
+          <span className="text-[12px] text-foreground-muted/60 leading-relaxed">
             {description}
           </span>
         )}
       </div>
-      <div className="flex items-center gap-3 shrink-0">{children}</div>
+      <div className="flex items-center gap-2 shrink-0">{children}</div>
     </div>
   );
 }
@@ -41,7 +58,7 @@ function NumberInput({ value, onChange, min, max, step, suffix, className }) {
   };
 
   return (
-    <div className="relative group">
+    <div className="flex items-center gap-2">
       <Input
         type="number"
         value={value}
@@ -50,14 +67,16 @@ function NumberInput({ value, onChange, min, max, step, suffix, className }) {
         max={max}
         step={step}
         className={cn(
-          "w-28 pr-8 font-mono text-sm bg-white/[0.03] border-white/[0.08] rounded-xl",
-          "focus:border-white/20 focus:bg-white/[0.05] transition-all",
-          "placeholder:text-foreground-muted/50",
+          "w-24 h-9 px-3 text-center font-mono text-sm",
+          "bg-white/[0.04] border-white/[0.08] rounded-lg",
+          "focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 focus:ring-offset-0",
+          "transition-colors",
+          "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
           className
         )}
       />
       {suffix && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted/60 text-xs font-medium pointer-events-none">
+        <span className="text-[13px] text-foreground-muted/50 font-medium min-w-[20px]">
           {suffix}
         </span>
       )}
@@ -83,28 +102,27 @@ function SymbolTags({ symbols, onChange }) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2 items-center max-w-sm justify-end">
+    <div className="flex flex-wrap gap-1.5 items-center justify-end">
       {symbols.map((symbol) => (
-        <Badge
+        <span
           key={symbol}
-          variant="secondary"
-          className="bg-white/[0.06] text-foreground/80 hover:bg-white/[0.1] border-0 transition-colors pl-2.5 pr-1.5 py-1 h-7 rounded-lg font-medium"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-white/[0.06] text-foreground/80 rounded-md hover:bg-white/[0.08] transition-colors"
         >
           {symbol}
           <button
             onClick={() => removeSymbol(symbol)}
-            className="ml-1.5 hover:bg-white/10 rounded p-0.5 transition-colors"
+            className="hover:text-foreground transition-colors"
           >
-            <X size={12} className="opacity-60" />
+            <X size={10} />
           </button>
-        </Badge>
+        </span>
       ))}
       <Input
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={addSymbol}
-        placeholder="Add..."
-        className="w-20 h-7 text-xs bg-white/[0.03] border-white/[0.08] rounded-lg focus:border-white/20 focus:bg-white/[0.05] transition-all placeholder:text-foreground-muted/40 placeholder:italic"
+        placeholder="+ Add"
+        className="w-16 h-7 px-2 text-xs bg-transparent border-white/[0.06] border-dashed rounded-md focus:border-white/20 focus:bg-white/[0.03] transition-colors placeholder:text-foreground-muted/40"
       />
     </div>
   );
@@ -128,28 +146,27 @@ function ChannelTags({ channels, onChange }) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2 items-center max-w-sm justify-end">
+    <div className="flex flex-wrap gap-1.5 items-center justify-end">
       {channels.map((channel) => (
-        <Badge
+        <span
           key={channel}
-          variant="outline"
-          className="bg-white/[0.04] text-foreground/70 border-white/[0.08] hover:bg-white/[0.08] transition-colors pl-2.5 pr-1.5 py-1 h-7 rounded-lg font-mono text-xs"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-white/[0.04] text-foreground/70 border border-white/[0.06] rounded-md hover:bg-white/[0.06] transition-colors"
         >
           {channel}
           <button
             onClick={() => removeChannel(channel)}
-            className="ml-1.5 hover:bg-white/10 rounded p-0.5 transition-colors"
+            className="hover:text-foreground transition-colors"
           >
-            <X size={12} className="opacity-60" />
+            <X size={10} />
           </button>
-        </Badge>
+        </span>
       ))}
       <Input
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={addChannel}
-        placeholder="Add ID..."
-        className="w-24 h-7 text-xs bg-white/[0.03] border-white/[0.08] rounded-lg focus:border-white/20 focus:bg-white/[0.05] transition-all placeholder:text-foreground-muted/40 placeholder:italic font-mono"
+        placeholder="+ Add ID"
+        className="w-20 h-7 px-2 text-xs font-mono bg-transparent border-white/[0.06] border-dashed rounded-md focus:border-white/20 focus:bg-white/[0.03] transition-colors placeholder:text-foreground-muted/40"
       />
     </div>
   );
@@ -166,36 +183,38 @@ function TPRatioInputs({ ratios, onChange }) {
   const isValid = Math.abs(total - 1) < 0.001;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       {ratios.map((ratio, i) => (
-        <div key={i} className="flex flex-col items-center gap-1.5">
-          <span className="text-[11px] text-foreground-muted/60 font-medium uppercase tracking-wide">
+        <div key={i} className="flex items-center gap-1">
+          <span className="text-[10px] text-foreground-muted/50 font-medium">
             TP{i + 1}
           </span>
-          <div className="relative">
-            <Input
-              type="number"
-              value={ratio}
-              onChange={(e) => handleChange(i, e.target.value)}
-              step={0.1}
-              min={0}
-              max={1}
-              className="w-16 h-8 px-2 bg-white/[0.03] border-white/[0.08] rounded-lg text-center font-mono text-sm focus:border-white/20 focus:bg-white/[0.05] transition-all"
-            />
-          </div>
+          <Input
+            type="number"
+            value={ratio}
+            onChange={(e) => handleChange(i, e.target.value)}
+            step={0.1}
+            min={0}
+            max={1}
+            className={cn(
+              "w-14 h-8 px-2 text-center font-mono text-xs",
+              "bg-white/[0.04] border-white/[0.08] rounded-md",
+              "focus:border-white/20 focus:bg-white/[0.06] focus:ring-0",
+              "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            )}
+          />
         </div>
       ))}
-      <div className="flex items-center gap-2 ml-2">
-        <div className="h-px w-3 bg-white/10" />
-        <span
-          className={cn(
-            "text-sm font-medium font-mono",
-            isValid ? "text-emerald-400/80" : "text-rose-400/80"
-          )}
-        >
-          {(total * 100).toFixed(0)}%
-        </span>
-      </div>
+      <span
+        className={cn(
+          "text-xs font-mono px-2 py-1 rounded-md",
+          isValid
+            ? "text-emerald-400/80 bg-emerald-500/10"
+            : "text-rose-400/80 bg-rose-500/10"
+        )}
+      >
+        {(total * 100).toFixed(0)}%
+      </span>
     </div>
   );
 }
@@ -211,15 +230,364 @@ function PasswordInput({ value, onChange, placeholder, className, disabled }) {
         onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
-        className={cn("pr-10", className)}
+        className={cn(
+          "h-9 pr-9 font-mono text-sm",
+          "bg-white/[0.04] border-white/[0.08] rounded-lg",
+          "focus:border-white/20 focus:bg-white/[0.06] focus:ring-0",
+          className
+        )}
       />
       <button
         type="button"
         onClick={() => setShow(!show)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted/60 hover:text-foreground-muted transition-colors"
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-muted/50 hover:text-foreground-muted transition-colors"
       >
         {show ? <EyeOff size={14} /> : <Eye size={14} />}
       </button>
+    </div>
+  );
+}
+
+function TelegramSection({
+  telegramCreds,
+  onCredsChange,
+  channels,
+  onChannelsChange,
+  isLoading: credsLoading,
+  configStatus = {} // { telegram_api_hash_set, telegram_api_hash_preview }
+}) {
+  const { fetchData, postData } = useApi();
+  const [connectionStatus, setConnectionStatus] = useState("loading");
+  const [connectionMessage, setConnectionMessage] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+
+  // Verification state
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    checkConnectionStatus();
+  }, []);
+
+  const checkConnectionStatus = async () => {
+    const result = await fetchData("/admin/telegram/status");
+    if (result) {
+      setConnectionStatus(result.status);
+      setConnectionMessage(result.message);
+    } else {
+      setConnectionStatus("not_configured");
+    }
+  };
+
+  const handleSendCode = async () => {
+    if (!telegramCreds.telegram_api_id || !telegramCreds.telegram_api_hash || !telegramCreds.telegram_phone) {
+      setConnectionError("Please save your credentials first (API ID, API Hash, Phone)");
+      return;
+    }
+    setIsConnecting(true);
+    setConnectionError("");
+
+    const result = await postData("/admin/telegram/send-code", {
+      api_id: telegramCreds.telegram_api_id,
+      api_hash: telegramCreds.telegram_api_hash,
+      phone: telegramCreds.telegram_phone,
+    });
+
+    if (result) {
+      setConnectionStatus(result.status);
+      setConnectionMessage(result.message);
+    } else {
+      setConnectionError("Failed to send verification code. Please check your credentials.");
+    }
+    setIsConnecting(false);
+  };
+
+  const handleVerifyCode = async () => {
+    if (!code) {
+      setConnectionError("Please enter the verification code");
+      return;
+    }
+    setIsConnecting(true);
+    setConnectionError("");
+
+    const result = await postData("/admin/telegram/verify-code", { code });
+
+    if (result) {
+      setConnectionStatus(result.status);
+      setConnectionMessage(result.message);
+    } else {
+      setConnectionError("Invalid code. Please try again.");
+    }
+    setIsConnecting(false);
+  };
+
+  const handleVerifyPassword = async () => {
+    if (!password) {
+      setConnectionError("Please enter your 2FA password");
+      return;
+    }
+    setIsConnecting(true);
+    setConnectionError("");
+
+    const result = await postData("/admin/telegram/verify-password", { password });
+
+    if (result) {
+      setConnectionStatus(result.status);
+      setConnectionMessage(result.message);
+    } else {
+      setConnectionError("Invalid password. Please try again.");
+    }
+    setIsConnecting(false);
+  };
+
+  const handleDisconnect = async () => {
+    setIsConnecting(true);
+    const result = await postData("/admin/telegram/disconnect", {});
+    if (result) {
+      setConnectionStatus(result.status);
+      setConnectionMessage(result.message);
+      setCode("");
+      setPassword("");
+    }
+    setIsConnecting(false);
+  };
+
+  const handleReconnect = async () => {
+    setIsConnecting(true);
+    setConnectionError("");
+    try {
+      const result = await postData("/admin/telegram/reconnect");
+      setConnectionMessage(result.message || "Reconnected successfully!");
+    } catch (err) {
+      setConnectionError(err.message || "Failed to reconnect");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const inputClass = "h-9 font-mono text-sm bg-white/[0.04] border-white/[0.08] rounded-lg focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40";
+
+  if (credsLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {/* Instructions */}
+      <div className="mb-4 p-3 bg-white/[0.02] border border-white/[0.04] rounded-lg">
+        <p className="text-[12px] text-foreground-muted/60 leading-relaxed">
+          Get your API credentials from{" "}
+          <a
+            href="https://my.telegram.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/70 hover:text-foreground inline-flex items-center gap-1 font-medium"
+          >
+            my.telegram.org
+            <ExternalLink size={10} />
+          </a>
+        </p>
+      </div>
+
+      {/* Credentials Section */}
+      <SettingRow
+        label="API ID"
+        description="Your Telegram application ID"
+      >
+        <Input
+          type="text"
+          value={telegramCreds.telegram_api_id}
+          onChange={(e) => onCredsChange("telegram_api_id", e.target.value)}
+          placeholder="12345678"
+          className={cn(inputClass, "w-32")}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="API Hash"
+        description="Your Telegram application hash"
+      >
+        <div className="flex items-center gap-2">
+          <PasswordInput
+            value={telegramCreds.telegram_api_hash}
+            onChange={(e) => onCredsChange("telegram_api_hash", e.target.value)}
+            placeholder={configStatus.telegram_api_hash_set ? "••••••••" : "Enter hash"}
+            className={cn(inputClass, "w-44")}
+          />
+          {configStatus.telegram_api_hash_set && !telegramCreds.telegram_api_hash && (
+            <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-1 rounded-md font-medium">
+              Set
+            </span>
+          )}
+        </div>
+      </SettingRow>
+
+      <SettingRow
+        label="Phone Number"
+        description="With country code"
+      >
+        <Input
+          type="tel"
+          value={telegramCreds.telegram_phone}
+          onChange={(e) => onCredsChange("telegram_phone", e.target.value)}
+          placeholder="+1234567890"
+          className={cn(inputClass, "w-36")}
+        />
+      </SettingRow>
+
+      {/* Connection Status & Actions */}
+      <div className="pt-2 border-t border-white/[0.04]">
+        {connectionError && (
+          <div className="flex items-center gap-2 text-rose-400 text-sm mb-4">
+            <AlertCircle size={14} />
+            <span className="italic">{connectionError}</span>
+          </div>
+        )}
+
+        {connectionStatus === "loading" && (
+          <div className="flex items-center gap-2 text-foreground-muted text-sm">
+            <Loader2 size={14} className="animate-spin" />
+            <span className="italic">Checking connection status...</span>
+          </div>
+        )}
+
+        {connectionStatus === "connected" && (
+          <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <div>
+                <p className="text-sm font-medium text-emerald-400">Connected</p>
+                <p className="text-xs text-foreground-muted/70 italic mt-0.5">{connectionMessage}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReconnect}
+                disabled={isConnecting}
+                className="h-8 px-3 text-foreground-muted hover:text-foreground hover:bg-white/[0.05]"
+              >
+                {isConnecting ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnect}
+                disabled={isConnecting}
+                className="h-8 px-3 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+              >
+                <Unplug size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {connectionStatus === "pending_password" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/[0.08] border border-amber-500/20">
+              <Lock size={18} className="text-amber-400" />
+              <div>
+                <p className="text-sm font-medium text-foreground">2FA Required</p>
+                <p className="text-xs text-foreground-muted/70 italic mt-0.5">{connectionMessage}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[15px] font-medium text-foreground">Telegram Password</label>
+              <PasswordInput
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your 2FA password"
+                className={inputClass}
+              />
+            </div>
+            <Button
+              onClick={handleVerifyPassword}
+              disabled={isConnecting}
+              className="w-full h-10 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium"
+            >
+              {isConnecting ? (
+                <Loader2 size={14} className="mr-2 animate-spin" />
+              ) : (
+                <Shield size={14} className="mr-2" />
+              )}
+              Verify Password
+            </Button>
+          </div>
+        )}
+
+        {connectionStatus === "pending_code" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-500/[0.08] border border-blue-500/20">
+              <MessageSquare size={18} className="text-blue-400" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Enter Verification Code</p>
+                <p className="text-xs text-foreground-muted/70 italic mt-0.5">{connectionMessage}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[15px] font-medium text-foreground">Verification Code</label>
+              <Input
+                placeholder="Enter the code from Telegram"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className={cn(inputClass, "text-center text-lg tracking-[0.5em]")}
+                maxLength={6}
+              />
+            </div>
+            <Button
+              onClick={handleVerifyCode}
+              disabled={isConnecting}
+              className="w-full h-10 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium"
+            >
+              {isConnecting ? (
+                <Loader2 size={14} className="mr-2 animate-spin" />
+              ) : (
+                <Check size={14} className="mr-2" />
+              )}
+              Verify Code
+            </Button>
+          </div>
+        )}
+
+        {(connectionStatus === "not_configured" || connectionStatus === "disconnected") && (
+          <Button
+            onClick={handleSendCode}
+            disabled={isConnecting || !telegramCreds.telegram_api_id || !telegramCreds.telegram_api_hash || !telegramCreds.telegram_phone}
+            className="w-full h-10 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium disabled:opacity-40 disabled:bg-white/[0.1] disabled:text-foreground-muted"
+          >
+            {isConnecting ? (
+              <Loader2 size={14} className="mr-2 animate-spin" />
+            ) : (
+              <Send size={14} className="mr-2" />
+            )}
+            Connect Telegram
+          </Button>
+        )}
+      </div>
+
+      {/* Signal Channels */}
+      <div className="pt-4 border-t border-white/[0.04]">
+        <SettingRow
+          label="Signal Channels"
+          description="Channel IDs to monitor for trading signals"
+          className="pt-0"
+        >
+          <ChannelTags
+            channels={channels || []}
+            onChange={onChannelsChange}
+          />
+        </SettingRow>
+      </div>
     </div>
   );
 }
@@ -233,6 +601,8 @@ export default function SettingsPage() {
     error,
     updateSettings,
   } = useSettings();
+  const { currencyData } = useCurrency();
+  const { putData } = useApi();
   const [localSettings, setLocalSettings] = useState(settings);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -242,49 +612,104 @@ export default function SettingsPage() {
     telegram_api_id: "",
     telegram_api_hash: "",
     telegram_phone: "",
-    telegram_connected: false,
   });
   const [telegramCredsOriginal, setTelegramCredsOriginal] = useState(null);
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [telegramSaving, setTelegramSaving] = useState(false);
   const [telegramError, setTelegramError] = useState("");
-  const [telegramSuccess, setTelegramSuccess] = useState(false);
   const [hasTelegramChanges, setHasTelegramChanges] = useState(false);
+  const [configStatus, setConfigStatus] = useState({});
 
   useEffect(() => {
     setLocalSettings(settings);
     setHasChanges(false);
   }, [settings]);
 
-  // Load Telegram credentials
-  useEffect(() => {
-    const loadTelegramCreds = async () => {
-      if (!user?.id) return;
+  // Load from admin config (where AdminPanel saved settings)
+  // This ensures existing configured values are populated
+  const { fetchData } = useApi();
 
+  useEffect(() => {
+    const loadAdminConfig = async () => {
       setTelegramLoading(true);
       try {
-        const { data, error } = await getUserCredentials(user.id);
-        if (error) {
-          console.error("Error loading telegram credentials:", error);
-        } else if (data) {
+        // Fetch from admin config - this is where AdminPanel saved all settings
+        const adminConfig = await fetchData("/admin/config");
+
+        if (adminConfig) {
+          // Track which sensitive fields are already set (for showing "Set" badges)
+          setConfigStatus({
+            telegram_api_hash_set: adminConfig.telegram_api_hash_set || false,
+            telegram_api_hash_preview: adminConfig.telegram_api_hash_preview || "",
+            metaapi_token_set: adminConfig.metaapi_token_set || false,
+          });
+
+          // Load Telegram credentials (backend now returns actual hash for admin editing)
           const creds = {
-            telegram_api_id: data.telegram_api_id || "",
-            telegram_api_hash: data.telegram_api_hash || "",
-            telegram_phone: data.telegram_phone || "",
-            telegram_connected: data.telegram_connected || false,
+            telegram_api_id: adminConfig.telegram_api_id || "",
+            telegram_api_hash: adminConfig.telegram_api_hash || "",
+            telegram_phone: adminConfig.telegram_phone || "",
           };
           setTelegramCreds(creds);
           setTelegramCredsOriginal(creds);
+
+          // Load trading settings from admin config if user_settings has defaults
+          // This migrates any settings that were configured via old AdminPanel
+          const tradingSettingsFromAdmin = {};
+
+          // Check each trading setting - use admin config if it differs from defaults
+          if (adminConfig.max_lot_size && adminConfig.max_lot_size !== "0.1") {
+            tradingSettingsFromAdmin.max_lot_size = parseFloat(adminConfig.max_lot_size);
+          }
+          if (adminConfig.max_open_trades && adminConfig.max_open_trades !== "5") {
+            tradingSettingsFromAdmin.max_open_trades = parseInt(adminConfig.max_open_trades);
+          }
+          if (adminConfig.max_risk_percent && adminConfig.max_risk_percent !== "2.0") {
+            tradingSettingsFromAdmin.max_risk_percent = parseFloat(adminConfig.max_risk_percent);
+          }
+          if (adminConfig.symbol_suffix) {
+            tradingSettingsFromAdmin.symbol_suffix = adminConfig.symbol_suffix;
+          }
+          if (adminConfig.split_tps !== undefined && adminConfig.split_tps !== "true") {
+            tradingSettingsFromAdmin.split_tps = adminConfig.split_tps === "true";
+          }
+          if (adminConfig.tp_split_ratios && adminConfig.tp_split_ratios !== "0.5,0.3,0.2") {
+            tradingSettingsFromAdmin.tp_split_ratios = adminConfig.tp_split_ratios
+              .split(",")
+              .map(r => parseFloat(r.trim()));
+          }
+          if (adminConfig.enable_breakeven !== undefined && adminConfig.enable_breakeven !== "true") {
+            tradingSettingsFromAdmin.enable_breakeven = adminConfig.enable_breakeven === "true";
+          }
+
+          // Load channels from admin config if user_settings has none
+          if (adminConfig.telegram_channel_ids && !settings.telegram_channel_ids?.length) {
+            const channelArray = adminConfig.telegram_channel_ids
+              .split(",")
+              .map(id => id.trim())
+              .filter(id => id);
+            if (channelArray.length > 0) {
+              tradingSettingsFromAdmin.telegram_channel_ids = channelArray;
+            }
+          }
+
+          // Apply admin config values if we found any
+          if (Object.keys(tradingSettingsFromAdmin).length > 0) {
+            setLocalSettings(prev => ({
+              ...prev,
+              ...tradingSettingsFromAdmin
+            }));
+          }
         }
       } catch (e) {
-        console.error("Error loading telegram credentials:", e);
+        console.error("Error loading admin config:", e);
       } finally {
         setTelegramLoading(false);
       }
     };
 
-    loadTelegramCreds();
-  }, [user?.id]);
+    loadAdminConfig();
+  }, [fetchData, settings.telegram_channel_ids?.length]);
 
   const updateLocal = (key, value) => {
     setLocalSettings((prev) => ({ ...prev, [key]: value }));
@@ -295,7 +720,7 @@ export default function SettingsPage() {
   const updateTelegramCred = (key, value) => {
     setTelegramCreds((prev) => ({ ...prev, [key]: value }));
     setHasTelegramChanges(true);
-    setTelegramSuccess(false);
+    setSaveSuccess(false);
     setTelegramError("");
   };
 
@@ -303,46 +728,67 @@ export default function SettingsPage() {
     const success = await updateSettings(localSettings);
     if (success) {
       setHasChanges(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+
+      // Also sync telegram_channel_ids to admin config for backend compatibility
+      // The backend telegram client reads from system_config, not user_settings
+      if (localSettings.telegram_channel_ids) {
+        try {
+          const channelIdsString = Array.isArray(localSettings.telegram_channel_ids)
+            ? localSettings.telegram_channel_ids.join(",")
+            : localSettings.telegram_channel_ids;
+          await putData("/admin/config", { telegram_channel_ids: channelIdsString });
+        } catch (e) {
+          // Non-critical - user settings were saved, admin config sync is optional
+          console.warn("Could not sync channels to admin config:", e);
+        }
+      }
     }
+    return success;
   };
 
   const handleSaveTelegram = async () => {
-    if (!user?.id) return;
-
     // Validation
     if (telegramCreds.telegram_api_id && !/^\d+$/.test(telegramCreds.telegram_api_id)) {
       setTelegramError("API ID must be a number");
-      return;
+      return false;
     }
 
     if (telegramCreds.telegram_phone && !/^\+?\d{10,15}$/.test(telegramCreds.telegram_phone.replace(/\s/g, ""))) {
       setTelegramError("Please enter a valid phone number with country code");
-      return;
+      return false;
     }
 
     setTelegramSaving(true);
     setTelegramError("");
 
     try {
-      const { error } = await updateUserCredentials(user.id, {
-        telegram_api_id: telegramCreds.telegram_api_id || null,
-        telegram_api_hash: telegramCreds.telegram_api_hash || null,
-        telegram_phone: telegramCreds.telegram_phone || null,
-        telegram_connected: false, // Reset connection status when credentials change
-      });
-
-      if (error) {
-        setTelegramError(error.message || "Failed to save Telegram credentials");
-      } else {
-        setTelegramCredsOriginal(telegramCreds);
-        setHasTelegramChanges(false);
-        setTelegramSuccess(true);
-        setTimeout(() => setTelegramSuccess(false), 3000);
+      // Save to admin config (system_config table) for backend compatibility
+      // This is where the backend telegram client reads credentials from
+      const updates = {};
+      if (telegramCreds.telegram_api_id) {
+        updates.telegram_api_id = telegramCreds.telegram_api_id;
       }
+      if (telegramCreds.telegram_api_hash) {
+        updates.telegram_api_hash = telegramCreds.telegram_api_hash;
+      }
+      if (telegramCreds.telegram_phone) {
+        updates.telegram_phone = telegramCreds.telegram_phone;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const result = await putData("/admin/config", updates);
+        if (!result) {
+          setTelegramError("Failed to save Telegram credentials");
+          return false;
+        }
+      }
+
+      setTelegramCredsOriginal({ ...telegramCreds });
+      setHasTelegramChanges(false);
+      return true;
     } catch (e) {
       setTelegramError("An unexpected error occurred");
+      return false;
     } finally {
       setTelegramSaving(false);
     }
@@ -351,27 +797,34 @@ export default function SettingsPage() {
   const handleReset = () => {
     setLocalSettings(settings);
     setHasChanges(false);
-    setSaveSuccess(false);
   };
 
   const handleResetTelegram = () => {
     if (telegramCredsOriginal) {
-      setTelegramCreds(telegramCredsOriginal);
+      setTelegramCreds({ ...telegramCredsOriginal });
     }
     setHasTelegramChanges(false);
     setTelegramError("");
-    setTelegramSuccess(false);
   };
 
   const anyChanges = hasChanges || hasTelegramChanges;
   const anySaving = isSaving || telegramSaving;
 
   const handleSaveAll = async () => {
+    let allSuccess = true;
+
     if (hasChanges) {
-      await handleSave();
+      const success = await handleSave();
+      if (!success) allSuccess = false;
     }
     if (hasTelegramChanges) {
-      await handleSaveTelegram();
+      const success = await handleSaveTelegram();
+      if (!success) allSuccess = false;
+    }
+
+    if (allSuccess) {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     }
   };
 
@@ -408,7 +861,7 @@ export default function SettingsPage() {
                 <span className="italic">{error || telegramError}</span>
               </span>
             )}
-            {(saveSuccess || telegramSuccess) && (
+            {saveSuccess && (
               <span className="text-sm text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-lg animate-in fade-in slide-in-from-right-2">
                 <Check size={14} />
                 <span className="italic">Saved</span>
@@ -453,86 +906,15 @@ export default function SettingsPage() {
                 Telegram
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-6 pt-4 pb-6 space-y-1">
-              {/* Instructions */}
-              <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 mb-4">
-                <p className="text-[13px] text-foreground-muted/70 italic leading-relaxed">
-                  Get your API credentials from{" "}
-                  <a
-                    href="https://my.telegram.org"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-foreground/80 hover:text-foreground inline-flex items-center gap-1 not-italic font-medium"
-                  >
-                    my.telegram.org
-                    <ExternalLink size={12} />
-                  </a>
-                  {" "}&mdash; create an app under "API development tools" to get your ID and Hash.
-                </p>
-              </div>
-
-              {telegramLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
-                </div>
-              ) : (
-                <>
-                  <SettingRow
-                    label="API ID"
-                    description="Your Telegram application ID (numbers only)"
-                  >
-                    <Input
-                      type="text"
-                      value={telegramCreds.telegram_api_id}
-                      onChange={(e) => updateTelegramCred("telegram_api_id", e.target.value)}
-                      placeholder="12345678"
-                      className="w-36 font-mono text-sm bg-white/[0.03] border-white/[0.08] rounded-xl focus:border-white/20 focus:bg-white/[0.05] transition-all placeholder:text-foreground-muted/40 placeholder:italic"
-                    />
-                  </SettingRow>
-
-                  <SettingRow
-                    label="API Hash"
-                    description="Your Telegram application hash"
-                  >
-                    <PasswordInput
-                      value={telegramCreds.telegram_api_hash}
-                      onChange={(e) => updateTelegramCred("telegram_api_hash", e.target.value)}
-                      placeholder="Your API hash"
-                      className="w-48 font-mono text-sm bg-white/[0.03] border-white/[0.08] rounded-xl focus:border-white/20 focus:bg-white/[0.05] transition-all placeholder:text-foreground-muted/40 placeholder:italic"
-                    />
-                  </SettingRow>
-
-                  <SettingRow
-                    label="Phone Number"
-                    description="Include country code (e.g., +1 for US)"
-                  >
-                    <Input
-                      type="tel"
-                      value={telegramCreds.telegram_phone}
-                      onChange={(e) => updateTelegramCred("telegram_phone", e.target.value)}
-                      placeholder="+1234567890"
-                      className="w-40 font-mono text-sm bg-white/[0.03] border-white/[0.08] rounded-xl focus:border-white/20 focus:bg-white/[0.05] transition-all placeholder:text-foreground-muted/40 placeholder:italic"
-                    />
-                  </SettingRow>
-
-                  <SettingRow
-                    label="Signal Channels"
-                    description="Channel IDs to monitor for trading signals"
-                  >
-                    <ChannelTags
-                      channels={localSettings.telegram_channel_ids || []}
-                      onChange={(v) => updateLocal("telegram_channel_ids", v)}
-                    />
-                  </SettingRow>
-
-                  {telegramCreds.telegram_connected && (
-                    <div className="flex items-center gap-2 pt-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span className="text-xs text-emerald-400/80 italic">Connected</span>
-                    </div>
-                  )}
-                </>
-              )}
+            <CardContent className="px-6 pt-4 pb-6">
+              <TelegramSection
+                telegramCreds={telegramCreds}
+                onCredsChange={updateTelegramCred}
+                channels={localSettings.telegram_channel_ids || []}
+                onChannelsChange={(v) => updateLocal("telegram_channel_ids", v)}
+                isLoading={telegramLoading}
+                configStatus={configStatus}
+              />
             </CardContent>
           </Card>
 
@@ -602,7 +984,7 @@ export default function SettingsPage() {
                   min={100}
                   max={1000000}
                   step={100}
-                  suffix="$"
+                  suffix={currencyData.symbol}
                 />
               </SettingRow>
               <SettingRow
@@ -659,7 +1041,7 @@ export default function SettingsPage() {
                   min={0}
                   max={100}
                   step={0.5}
-                  suffix="$"
+                  suffix={currencyData.symbol}
                 />
               </SettingRow>
               <SettingRow
@@ -674,17 +1056,55 @@ export default function SettingsPage() {
               </SettingRow>
 
               {localSettings.split_tps && (
-                <div className="bg-white/[0.02] rounded-xl p-4 mt-3 border border-white/[0.04] animate-in slide-in-from-top-1 duration-200">
+                <div className="bg-white/[0.02] rounded-xl p-4 mt-3 border border-white/[0.04] animate-in slide-in-from-top-1 duration-200 space-y-4">
                   <SettingRow
-                    label="TP Split Ratios"
-                    description="Distribution of volume across TPs (must sum to 100%)"
+                    label="Lot Size Mode"
+                    description="How lot size is handled for multiple TPs"
                     className="py-0"
                   >
-                    <TPRatioInputs
-                      ratios={localSettings.tp_split_ratios || [0.5, 0.3, 0.2]}
-                      onChange={(v) => updateLocal("tp_split_ratios", v)}
-                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateLocal("tp_lot_mode", "split")}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                          localSettings.tp_lot_mode === "split" || !localSettings.tp_lot_mode
+                            ? "bg-foreground text-background"
+                            : "bg-white/[0.04] text-foreground-muted hover:bg-white/[0.08]"
+                        )}
+                      >
+                        Split
+                      </button>
+                      <button
+                        onClick={() => updateLocal("tp_lot_mode", "equal")}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                          localSettings.tp_lot_mode === "equal"
+                            ? "bg-foreground text-background"
+                            : "bg-white/[0.04] text-foreground-muted hover:bg-white/[0.08]"
+                        )}
+                      >
+                        Equal
+                      </button>
+                    </div>
                   </SettingRow>
+                  <p className="text-[10px] text-foreground-muted/60 -mt-2 ml-1">
+                    {localSettings.tp_lot_mode === "equal"
+                      ? "Each TP gets the FULL calculated lot size (e.g., 0.04 × 3 = 0.12 total)"
+                      : "Total lot is SPLIT across TPs using ratios below (e.g., 0.04 total)"}
+                  </p>
+
+                  {(localSettings.tp_lot_mode === "split" || !localSettings.tp_lot_mode) && (
+                    <SettingRow
+                      label="TP Split Ratios"
+                      description="Distribution of volume across TPs (must sum to 100%)"
+                      className="py-0"
+                    >
+                      <TPRatioInputs
+                        ratios={localSettings.tp_split_ratios || [0.5, 0.3, 0.2]}
+                        onChange={(v) => updateLocal("tp_split_ratios", v)}
+                      />
+                    </SettingRow>
+                  )}
                 </div>
               )}
 
@@ -711,13 +1131,13 @@ export default function SettingsPage() {
             <CardContent className="px-6 pt-4 pb-6">
               <SettingRow
                 label="Symbol Suffix"
-                description="Broker-specific suffix appended to symbols (e.g., .raw, .pro)"
+                description="Broker-specific suffix (e.g., .raw, .pro)"
               >
                 <Input
                   value={localSettings.symbol_suffix || ""}
                   onChange={(e) => updateLocal("symbol_suffix", e.target.value)}
                   placeholder=".pro"
-                  className="w-24 font-mono text-sm bg-white/[0.03] border-white/[0.08] rounded-xl focus:border-white/20 focus:bg-white/[0.05] transition-all placeholder:text-foreground-muted/40 placeholder:italic"
+                  className="w-20 h-9 px-3 text-center font-mono text-sm bg-white/[0.04] border-white/[0.08] rounded-lg focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40"
                 />
               </SettingRow>
             </CardContent>
