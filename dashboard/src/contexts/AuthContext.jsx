@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import {
   supabase,
   signInWithEmail,
@@ -14,6 +14,54 @@ import {
 
 const AuthContext = createContext(null);
 
+// localStorage cache key for profile data
+const PROFILE_CACHE_KEY = 'relay-profile-cache';
+
+// Cache critical profile fields to localStorage
+const cacheProfile = (profileData) => {
+  if (profileData && typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+        role: profileData.role,
+        subscription_tier: profileData.subscription_tier,
+        subscription_status: profileData.subscription_status,
+        status: profileData.status,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      console.warn("Failed to cache profile:", e);
+    }
+  }
+};
+
+// Get cached profile data if less than 24 hours old
+const getCachedProfile = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!cached) return null;
+    const data = JSON.parse(cached);
+    // Only use cache if less than 24 hours old
+    if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+      return data;
+    }
+  } catch (e) {
+    console.warn("Failed to read profile cache:", e);
+  }
+  return null;
+};
+
+// Clear profile cache
+const clearProfileCache = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+    } catch (e) {
+      console.warn("Failed to clear profile cache:", e);
+    }
+  }
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -21,14 +69,17 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch profile data with timeout
+  // Ref to prevent concurrent profile fetches (race condition prevention)
+  const fetchInProgressRef = useRef(false);
+
+  // Fetch profile data with timeout (single attempt)
   const fetchProfile = useCallback(async (userId) => {
     try {
       console.log("Fetching profile for:", userId);
 
-      // Add timeout to prevent hanging
+      // Add timeout to prevent hanging (10 seconds for slower connections)
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Profile fetch timeout")), 5000)
+        setTimeout(() => reject(new Error("Profile fetch timeout")), 10000)
       );
 
       const fetchPromise = getProfile(userId);
@@ -39,12 +90,35 @@ export function AuthProvider({ children }) {
         return null;
       }
       console.log("Profile fetched:", data);
+
+      // Cache successful profile fetch
+      if (data) {
+        cacheProfile(data);
+      }
+
       return data;
     } catch (e) {
       console.error("Error fetching profile:", e);
       return null;
     }
   }, []);
+
+  // Fetch profile with retry logic and exponential backoff
+  const fetchProfileWithRetry = useCallback(async (userId, maxRetries = 3) => {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const data = await fetchProfile(userId);
+      if (data) return data;
+
+      // Don't wait after the last failed attempt
+      if (attempt < maxRetries - 1) {
+        const delay = 1000 * (attempt + 1); // 1s, 2s, 3s delays
+        console.log(`Profile fetch attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    console.warn("All profile fetch attempts failed");
+    return null;
+  }, [fetchProfile]);
 
   // Initialize auth state
   useEffect(() => {
@@ -74,23 +148,54 @@ export function AuthProvider({ children }) {
           if (session?.user) {
             console.log("initAuth: Fetching profile...");
             try {
-              const profileData = await fetchProfile(session.user.id);
+              // Use retry logic for initial profile fetch
+              const profileData = await fetchProfileWithRetry(session.user.id);
               console.log("initAuth: Profile result:", profileData);
               if (mounted) {
-                setProfile(profileData);
+                if (profileData) {
+                  setProfile(profileData);
+                } else {
+                  // Profile fetch failed - try to use cached profile data
+                  const cachedData = getCachedProfile();
+                  if (cachedData) {
+                    console.log("initAuth: Using cached profile data");
+                    setProfile({
+                      id: session.user.id,
+                      email: session.user.email,
+                      full_name: session.user.user_metadata?.full_name || null,
+                      role: cachedData.role,
+                      subscription_tier: cachedData.subscription_tier,
+                      subscription_status: cachedData.subscription_status,
+                      status: cachedData.status || "active",
+                    });
+                  } else {
+                    // No cache available - set profile to null (UI will handle gracefully)
+                    console.warn("initAuth: No cached profile available, profile will be null");
+                    setProfile(null);
+                  }
+                }
               }
             } catch (profileError) {
-              // Profile fetch failed but user is authenticated - continue without profile
-              console.warn("initAuth: Profile fetch failed, continuing without profile:", profileError);
+              // Profile fetch failed but user is authenticated
+              console.warn("initAuth: Profile fetch failed:", profileError);
               if (mounted) {
-                // Create a minimal profile from user metadata
-                setProfile({
-                  id: session.user.id,
-                  email: session.user.email,
-                  full_name: session.user.user_metadata?.full_name || null,
-                  role: "user",  // Default role
-                  status: "active",
-                });
+                // Try to use cached profile data
+                const cachedData = getCachedProfile();
+                if (cachedData) {
+                  console.log("initAuth: Using cached profile data after error");
+                  setProfile({
+                    id: session.user.id,
+                    email: session.user.email,
+                    full_name: session.user.user_metadata?.full_name || null,
+                    role: cachedData.role,
+                    subscription_tier: cachedData.subscription_tier,
+                    subscription_status: cachedData.subscription_status,
+                    status: cachedData.status || "active",
+                  });
+                } else {
+                  // No cache - leave profile null
+                  setProfile(null);
+                }
               }
             }
           }
@@ -124,21 +229,62 @@ export function AuthProvider({ children }) {
       setSession(session);
       setUser(session?.user ?? null);
 
-      if (session?.user) {
-        const profileData = await fetchProfile(session.user.id);
+      // Handle SIGNED_OUT - clear everything including cache
+      if (event === "SIGNED_OUT" || !session?.user) {
+        setProfile(null);
+        clearProfileCache();
         if (mounted) {
-          setProfile(profileData);
+          setIsLoading(false);
         }
-      } else {
-        setProfile(null);
+        return;
       }
 
-      // Handle specific events
-      if (event === "SIGNED_OUT") {
-        setProfile(null);
+      // For other events (TOKEN_REFRESHED, SIGNED_IN, etc.) - fetch profile
+      // but preserve existing profile if fetch fails
+      if (session?.user) {
+        // Prevent concurrent fetches (race condition prevention)
+        if (fetchInProgressRef.current) {
+          console.log("Auth state change: Profile fetch already in progress, skipping");
+          return;
+        }
+
+        fetchInProgressRef.current = true;
+        try {
+          const profileData = await fetchProfile(session.user.id);
+          if (mounted) {
+            // Only update profile if we got valid data - preserve existing otherwise
+            if (profileData) {
+              setProfile(profileData);
+            } else {
+              // Fetch failed - preserve existing profile (don't overwrite with null)
+              console.log("Auth state change: Profile fetch failed, preserving existing profile");
+              // If we have no existing profile, try cache
+              setProfile(prev => {
+                if (prev) return prev; // Keep existing profile
+                // No existing profile - try cache
+                const cachedData = getCachedProfile();
+                if (cachedData) {
+                  console.log("Auth state change: Using cached profile");
+                  return {
+                    id: session.user.id,
+                    email: session.user.email,
+                    full_name: session.user.user_metadata?.full_name || null,
+                    role: cachedData.role,
+                    subscription_tier: cachedData.subscription_tier,
+                    subscription_status: cachedData.subscription_status,
+                    status: cachedData.status || "active",
+                  };
+                }
+                return null;
+              });
+            }
+          }
+        } finally {
+          fetchInProgressRef.current = false;
+        }
       }
 
-      // Token refreshed - no action needed, session is already updated
+      // Token refreshed - log for debugging
       if (event === "TOKEN_REFRESHED") {
         console.log("Token refreshed successfully");
       }
@@ -153,7 +299,7 @@ export function AuthProvider({ children }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, fetchProfileWithRetry]);
 
   // Sign in with email
   const login = async (email, password) => {
@@ -220,6 +366,8 @@ export function AuthProvider({ children }) {
     setUser(null);
     setProfile(null);
     setSession(null);
+    // Clear profile cache on logout
+    clearProfileCache();
     return { success: true };
   };
 

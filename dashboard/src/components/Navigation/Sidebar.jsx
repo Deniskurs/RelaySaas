@@ -29,6 +29,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
+import { Logo, BrandName } from "../Brand/Brand";
 
 const SIDEBAR_EXPANDED_WIDTH = 240;
 const SIDEBAR_COLLAPSED_WIDTH = 64;
@@ -68,7 +69,8 @@ export default function Sidebar({
   // Keyboard shortcuts for collapse toggle
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+        return;
       if (e.key === "[" || e.key === "]") {
         setIsCollapsed((prev) => !prev);
       }
@@ -87,7 +89,9 @@ export default function Sidebar({
     onTabChange(id);
   };
 
-  const sidebarWidth = isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
+  const sidebarWidth = isCollapsed
+    ? SIDEBAR_COLLAPSED_WIDTH
+    : SIDEBAR_EXPANDED_WIDTH;
 
   // Shared transition config for synchronized animations
   const sidebarTransition = { duration: 0.25, ease: [0.25, 0.1, 0.25, 1] };
@@ -102,16 +106,21 @@ export default function Sidebar({
         "border-r border-white/[0.04]"
       )}
       style={{
-        background: "linear-gradient(180deg, rgba(15,15,20,0.98), rgba(10,10,15,0.98))",
+        background:
+          "linear-gradient(180deg, rgba(15,15,20,0.98), rgba(10,10,15,0.98))",
         backdropFilter: "blur(20px) saturate(180%)",
-        boxShadow: "inset -1px 0 0 rgba(255,255,255,0.03), 4px 0 30px rgba(0,0,0,0.2)",
+        boxShadow:
+          "inset -1px 0 0 rgba(255,255,255,0.03), 4px 0 30px rgba(0,0,0,0.2)",
       }}
     >
       {/* Header: Logo + Collapse Toggle */}
-      <div className={cn(
-        "h-16 flex items-center border-b border-white/[0.04]",
-        isCollapsed ? "justify-center px-0" : "justify-between px-4"
-      )}>
+      <div
+        className={cn(
+          "h-16 flex items-center border-b border-white/[0.04]",
+          isCollapsed ? "justify-center px-0" : "justify-between px-4"
+        )}
+      >
+        {/* When collapsed: Logo becomes expand trigger */}
         {/* When collapsed: Logo becomes expand trigger */}
         {isCollapsed ? (
           <motion.button
@@ -121,24 +130,21 @@ export default function Sidebar({
             whileTap={{ scale: 0.95 }}
           >
             {/* Logo */}
-            <div className="w-8 h-8 overflow-hidden relative z-10 transition-opacity duration-200 group-hover:opacity-60">
-              <img
-                src="/logo.png"
-                alt="Logo"
-                className="w-full h-full object-cover"
-              />
+            <div className="w-8 h-8 relative z-10 transition-opacity duration-200 group-hover:opacity-100">
+              <Logo size={32} />
             </div>
             {/* Expand icon overlay on hover */}
-            <motion.div
-              className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-            >
-              <ChevronRight size={16} className="text-foreground" />
+            <motion.div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+              <div className="bg-black/80 rounded-full p-1 backdrop-blur-sm">
+                <ChevronRight size={14} className="text-white" />
+              </div>
             </motion.div>
             {/* Glow effect */}
             <motion.div
               className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
               style={{
-                background: "radial-gradient(circle, rgba(41,161,156,0.25), transparent 70%)",
+                background:
+                  "radial-gradient(circle, rgba(41,161,156,0.25), transparent 70%)",
                 filter: "blur(8px)",
               }}
             />
@@ -147,35 +153,31 @@ export default function Sidebar({
           <>
             {/* When expanded: Logo goes to dashboard */}
             <motion.div
-              className="flex items-center gap-3 cursor-pointer group overflow-hidden"
+              className="flex items-center gap-3 cursor-pointer group overflow-visible"
               onClick={() => onTabChange("dashboard")}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
               <div className="relative flex-shrink-0">
-                <div className="w-8 h-8 overflow-hidden relative z-10">
-                  <img
-                    src="/logo.png"
-                    alt="Logo"
-                    className="w-full h-full object-cover"
-                  />
+                <div className="w-8 h-8 relative z-10">
+                  <Logo size={32} />
                 </div>
                 <motion.div
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{
-                    background: "radial-gradient(circle, rgba(41,161,156,0.3), transparent 70%)",
+                    background:
+                      "radial-gradient(circle, rgba(41,161,156,0.3), transparent 70%)",
                     filter: "blur(8px)",
                   }}
                 />
               </div>
-              <motion.span
+              <motion.div
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.2, delay: 0.05 }}
-                className="text-base font-semibold tracking-tight text-foreground whitespace-nowrap uppercase"
               >
-                Relay
-              </motion.span>
+                <BrandName />
+              </motion.div>
             </motion.div>
 
             {/* Collapse button */}
@@ -354,10 +356,12 @@ export default function Sidebar({
       {/* Status Section */}
       <div className="px-3 py-3 border-t border-white/[0.04] space-y-2 overflow-hidden">
         {/* Connection Status */}
-        <div className={cn(
-          "flex items-center gap-3 py-2",
-          isCollapsed ? "justify-center px-2" : "px-3"
-        )}>
+        <div
+          className={cn(
+            "flex items-center gap-3 py-2",
+            isCollapsed ? "justify-center px-2" : "px-3"
+          )}
+        >
           <div className="relative flex-shrink-0">
             <motion.div
               className={cn(
@@ -470,7 +474,8 @@ export default function Sidebar({
               "border border-white/[0.06]"
             )}
             style={{
-              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03)",
+              boxShadow:
+                "0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03)",
             }}
           >
             {/* User Info Header */}

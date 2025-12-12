@@ -17,6 +17,7 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Shield } from "lucide-react";
+import { Logo, BrandName } from "../Brand/Brand";
 
 export default function MobileTopBar({
   activeTab,
@@ -55,9 +56,11 @@ export default function MobileTopBar({
         "border-b border-white/[0.04]"
       )}
       style={{
-        background: "linear-gradient(180deg, rgba(15,15,20,0.95), rgba(10,10,15,0.92))",
+        background:
+          "linear-gradient(180deg, rgba(15,15,20,0.95), rgba(10,10,15,0.92))",
         backdropFilter: "blur(20px) saturate(180%)",
-        boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.03), 0 4px 20px rgba(0,0,0,0.2)",
+        boxShadow:
+          "inset 0 -1px 0 rgba(255,255,255,0.03), 0 4px 20px rgba(0,0,0,0.2)",
       }}
     >
       {/* Left: Logo/Title */}
@@ -66,16 +69,37 @@ export default function MobileTopBar({
         onClick={() => onTabChange("dashboard")}
         whileTap={{ scale: 0.98 }}
       >
-        <div className="w-7 h-7 overflow-hidden">
-          <img
-            src="/logo.png"
-            alt="Logo"
-            className="w-full h-full object-cover"
-          />
+        <div className="w-7 h-7 relative">
+          <Logo size={28} />
         </div>
-        <span className="text-sm font-semibold tracking-tight text-foreground uppercase">
-          {getPageTitle()}
-        </span>
+        <div className="flex flex-col">
+          {/* If we are on a specific page that isn't dashboard, we might want to show that title, 
+               but for branding consistency "Relay" should always be visible or at least the Logo.
+               The previous code showed getPageTitle(). Let's keep showing the specific page title 
+               but styled better, OR show BrandName if it's the dashboard. 
+               
+               Actually, the user wants "Relay" branding. Let's start with showing BrandName 
+               and maybe the page title in a different way or just stick to BrandName for now 
+               to maximize the "premium brand" feeling.
+               
+               If I look at getPageTitle logic:
+               case "settings": return "Settings";
+               ...
+               default: return "Relay";
+               
+               So if it's not a special page, it shows Relay.
+               
+               Let's render BrandName if activeTab is dashboard, otherwise the page title 
+               BUT styled nicely.
+           */}
+          {activeTab === "dashboard" ? (
+            <BrandName className="items-start" />
+          ) : (
+            <span className="text-sm font-semibold tracking-tight text-foreground uppercase">
+              {getPageTitle()}
+            </span>
+          )}
+        </div>
       </motion.div>
 
       {/* Right: Status, Search, User */}
@@ -194,14 +218,19 @@ export default function MobileTopBar({
                   "border border-white/[0.06]"
                 )}
               >
-                <DropdownMenuRadioGroup value={currency} onValueChange={setCurrency}>
+                <DropdownMenuRadioGroup
+                  value={currency}
+                  onValueChange={setCurrency}
+                >
                   {Object.values(currencies).map((curr) => (
                     <DropdownMenuRadioItem
                       key={curr.code}
                       value={curr.code}
                       className="gap-2 py-1.5 cursor-pointer"
                     >
-                      <span className="w-4 text-center text-xs">{curr.symbol}</span>
+                      <span className="w-4 text-center text-xs">
+                        {curr.symbol}
+                      </span>
                       <span>{curr.code}</span>
                     </DropdownMenuRadioItem>
                   ))}
