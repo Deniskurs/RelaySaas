@@ -3,6 +3,14 @@ from pydantic_settings import BaseSettings
 from typing import List
 from functools import lru_cache
 import os
+import sys
+
+# Early debug - print immediately on module load
+print("=== STARTUP DEBUG ===", file=sys.stderr)
+print(f"SUPABASE_URL in env: {'SUPABASE_URL' in os.environ}", file=sys.stderr)
+print(f"SUPABASE_KEY in env: {'SUPABASE_KEY' in os.environ}", file=sys.stderr)
+print(f"Total env vars: {len(os.environ)}", file=sys.stderr)
+print("=====================", file=sys.stderr)
 
 
 class Settings(BaseSettings):
