@@ -3,9 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
-  Radio,
-  BarChart2,
-  Wallet,
   Settings,
   Search,
   Command,
@@ -38,9 +35,6 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard" },
-  { icon: Radio, label: "Signals", id: "signals" },
-  { icon: BarChart2, label: "Positions", id: "positions" },
-  { icon: Wallet, label: "Account", id: "account" },
   { icon: Settings, label: "Settings", id: "settings" },
 ];
 
@@ -173,7 +167,7 @@ export default function PremiumTopBar({
                   ease: [0.16, 1, 0.3, 1],
                 }}
                 className={cn(
-                  "relative px-3.5 py-2 rounded-full flex items-center gap-2",
+                  "relative px-3.5 py-2 rounded-none flex items-center gap-2",
                   "text-sm font-medium transition-colors duration-200",
                   isActive
                     ? "text-foreground"
@@ -184,7 +178,7 @@ export default function PremiumTopBar({
                 {isActive && (
                   <motion.div
                     layoutId="nav-pill"
-                    className="absolute inset-0 rounded-full"
+                    className="absolute inset-0 rounded-none"
                     style={{
                       background:
                         "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.12))",
@@ -217,7 +211,7 @@ export default function PremiumTopBar({
                 ease: [0.16, 1, 0.3, 1],
               }}
               className={cn(
-                "relative px-3.5 py-2 rounded-full flex items-center gap-2",
+                "relative px-3.5 py-2 rounded-none flex items-center gap-2",
                 "text-sm font-medium transition-colors duration-200",
                 activeTab === "admin"
                   ? "text-foreground"
@@ -227,7 +221,7 @@ export default function PremiumTopBar({
               {activeTab === "admin" && (
                 <motion.div
                   layoutId="nav-pill"
-                  className="absolute inset-0 rounded-full"
+                  className="absolute inset-0 rounded-none"
                   style={{
                     background:
                       "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.12))",
@@ -256,7 +250,7 @@ export default function PremiumTopBar({
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
           className={cn(
-            "hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full",
+            "hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-none",
             "bg-white/[0.04] hover:bg-white/[0.08]",
             "border border-white/[0.06] hover:border-white/[0.1]",
             "text-foreground-muted hover:text-foreground",
@@ -285,13 +279,13 @@ export default function PremiumTopBar({
           <div className="relative">
             <motion.div
               className={cn(
-                "w-2 h-2 rounded-full",
+                "w-2 h-2 rounded-none",
                 isConnected ? "bg-emerald-400" : "bg-neutral-500"
               )}
             />
             {isConnected && (
               <motion.div
-                className="absolute inset-0 rounded-full bg-emerald-400"
+                className="absolute inset-0 rounded-none bg-emerald-400"
                 animate={{
                   scale: [1, 2, 2],
                   opacity: [0.6, 0, 0],
@@ -319,7 +313,7 @@ export default function PremiumTopBar({
             transition={{ duration: 0.15 }}
             onClick={isPaused ? onResume : onPause}
             className={cn(
-              "hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full",
+              "hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-none",
               "text-xs font-medium transition-all duration-200",
               isPaused
                 ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
@@ -350,18 +344,18 @@ export default function PremiumTopBar({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className={cn(
-                "flex items-center gap-2 px-2 py-1.5 rounded-full",
+                "flex items-center gap-2 px-2 py-1.5 rounded-none",
                 "bg-white/[0.03] hover:bg-white/[0.06]",
                 "border border-white/[0.04] hover:border-white/[0.08]",
                 "transition-all duration-200"
               )}
             >
-              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+              <div className="w-7 h-7 rounded-none bg-white/10 flex items-center justify-center overflow-hidden">
                 {profile?.avatar_url ? (
                   <img
                     src={profile.avatar_url}
                     alt=""
-                    className="w-7 h-7 rounded-full object-cover"
+                    className="w-7 h-7 rounded-none object-cover"
                   />
                 ) : (
                   <User size={14} className="text-foreground-muted" />
@@ -539,7 +533,7 @@ export default function PremiumTopBar({
                 <div className="flex items-center gap-2">
                   <div
                     className={cn(
-                      "w-2 h-2 rounded-full",
+                      "w-2 h-2 rounded-none",
                       isConnected ? "bg-emerald-400" : "bg-neutral-500"
                     )}
                   />

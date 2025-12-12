@@ -2,9 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
-  Radio,
-  BarChart2,
-  Wallet,
   Settings,
   User,
   Shield,
@@ -43,39 +40,6 @@ const createCommands = (
       group: "Navigation",
       action: () => {
         onTabChange("dashboard");
-        onClose();
-      },
-    },
-    {
-      id: "nav-signals",
-      label: "Signals",
-      description: "View signal history",
-      icon: Radio,
-      group: "Navigation",
-      action: () => {
-        onTabChange("signals");
-        onClose();
-      },
-    },
-    {
-      id: "nav-positions",
-      label: "Positions",
-      description: "View open positions",
-      icon: BarChart2,
-      group: "Navigation",
-      action: () => {
-        onTabChange("positions");
-        onClose();
-      },
-    },
-    {
-      id: "nav-account",
-      label: "Account",
-      description: "Account overview",
-      icon: Wallet,
-      group: "Navigation",
-      action: () => {
-        onTabChange("account");
         onClose();
       },
     },
