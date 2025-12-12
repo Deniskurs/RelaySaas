@@ -133,7 +133,7 @@ const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconn
         </span>
 
         {/* Tooltip with connection details */}
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 border border-white/10 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-xl">
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 border border-white/10 text-white text-[10px] rounded-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-xl">
           <div className="space-y-1">
             {lastActivity && (
               <div className="flex justify-between gap-4">
@@ -230,7 +230,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
   };
 
   return (
-    <div className="group rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all duration-200 overflow-hidden">
+    <div className="group rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all duration-200 overflow-hidden">
       {/* Header Section */}
       <div className="p-4 border-b border-white/5 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -242,7 +242,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
               </span>
               <span
                 className={cn(
-                  "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-white/5",
+                  "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-none bg-white/5",
                   signal.type === "BUY" ? "text-emerald-400" : "text-rose-400"
                 )}
               >
@@ -288,7 +288,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
       {/* Body Content */}
       <div className="p-4 space-y-3">
         {/* Raw Message */}
-        <div className="bg-black/20 rounded-lg p-3 border border-white/5">
+        <div className="bg-black/20 rounded-none p-3 border border-white/5">
           <p className="text-[11px] font-mono text-foreground-muted leading-relaxed whitespace-pre-wrap line-clamp-3 group-hover:line-clamp-none transition-all">
             {signal.rawMessage || "No message content"}
           </p>
@@ -296,7 +296,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
 
         {/* Warnings */}
         {signal.warnings?.length > 0 && (
-          <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-lg p-2.5">
+          <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-none p-2.5">
             {signal.warnings.map((w, i) => (
               <div
                 key={i}
@@ -314,7 +314,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
           (status === "failed" ||
             status === "skipped" ||
             status === "rejected") && (
-            <div className="bg-rose-500/5 border border-rose-500/10 rounded-lg p-3">
+            <div className="bg-rose-500/5 border border-rose-500/10 rounded-none p-3">
               <div className="flex items-start gap-2">
                 <XCircle size={14} className="mt-0.5 shrink-0 text-rose-400" />
                 <div className="flex-1">
@@ -331,7 +331,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
 
         {/* Pending Confirmation Actions */}
         {isPendingConfirmation && (
-          <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-3 space-y-3">
+          <div className="bg-blue-500/5 border border-blue-500/10 rounded-none p-3 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-blue-400 font-medium flex items-center gap-2">
                 <Clock size={14} /> Awaiting Confirmation
@@ -376,7 +376,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
                 <div className="w-[1px] h-4 bg-white/10 mx-1" />
                 <input
                   type="number"
-                  className="h-6 w-16 bg-black/20 border border-white/10 rounded px-2 text-[10px] text-foreground font-mono focus:outline-none focus:border-blue-500/50 transition-colors"
+                  className="h-6 w-16 bg-black/20 border border-white/10 rounded-none px-2 text-[10px] text-foreground font-mono focus:outline-none focus:border-blue-500/50 transition-colors"
                   placeholder="Lot"
                   value={customLot}
                   onChange={(e) => setCustomLot(e.target.value)}

@@ -63,7 +63,7 @@ export default function SettingsStep({ onComplete }) {
       </p>
 
       {error && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+        <div className="flex items-center gap-2 p-3 rounded-none bg-destructive/10 text-destructive text-sm">
           <AlertCircle size={16} />
           {error}
         </div>
@@ -160,7 +160,7 @@ export default function SettingsStep({ onComplete }) {
           </h3>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-background-raised rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-background-raised rounded-none">
               <div>
                 <p className="text-sm font-medium text-foreground">Split Take Profits</p>
                 <p className="text-xs text-foreground-muted">
@@ -174,7 +174,7 @@ export default function SettingsStep({ onComplete }) {
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-background-raised rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-background-raised rounded-none">
               <div>
                 <p className="text-sm font-medium text-foreground">Auto-Breakeven</p>
                 <p className="text-xs text-foreground-muted">

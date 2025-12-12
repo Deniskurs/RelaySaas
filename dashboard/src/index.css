@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --radius: 0.75rem;
+    --radius: 0;
 
     /* 
       Magical Dark Theme 
@@ -115,7 +115,7 @@
   }
 
   .glass-card {
-    @apply bg-card/50 backdrop-blur-md border border-white/5 transition-all duration-300 hover:bg-card/70 hover:border-white/10;
+    @apply bg-card/50 backdrop-blur-md border border-white/5 transition-all duration-300 hover:bg-card/70 hover:border-white/10 rounded-none;
   }
 
   .text-glow {

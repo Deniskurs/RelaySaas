@@ -362,7 +362,7 @@ export default function CommandPalette({
                           onClick={cmd.action}
                           onMouseEnter={() => setSelectedIndex(globalIndex)}
                           className={cn(
-                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl",
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-none",
                             "text-left transition-colors duration-100",
                             isSelected
                               ? "bg-white/[0.08]"
@@ -371,7 +371,7 @@ export default function CommandPalette({
                         >
                           <div
                             className={cn(
-                              "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                              "w-8 h-8 rounded-none flex items-center justify-center flex-shrink-0",
                               "bg-white/[0.04]",
                               isSelected && "bg-white/[0.08]"
                             )}

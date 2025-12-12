@@ -133,7 +133,7 @@ export default function PremiumTopBar({
           whileTap={{ scale: 0.98 }}
         >
           <div className="relative">
-            <div className="w-8 h-8 rounded-lg overflow-hidden relative z-10">
+            <div className="w-8 h-8 rounded-none overflow-hidden relative z-10">
               <img
                 src="/logo.png"
                 alt="Logo"
@@ -142,7 +142,7 @@ export default function PremiumTopBar({
             </div>
             {/* Logo glow on hover */}
             <motion.div
-              className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              className="absolute inset-0 rounded-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
               style={{
                 background:
                   "radial-gradient(circle, rgba(139,92,246,0.4), transparent 70%)",
@@ -401,7 +401,7 @@ export default function PremiumTopBar({
             {/* Profile */}
             <DropdownMenuItem
               onClick={() => onTabChange("profile")}
-              className="gap-2 py-2 cursor-pointer rounded-md focus:bg-white/[0.06]"
+              className="gap-2 py-2 cursor-pointer rounded-none focus:bg-white/[0.06]"
             >
               <User size={14} className="text-foreground-muted" />
               <span>Profile</span>
@@ -409,7 +409,7 @@ export default function PremiumTopBar({
 
             {/* Currency Submenu */}
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-2 py-2 cursor-pointer rounded-md focus:bg-white/[0.06]">
+              <DropdownMenuSubTrigger className="gap-2 py-2 cursor-pointer rounded-none focus:bg-white/[0.06]">
                 <span className="w-4 h-4 flex items-center justify-center text-xs font-medium text-foreground-muted">
                   {currencies[currency]?.symbol}
                 </span>
@@ -433,7 +433,7 @@ export default function PremiumTopBar({
                     <DropdownMenuRadioItem
                       key={curr.code}
                       value={curr.code}
-                      className="gap-2 py-1.5 cursor-pointer rounded-md"
+                      className="gap-2 py-1.5 cursor-pointer rounded-none"
                     >
                       <span className="w-4 text-center text-xs">
                         {curr.symbol}
@@ -449,7 +449,7 @@ export default function PremiumTopBar({
             {isAdmin && (
               <DropdownMenuItem
                 onClick={() => onTabChange("admin")}
-                className="gap-2 py-2 cursor-pointer rounded-md focus:bg-white/[0.06]"
+                className="gap-2 py-2 cursor-pointer rounded-none focus:bg-white/[0.06]"
               >
                 <Shield size={14} className="text-foreground-muted" />
                 <span>Admin Panel</span>
@@ -461,7 +461,7 @@ export default function PremiumTopBar({
             {/* Logout */}
             <DropdownMenuItem
               onClick={handleLogout}
-              className="gap-2 py-2 cursor-pointer rounded-md text-destructive focus:text-destructive focus:bg-destructive/10"
+              className="gap-2 py-2 cursor-pointer rounded-none text-destructive focus:text-destructive focus:bg-destructive/10"
             >
               <LogOut size={14} />
               <span>Sign Out</span>
@@ -474,7 +474,7 @@ export default function PremiumTopBar({
           <SheetTrigger asChild>
             <button
               className={cn(
-                "md:hidden p-2 rounded-lg",
+                "md:hidden p-2 rounded-none",
                 "text-foreground-muted hover:text-foreground",
                 "hover:bg-white/[0.06] transition-colors"
               )}
@@ -501,7 +501,7 @@ export default function PremiumTopBar({
                     key={item.id}
                     onClick={() => handleNavClick(item.id)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-3 py-3 rounded-xl",
+                      "w-full flex items-center gap-3 px-3 py-3 rounded-none",
                       "text-sm font-medium transition-all duration-200",
                       isActive
                         ? "bg-white/[0.08] text-foreground border border-white/[0.1]"
@@ -518,7 +518,7 @@ export default function PremiumTopBar({
                 <button
                   onClick={() => handleNavClick("admin")}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-3 rounded-xl",
+                    "w-full flex items-center gap-3 px-3 py-3 rounded-none",
                     "text-sm font-medium transition-all duration-200",
                     activeTab === "admin"
                       ? "bg-white/[0.08] text-foreground border border-white/[0.1]"
@@ -553,7 +553,7 @@ export default function PremiumTopBar({
               <button
                 onClick={isPaused ? onResume : onPause}
                 className={cn(
-                  "w-full flex items-center justify-between px-3 py-2.5 rounded-xl",
+                  "w-full flex items-center justify-between px-3 py-2.5 rounded-none",
                   "text-sm font-medium transition-all",
                   isPaused
                     ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"

@@ -66,7 +66,7 @@ function PasswordInput({ value, onChange, placeholder, className, disabled }) {
         disabled={disabled}
         className={cn(
           "h-9 pr-9 text-sm",
-          "bg-white/[0.04] border-white/[0.08] rounded-lg",
+          "bg-white/[0.04] border-white/[0.08] rounded-none",
           "focus:border-white/20 focus:bg-white/[0.06] focus:ring-0",
           className
         )}
@@ -265,7 +265,7 @@ function PlansSheet({ open, onOpenChange, currentTier }) {
 
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-white/[0.06]">
+                    <div className="p-2 rounded-none bg-white/[0.06]">
                       <Icon size={20} className="text-foreground" />
                     </div>
                     <div>
@@ -323,7 +323,7 @@ function PlansSheet({ open, onOpenChange, currentTier }) {
           })}
         </div>
 
-        <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="mt-6 p-4 rounded-none bg-white/[0.02] border border-white/[0.04]">
           <p className="text-xs text-foreground-muted/60 text-center">
             All plans include a 14-day free trial. Cancel anytime.{" "}
             <a href="#" className="text-foreground/70 hover:text-foreground inline-flex items-center gap-1">
@@ -501,13 +501,13 @@ export default function ProfilePage() {
             </div>
             <div className="flex items-center gap-2.5">
               {error && (
-                <span className="text-sm text-rose-400 flex items-center gap-1.5 bg-rose-500/10 px-3 py-1.5 rounded-lg">
+                <span className="text-sm text-rose-400 flex items-center gap-1.5 bg-rose-500/10 px-3 py-1.5 rounded-none">
                   <AlertCircle size={14} />
                   <span className="italic">{error}</span>
                 </span>
               )}
               {saveSuccess && (
-                <span className="text-sm text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-lg animate-in fade-in slide-in-from-right-2">
+                <span className="text-sm text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-none animate-in fade-in slide-in-from-right-2">
                   <Check size={14} />
                   <span className="italic">Saved</span>
                 </span>
@@ -528,7 +528,7 @@ export default function ProfilePage() {
                     onClick={handleSaveProfile}
                     disabled={isSaving}
                     className={cn(
-                      "h-9 px-4 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium",
+                      "h-9 px-4 rounded-none bg-white/[0.9] text-background hover:bg-white font-medium",
                       "disabled:opacity-40 disabled:bg-white/[0.1] disabled:text-foreground-muted",
                       "transition-all"
                     )}
@@ -562,7 +562,7 @@ export default function ProfilePage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Enter your name"
-                    className="w-56 h-9 px-3 text-sm bg-white/[0.04] border-white/[0.08] rounded-lg focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40"
+                    className="w-56 h-9 px-3 text-sm bg-white/[0.04] border-white/[0.08] rounded-none focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40"
                   />
                 </ProfileRow>
 
@@ -652,9 +652,9 @@ export default function ProfilePage() {
                 {isOAuthUser && providerDisplay ? (
                   // OAuth user - show provider info instead of password form
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="flex items-center justify-between p-4 rounded-none bg-white/[0.03] border border-white/[0.06]">
                       <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-white/[0.06]">
+                        <div className="p-2.5 rounded-none bg-white/[0.06]">
                           <providerDisplay.Icon className="w-5 h-5 text-foreground" />
                         </div>
                         <div>
@@ -739,7 +739,7 @@ export default function ProfilePage() {
                         onClick={handleChangePassword}
                         disabled={isChangingPassword || !newPassword || !confirmPassword}
                         className={cn(
-                          "h-9 px-4 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium",
+                          "h-9 px-4 rounded-none bg-white/[0.9] text-background hover:bg-white font-medium",
                           "disabled:opacity-40 disabled:bg-white/[0.1] disabled:text-foreground-muted",
                           "transition-all"
                         )}

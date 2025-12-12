@@ -16,7 +16,7 @@ const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded px-2 py-1 text-xs shadow-xl">
+      <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded-none px-2 py-1 text-xs shadow-xl">
         <p className="font-medium text-white">{data.name}</p>
         <p className="text-white/70">{data.value} trades</p>
       </div>

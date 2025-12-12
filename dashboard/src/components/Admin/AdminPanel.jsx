@@ -45,7 +45,7 @@ function StatCard({ title, value, icon: Icon, trend, className }) {
               </p>
             )}
           </div>
-          <div className={`p-3 rounded-xl ${className || "bg-primary/10"}`}>
+          <div className={`p-3 rounded-none ${className || "bg-primary/10"}`}>
             <Icon className="w-5 h-5 text-primary" />
           </div>
         </div>
@@ -304,7 +304,7 @@ function UserRow({ user, onSuspend, onActivate }) {
   };
 
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg hover:bg-surface-hover transition-colors">
+    <div className="flex items-center justify-between p-3 rounded-none hover:bg-surface-hover transition-colors">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
           {user.avatar_url ? (
@@ -514,9 +514,9 @@ export default function AdminPanel() {
                   {activity.map((log) => (
                     <div
                       key={log.id}
-                      className="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-hover transition-colors"
+                      className="flex items-start gap-3 p-2 rounded-none hover:bg-surface-hover transition-colors"
                     >
-                      <div className="p-2 rounded-lg bg-primary/10 mt-0.5">
+                      <div className="p-2 rounded-none bg-primary/10 mt-0.5">
                         <Activity size={12} className="text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">

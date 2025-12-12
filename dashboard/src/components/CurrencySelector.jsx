@@ -22,7 +22,7 @@ export default function CurrencySelector() {
           variant="ghost"
           size="sm"
           className={cn(
-            "h-9 px-3 rounded-full transition-all duration-300",
+            "h-9 px-3 rounded-none transition-all duration-300",
             "bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10",
             "text-foreground hover:text-white",
             "shadow-lg shadow-black/10 backdrop-blur-md",
@@ -67,7 +67,7 @@ export default function CurrencySelector() {
                 key={curr.code}
                 value={curr.code}
                 className={cn(
-                  "cursor-pointer rounded-md my-1 px-3 py-2.5",
+                  "cursor-pointer rounded-none my-1 px-3 py-2.5",
                   "focus:bg-white/5 focus:text-white transition-colors",
                   "data-[state=checked]:bg-white/10 data-[state=checked]:text-foreground"
                 )}
@@ -75,7 +75,7 @@ export default function CurrencySelector() {
                 <div className="flex items-center w-full gap-3">
                   <span
                     className={cn(
-                      "w-6 h-6 rounded-md flex items-center justify-center text-xs font-mono border",
+                      "w-6 h-6 rounded-none flex items-center justify-center text-xs font-mono border",
                       isSelected
                         ? "bg-white/15 border-white/15 text-foreground"
                         : "bg-white/5 border-white/5 text-foreground-muted group-hover:border-white/10"

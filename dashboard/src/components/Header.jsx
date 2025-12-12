@@ -8,7 +8,7 @@ export default function Header({ isConnected, isPaused, onPause, onResume }) {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center">
               <Activity className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -34,7 +34,7 @@ export default function Header({ isConnected, isPaused, onPause, onResume }) {
             <button
               onClick={isPaused ? onResume : onPause}
               className={clsx(
-                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all",
+                "flex items-center gap-2 px-4 py-2 rounded-none font-medium transition-all",
                 isPaused
                   ? "bg-accent-green hover:bg-accent-green/80 text-white"
                   : "bg-accent-yellow/10 hover:bg-accent-yellow/20 text-accent-yellow"

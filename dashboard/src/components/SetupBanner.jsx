@@ -19,7 +19,7 @@ const SetupStep = ({ icon: Icon, label, isComplete, isActive }) => (
   <div className="flex items-center gap-3">
     <div
       className={cn(
-        "relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300",
+        "relative w-10 h-10 rounded-none flex items-center justify-center transition-all duration-300",
         isComplete
           ? "bg-success/20 text-success"
           : isActive
@@ -33,7 +33,7 @@ const SetupStep = ({ icon: Icon, label, isComplete, isActive }) => (
         <Icon size={18} />
       )}
       {isActive && !isComplete && (
-        <span className="absolute inset-0 rounded-xl animate-ping bg-white/10" />
+        <span className="absolute inset-0 rounded-none animate-ping bg-white/10" />
       )}
     </div>
     <span
@@ -89,7 +89,7 @@ export default function SetupBanner({ onNavigateToAdmin }) {
   const activeStep = !hasAnthropicKey ? 0 : !hasMetaApi ? 1 : !hasTelegram ? 2 : 3;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl mb-6">
+    <div className="relative overflow-hidden rounded-none mb-6">
       {/* Gradient background with glass effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] via-transparent to-white/[0.02]" />
       <div className="absolute inset-0 backdrop-blur-xl bg-surface/40" />
@@ -103,14 +103,14 @@ export default function SetupBanner({ onNavigateToAdmin }) {
         {/* Close button */}
         <button
           onClick={() => setIsDismissed(true)}
-          className="absolute top-4 right-4 p-2 rounded-lg hover:bg-white/5 text-foreground-muted hover:text-foreground transition-all"
+          className="absolute top-4 right-4 p-2 rounded-none hover:bg-white/5 text-foreground-muted hover:text-foreground transition-all"
         >
           <X size={18} />
         </button>
 
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
-          <div className="p-3 rounded-2xl bg-white/[0.06] border border-white/10">
+          <div className="p-3 rounded-none bg-white/[0.06] border border-white/10">
             <Sparkles className="w-6 h-6 text-foreground" />
           </div>
           <div>
@@ -165,7 +165,7 @@ export default function SetupBanner({ onNavigateToAdmin }) {
 
         {/* Missing items detail */}
         {missing.length > 0 && (
-          <div className="bg-surface/50 rounded-xl p-4 mb-6 border border-border/50">
+          <div className="bg-surface/50 rounded-none p-4 mb-6 border border-border/50">
             <p className="text-xs font-medium text-foreground-muted uppercase tracking-wider mb-3">
               Required Configuration
             </p>
@@ -173,7 +173,7 @@ export default function SetupBanner({ onNavigateToAdmin }) {
               {missing.map((item, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-none bg-destructive/10 text-destructive text-xs font-medium"
                 >
                   <Circle size={6} className="fill-current" />
                   {item}
@@ -204,7 +204,7 @@ export default function SetupBanner({ onNavigateToAdmin }) {
             </>
           ) : (
             <div className="flex items-center gap-3 text-sm text-foreground-muted">
-              <div className="p-2 rounded-lg bg-surface">
+              <div className="p-2 rounded-none bg-surface">
                 <Shield size={16} />
               </div>
               <span>

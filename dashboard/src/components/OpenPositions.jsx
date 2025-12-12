@@ -96,7 +96,7 @@ export default function OpenPositions({
         {trades.length > 0 && (
           <div
             className={cn(
-              "text-xs font-mono font-medium px-2 py-1 rounded bg-white/5 border border-white/5",
+              "text-xs font-mono font-medium px-2 py-1 rounded-none bg-white/5 border border-white/5",
               isTotalProfit ? "text-emerald-500" : "text-rose-500"
             )}
           >

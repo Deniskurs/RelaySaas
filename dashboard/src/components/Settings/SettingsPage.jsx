@@ -68,7 +68,7 @@ function NumberInput({ value, onChange, min, max, step, suffix, className }) {
         step={step}
         className={cn(
           "w-24 h-9 px-3 text-center font-mono text-sm",
-          "bg-white/[0.04] border-white/[0.08] rounded-lg",
+          "bg-white/[0.04] border-white/[0.08] rounded-none",
           "focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 focus:ring-offset-0",
           "transition-colors",
           "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
@@ -106,7 +106,7 @@ function SymbolTags({ symbols, onChange }) {
       {symbols.map((symbol) => (
         <span
           key={symbol}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-white/[0.06] text-foreground/80 rounded-md hover:bg-white/[0.08] transition-colors"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-white/[0.06] text-foreground/80 rounded-none hover:bg-white/[0.08] transition-colors"
         >
           {symbol}
           <button
@@ -122,7 +122,7 @@ function SymbolTags({ symbols, onChange }) {
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={addSymbol}
         placeholder="+ Add"
-        className="w-16 h-7 px-2 text-xs bg-transparent border-white/[0.06] border-dashed rounded-md focus:border-white/20 focus:bg-white/[0.03] transition-colors placeholder:text-foreground-muted/40"
+        className="w-16 h-7 px-2 text-xs bg-transparent border-white/[0.06] border-dashed rounded-none focus:border-white/20 focus:bg-white/[0.03] transition-colors placeholder:text-foreground-muted/40"
       />
     </div>
   );
@@ -150,7 +150,7 @@ function ChannelTags({ channels, onChange }) {
       {channels.map((channel) => (
         <span
           key={channel}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-white/[0.04] text-foreground/70 border border-white/[0.06] rounded-md hover:bg-white/[0.06] transition-colors"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-white/[0.04] text-foreground/70 border border-white/[0.06] rounded-none hover:bg-white/[0.06] transition-colors"
         >
           {channel}
           <button
@@ -166,7 +166,7 @@ function ChannelTags({ channels, onChange }) {
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={addChannel}
         placeholder="+ Add ID"
-        className="w-20 h-7 px-2 text-xs font-mono bg-transparent border-white/[0.06] border-dashed rounded-md focus:border-white/20 focus:bg-white/[0.03] transition-colors placeholder:text-foreground-muted/40"
+        className="w-20 h-7 px-2 text-xs font-mono bg-transparent border-white/[0.06] border-dashed rounded-none focus:border-white/20 focus:bg-white/[0.03] transition-colors placeholder:text-foreground-muted/40"
       />
     </div>
   );
@@ -198,7 +198,7 @@ function TPRatioInputs({ ratios, onChange }) {
             max={1}
             className={cn(
               "w-14 h-8 px-2 text-center font-mono text-xs",
-              "bg-white/[0.04] border-white/[0.08] rounded-md",
+              "bg-white/[0.04] border-white/[0.08] rounded-none",
               "focus:border-white/20 focus:bg-white/[0.06] focus:ring-0",
               "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             )}
@@ -207,7 +207,7 @@ function TPRatioInputs({ ratios, onChange }) {
       ))}
       <span
         className={cn(
-          "text-xs font-mono px-2 py-1 rounded-md",
+          "text-xs font-mono px-2 py-1 rounded-none",
           isValid
             ? "text-emerald-400/80 bg-emerald-500/10"
             : "text-rose-400/80 bg-rose-500/10"
@@ -232,7 +232,7 @@ function PasswordInput({ value, onChange, placeholder, className, disabled }) {
         disabled={disabled}
         className={cn(
           "h-9 pr-9 font-mono text-sm",
-          "bg-white/[0.04] border-white/[0.08] rounded-lg",
+          "bg-white/[0.04] border-white/[0.08] rounded-none",
           "focus:border-white/20 focus:bg-white/[0.06] focus:ring-0",
           className
         )}
@@ -366,7 +366,7 @@ function TelegramSection({
     }
   };
 
-  const inputClass = "h-9 font-mono text-sm bg-white/[0.04] border-white/[0.08] rounded-lg focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40";
+  const inputClass = "h-9 font-mono text-sm bg-white/[0.04] border-white/[0.08] rounded-none focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40";
 
   if (credsLoading) {
     return (
@@ -379,7 +379,7 @@ function TelegramSection({
   return (
     <div className="space-y-1">
       {/* Instructions */}
-      <div className="mb-4 p-3 bg-white/[0.02] border border-white/[0.04] rounded-lg">
+      <div className="mb-4 p-3 bg-white/[0.02] border border-white/[0.04] rounded-none">
         <p className="text-[12px] text-foreground-muted/60 leading-relaxed">
           Get your API credentials from{" "}
           <a
@@ -420,7 +420,7 @@ function TelegramSection({
             className={cn(inputClass, "w-44")}
           />
           {configStatus.telegram_api_hash_set && !telegramCreds.telegram_api_hash && (
-            <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-1 rounded-md font-medium">
+            <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-1 rounded-none font-medium">
               Set
             </span>
           )}
@@ -457,7 +457,7 @@ function TelegramSection({
         )}
 
         {connectionStatus === "connected" && (
-          <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20">
+          <div className="flex items-center justify-between p-4 rounded-none bg-emerald-500/[0.08] border border-emerald-500/20">
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
               <div>
@@ -494,7 +494,7 @@ function TelegramSection({
 
         {connectionStatus === "pending_password" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/[0.08] border border-amber-500/20">
+            <div className="flex items-center gap-3 p-4 rounded-none bg-amber-500/[0.08] border border-amber-500/20">
               <Lock size={18} className="text-amber-400" />
               <div>
                 <p className="text-sm font-medium text-foreground">2FA Required</p>
@@ -513,7 +513,7 @@ function TelegramSection({
             <Button
               onClick={handleVerifyPassword}
               disabled={isConnecting}
-              className="w-full h-10 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium"
+              className="w-full h-10 rounded-none bg-white/[0.9] text-background hover:bg-white font-medium"
             >
               {isConnecting ? (
                 <Loader2 size={14} className="mr-2 animate-spin" />
@@ -527,7 +527,7 @@ function TelegramSection({
 
         {connectionStatus === "pending_code" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-500/[0.08] border border-blue-500/20">
+            <div className="flex items-center gap-3 p-4 rounded-none bg-blue-500/[0.08] border border-blue-500/20">
               <MessageSquare size={18} className="text-blue-400" />
               <div>
                 <p className="text-sm font-medium text-foreground">Enter Verification Code</p>
@@ -547,7 +547,7 @@ function TelegramSection({
             <Button
               onClick={handleVerifyCode}
               disabled={isConnecting}
-              className="w-full h-10 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium"
+              className="w-full h-10 rounded-none bg-white/[0.9] text-background hover:bg-white font-medium"
             >
               {isConnecting ? (
                 <Loader2 size={14} className="mr-2 animate-spin" />
@@ -563,7 +563,7 @@ function TelegramSection({
           <Button
             onClick={handleSendCode}
             disabled={isConnecting || !telegramCreds.telegram_api_id || !telegramCreds.telegram_api_hash || !telegramCreds.telegram_phone}
-            className="w-full h-10 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium disabled:opacity-40 disabled:bg-white/[0.1] disabled:text-foreground-muted"
+            className="w-full h-10 rounded-none bg-white/[0.9] text-background hover:bg-white font-medium disabled:opacity-40 disabled:bg-white/[0.1] disabled:text-foreground-muted"
           >
             {isConnecting ? (
               <Loader2 size={14} className="mr-2 animate-spin" />
@@ -825,13 +825,13 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center gap-2.5">
             {(error || telegramError) && (
-              <span className="text-sm text-rose-400 flex items-center gap-1.5 bg-rose-500/10 px-3 py-1.5 rounded-lg">
+              <span className="text-sm text-rose-400 flex items-center gap-1.5 bg-rose-500/10 px-3 py-1.5 rounded-none">
                 <AlertCircle size={14} />
                 <span className="italic">{error || telegramError}</span>
               </span>
             )}
             {saveSuccess && (
-              <span className="text-sm text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-lg animate-in fade-in slide-in-from-right-2">
+              <span className="text-sm text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-none animate-in fade-in slide-in-from-right-2">
                 <Check size={14} />
                 <span className="italic">Saved</span>
               </span>
@@ -852,7 +852,7 @@ export default function SettingsPage() {
               onClick={handleSaveAll}
               disabled={!anyChanges || anySaving}
               className={cn(
-                "h-9 px-4 rounded-xl bg-white/[0.9] text-background hover:bg-white font-medium",
+                "h-9 px-4 rounded-none bg-white/[0.9] text-background hover:bg-white font-medium",
                 "disabled:opacity-40 disabled:bg-white/[0.1] disabled:text-foreground-muted",
                 "transition-all"
               )}
@@ -1025,7 +1025,7 @@ export default function SettingsPage() {
               </SettingRow>
 
               {localSettings.split_tps && (
-                <div className="bg-white/[0.02] rounded-xl p-4 mt-3 border border-white/[0.04] animate-in slide-in-from-top-1 duration-200 space-y-4">
+                <div className="bg-white/[0.02] rounded-none p-4 mt-3 border border-white/[0.04] animate-in slide-in-from-top-1 duration-200 space-y-4">
                   <SettingRow
                     label="Lot Size Mode"
                     description="How lot size is handled for multiple TPs"
@@ -1035,7 +1035,7 @@ export default function SettingsPage() {
                       <button
                         onClick={() => updateLocal("tp_lot_mode", "split")}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                          "px-3 py-1.5 rounded-none text-xs font-medium transition-all",
                           localSettings.tp_lot_mode === "split" || !localSettings.tp_lot_mode
                             ? "bg-foreground text-background"
                             : "bg-white/[0.04] text-foreground-muted hover:bg-white/[0.08]"
@@ -1046,7 +1046,7 @@ export default function SettingsPage() {
                       <button
                         onClick={() => updateLocal("tp_lot_mode", "equal")}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                          "px-3 py-1.5 rounded-none text-xs font-medium transition-all",
                           localSettings.tp_lot_mode === "equal"
                             ? "bg-foreground text-background"
                             : "bg-white/[0.04] text-foreground-muted hover:bg-white/[0.08]"
@@ -1106,7 +1106,7 @@ export default function SettingsPage() {
                   value={localSettings.symbol_suffix || ""}
                   onChange={(e) => updateLocal("symbol_suffix", e.target.value)}
                   placeholder=".pro"
-                  className="w-20 h-9 px-3 text-center font-mono text-sm bg-white/[0.04] border-white/[0.08] rounded-lg focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40"
+                  className="w-20 h-9 px-3 text-center font-mono text-sm bg-white/[0.04] border-white/[0.08] rounded-none focus:border-white/20 focus:bg-white/[0.06] focus:ring-0 transition-colors placeholder:text-foreground-muted/40"
                 />
               </SettingRow>
             </CardContent>

@@ -51,7 +51,7 @@ export default function Login() {
         {/* Logo/Brand */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center">
               <TrendingUp className="w-7 h-7 text-primary" />
             </div>
           </div>
@@ -67,7 +67,7 @@ export default function Login() {
           </CardHeader>
           <CardContent className="space-y-4">
             {displayError && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <div className="flex items-center gap-2 p-3 rounded-none bg-destructive/10 text-destructive text-sm">
                 <AlertCircle size={16} />
                 {displayError}
               </div>

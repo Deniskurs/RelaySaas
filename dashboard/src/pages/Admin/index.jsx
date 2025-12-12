@@ -37,7 +37,7 @@ function StatCard({ title, value, icon: Icon, trend, className, index }) {
       <CardContent className="p-6 relative">
         <div className="flex items-center justify-between mb-4">
           <div
-            className={`p-3 rounded-xl ${
+            className={`p-3 rounded-none ${
               className || "bg-white/10"
             } group-hover:scale-110 transition-transform duration-300`}
           >
@@ -196,7 +196,7 @@ function SystemConfig() {
           <div className="absolute inset-0 bg-gradient-to-r from-white/[0.02] to-transparent pointer-events-none" />
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5 text-lg">
-              <div className="p-2 bg-white/10 rounded-lg">
+              <div className="p-2 bg-white/10 rounded-none">
                 <Key size={20} className="text-foreground" />
               </div>
               API Credentials
@@ -309,7 +309,7 @@ function SystemConfig() {
         <Card className="glass-card border-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5 text-lg">
-              <div className="p-2 bg-destructive/10 rounded-lg">
+              <div className="p-2 bg-destructive/10 rounded-none">
                 <Shield size={20} className="text-destructive" />
               </div>
               Risk Limits
@@ -378,7 +378,7 @@ function SystemConfig() {
         <Card className="glass-card border-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5 text-lg">
-              <div className="p-2 bg-success/10 rounded-lg">
+              <div className="p-2 bg-success/10 rounded-none">
                 <Activity size={20} className="text-success" />
               </div>
               Execution Defaults
@@ -386,7 +386,7 @@ function SystemConfig() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-white/5">
+              <div className="flex items-center justify-between p-3 rounded-none bg-background/30 border border-white/5">
                 <div className="space-y-0.5">
                   <span className="text-sm font-medium text-foreground">
                     Split Take Profits
@@ -422,7 +422,7 @@ function SystemConfig() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between p-3 rounded-lg bg-background/30 border border-white/5">
+              <div className="flex items-center justify-between p-3 rounded-none bg-background/30 border border-white/5">
                 <div className="space-y-0.5">
                   <span className="text-sm font-medium text-foreground">
                     Auto-Breakeven
@@ -496,7 +496,7 @@ function UserRow({ user, onSuspend, onActivate }) {
   const StatusIcon = config.icon;
 
   return (
-    <div className="group flex items-center justify-between p-4 rounded-xl border border-border/40 bg-card/30 hover:bg-card/50 hover:border-white/20 transition-all duration-300">
+    <div className="group flex items-center justify-between p-4 rounded-none border border-border/40 bg-card/30 hover:bg-card/50 hover:border-white/20 transition-all duration-300">
       <div className="flex items-center gap-4">
         <div className="w-12 h-12 rounded-full ring-2 ring-border/50 group-hover:ring-white/20 transition-all overflow-hidden bg-surface flex items-center justify-center">
           {user.avatar_url ? (
@@ -540,7 +540,7 @@ function UserRow({ user, onSuspend, onActivate }) {
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg"
+              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-none"
               onClick={() => onSuspend(user.id)}
               title="Suspend User"
             >
@@ -550,7 +550,7 @@ function UserRow({ user, onSuspend, onActivate }) {
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-success hover:text-success hover:bg-success/10 rounded-lg"
+              className="h-8 w-8 text-success hover:text-success hover:bg-success/10 rounded-none"
               onClick={() => onActivate(user.id)}
               title="Activate User"
             >
@@ -665,24 +665,24 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-6 h-full flex flex-col">
-        <TabsList className="bg-surface/50 border border-white/5 p-1 h-12 w-fit rounded-xl self-start">
+        <TabsList className="bg-surface/50 border border-white/5 p-1 h-12 w-fit rounded-none self-start">
           <TabsTrigger
             value="overview"
-            className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
+            className="rounded-none data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
           >
             <Activity size={16} className="mr-2" />
             Overview
           </TabsTrigger>
           <TabsTrigger
             value="users"
-            className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
+            className="rounded-none data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
           >
             <Users size={16} className="mr-2" />
             Users
           </TabsTrigger>
           <TabsTrigger
             value="config"
-            className="rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
+            className="rounded-none data-[state=active]:bg-white/10 data-[state=active]:text-foreground text-sm px-6 h-10"
           >
             <Settings size={16} className="mr-2" />
             System Config
@@ -764,7 +764,7 @@ export default function AdminDashboard() {
                         key={log.id}
                         className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors group"
                       >
-                        <div className="p-2.5 rounded-xl bg-surface border border-white/10 group-hover:border-white/30 transition-colors">
+                        <div className="p-2.5 rounded-none bg-surface border border-white/10 group-hover:border-white/30 transition-colors">
                           <Activity
                             size={16}
                             className="text-foreground-muted group-hover:text-foreground transition-colors"

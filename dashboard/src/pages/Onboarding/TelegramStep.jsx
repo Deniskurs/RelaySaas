@@ -59,7 +59,7 @@ export default function TelegramStep({ onComplete, onSkip }) {
   return (
     <div className="space-y-6">
       {/* Instructions */}
-      <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
+      <div className="bg-primary/5 border border-primary/20 rounded-none p-4 space-y-3">
         <div className="flex items-start gap-3">
           <Info className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
           <div className="space-y-2">
@@ -89,7 +89,7 @@ export default function TelegramStep({ onComplete, onSkip }) {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+        <div className="flex items-center gap-2 p-3 rounded-none bg-destructive/10 text-destructive text-sm">
           <AlertCircle size={16} />
           {error}
         </div>
