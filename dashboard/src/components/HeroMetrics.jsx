@@ -13,13 +13,16 @@ export default function HeroMetrics({ stats, account, openTrades = [] }) {
 
   // Calculate key metrics
   const todayPnL = stats?.todayPnL || stats?.today_pnl || 0;
-  const openPnL = openTrades.reduce((sum, t) => sum + (t.profit || t.unrealizedPnL || 0), 0);
-  const marginPercent = account.equity > 0
-    ? ((account.margin / account.equity) * 100)
-    : 0;
-  const todayChange = account.balance > 0
-    ? ((todayPnL / account.balance) * 100)
-    : 0;
+  const openPnL = openTrades.reduce(
+    (sum, t) => sum + (t.profit || t.unrealizedPnL || 0),
+    0
+  );
+  const marginPercent =
+    account.equity > 0 ? (account.margin / account.equity) * 100 : 0;
+  // Calculate starting balance to get accurate daily return %
+  const startingBalance = account.balance - todayPnL;
+  const todayChange =
+    startingBalance > 0 ? (todayPnL / startingBalance) * 100 : 0;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -37,7 +40,9 @@ export default function HeroMetrics({ stats, account, openTrades = [] }) {
       <HeroCard
         label="Open P&L"
         value={formatPnL(openPnL)}
-        subtitle={`${openTrades.length} position${openTrades.length !== 1 ? "s" : ""}`}
+        subtitle={`${openTrades.length} position${
+          openTrades.length !== 1 ? "s" : ""
+        }`}
         variant={openPnL >= 0 ? "profit" : "loss"}
         icon={openPnL >= 0 ? TrendingUp : TrendingDown}
         priority="high"
@@ -48,7 +53,13 @@ export default function HeroMetrics({ stats, account, openTrades = [] }) {
         label="Margin Used"
         value={`${marginPercent.toFixed(1)}%`}
         progress={marginPercent}
-        variant={marginPercent > 80 ? "danger" : marginPercent > 50 ? "warning" : "safe"}
+        variant={
+          marginPercent > 80
+            ? "danger"
+            : marginPercent > 50
+            ? "warning"
+            : "safe"
+        }
         icon={marginPercent > 80 ? AlertTriangle : null}
         priority="high"
       />
@@ -74,7 +85,7 @@ function HeroCard({
   variant,
   icon: Icon,
   progress,
-  priority = "medium"
+  priority = "medium",
 }) {
   const variants = {
     profit: {
@@ -145,30 +156,32 @@ function HeroCard({
       </div>
 
       {/* Main Value - Size varies by priority */}
-      <div className={cn(
-        "font-mono font-bold tracking-tight",
-        style.text,
-        isHero ? "text-3xl lg:text-4xl" : "text-2xl"
-      )}>
+      <div
+        className={cn(
+          "font-mono font-bold tracking-tight",
+          style.text,
+          isHero ? "text-3xl lg:text-4xl" : "text-2xl"
+        )}
+      >
         {value}
       </div>
 
       {/* Change Indicator (for P&L cards) */}
       {change && (
-        <div className={cn(
-          "text-sm font-medium mt-1.5 font-mono",
-          style.text,
-          "opacity-80"
-        )}>
+        <div
+          className={cn(
+            "text-sm font-medium mt-1.5 font-mono",
+            style.text,
+            "opacity-80"
+          )}
+        >
           {change}
         </div>
       )}
 
       {/* Subtitle (for position count, equity) */}
       {subtitle && (
-        <div className="text-xs text-foreground-muted mt-1.5">
-          {subtitle}
-        </div>
+        <div className="text-xs text-foreground-muted mt-1.5">{subtitle}</div>
       )}
 
       {/* Progress Bar (for margin) */}
@@ -181,20 +194,30 @@ function HeroCard({
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
               className={cn(
                 "h-full rounded-none transition-colors",
-                variant === "danger" ? "bg-destructive" :
-                variant === "warning" ? "bg-warning" :
-                "bg-primary"
+                variant === "danger"
+                  ? "bg-destructive"
+                  : variant === "warning"
+                  ? "bg-warning"
+                  : "bg-primary"
               )}
             />
           </div>
           <div className="flex justify-between mt-1.5 text-[10px] text-foreground-muted">
             <span>0%</span>
-            <span className={cn(
-              progress > 80 ? "text-destructive" :
-              progress > 50 ? "text-warning" :
-              "text-foreground-muted"
-            )}>
-              {progress > 80 ? "High Risk" : progress > 50 ? "Moderate" : "Safe"}
+            <span
+              className={cn(
+                progress > 80
+                  ? "text-destructive"
+                  : progress > 50
+                  ? "text-warning"
+                  : "text-foreground-muted"
+              )}
+            >
+              {progress > 80
+                ? "High Risk"
+                : progress > 50
+                ? "Moderate"
+                : "Safe"}
             </span>
             <span>100%</span>
           </div>
