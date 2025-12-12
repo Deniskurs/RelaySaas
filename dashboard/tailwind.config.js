@@ -41,8 +41,8 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
-          purple: "#a855f7",
-          blue: "#3b82f6",
+          teal: "#29A19C", /* Active states, toggles ON, success */
+          gold: "#E5C07B", /* Premium highlights, profits, logo */
         },
         card: {
           DEFAULT: "hsl(var(--card))",

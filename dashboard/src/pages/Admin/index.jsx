@@ -733,7 +733,7 @@ export default function AdminDashboard() {
                   icon={Signal}
                   trend={-2}
                   index={2}
-                  className="bg-purple-500/10"
+                  className="bg-accent-teal/10"
                 />
                 <StatCard
                   title="Connected"

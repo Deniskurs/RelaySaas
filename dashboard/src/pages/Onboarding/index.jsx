@@ -91,7 +91,7 @@ export default function Onboarding() {
               <TrendingUp className="w-7 h-7 text-primary" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Welcome to Signal Copier</h1>
+          <h1 className="text-2xl font-bold text-foreground">Welcome to Relay</h1>
           <p className="text-sm text-foreground-muted">
             Let's get your account set up in just a few steps
           </p>

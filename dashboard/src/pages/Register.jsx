@@ -94,7 +94,7 @@ export default function Register() {
               <TrendingUp className="w-7 h-7 text-primary" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Signal Copier</h1>
+          <h1 className="text-2xl font-bold text-foreground">Relay</h1>
           <p className="text-sm text-foreground-muted">
             Create your trading account
           </p>

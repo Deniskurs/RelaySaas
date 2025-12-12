@@ -111,7 +111,7 @@ export default function PremiumTopBar({
             transition={{ duration: 0.3 }}
             className="absolute inset-0 pointer-events-none overflow-hidden rounded-none"
             style={{
-              background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(139,92,246,0.04), transparent 40%)`,
+              background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(255,255,255,0.02), transparent 40%)`,
             }}
           />
         )}
@@ -139,13 +139,13 @@ export default function PremiumTopBar({
               className="absolute inset-0 rounded-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
               style={{
                 background:
-                  "radial-gradient(circle, rgba(139,92,246,0.4), transparent 70%)",
+                  "radial-gradient(circle, rgba(41,161,156,0.3), transparent 70%)",
                 filter: "blur(8px)",
               }}
             />
           </div>
           <span className="text-base font-semibold tracking-tight text-foreground hidden sm:block">
-            SignalCopier
+            Relay
           </span>
         </motion.div>
 
@@ -180,10 +180,10 @@ export default function PremiumTopBar({
                     layoutId="nav-pill"
                     className="absolute inset-0 rounded-none"
                     style={{
-                      background:
-                        "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.12))",
-                      border: "1px solid rgba(139,92,246,0.2)",
-                      boxShadow: "0 0 20px rgba(139,92,246,0.08)",
+                      background: "rgba(255, 255, 255, 0.06)",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      borderLeft: "2px solid rgba(41, 161, 156, 0.6)",
+                      boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.04)",
                     }}
                     transition={{
                       type: "spring",
@@ -223,10 +223,10 @@ export default function PremiumTopBar({
                   layoutId="nav-pill"
                   className="absolute inset-0 rounded-none"
                   style={{
-                    background:
-                      "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.12))",
-                    border: "1px solid rgba(139,92,246,0.2)",
-                    boxShadow: "0 0 20px rgba(139,92,246,0.08)",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderLeft: "2px solid rgba(41, 161, 156, 0.6)",
+                    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.04)",
                   }}
                   transition={{
                     type: "spring",

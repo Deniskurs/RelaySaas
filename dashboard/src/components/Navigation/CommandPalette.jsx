@@ -263,7 +263,7 @@ export default function CommandPalette({
                 background:
                   "linear-gradient(180deg, rgba(20,20,25,0.98), rgba(15,15,20,0.98))",
                 boxShadow:
-                  "0 0 0 1px rgba(255,255,255,0.03), 0 25px 80px -20px rgba(0,0,0,0.6), 0 0 100px rgba(139,92,246,0.08)",
+                  "0 0 0 1px rgba(255,255,255,0.03), 0 25px 80px -20px rgba(0,0,0,0.6), 0 0 100px rgba(255,255,255,0.03)",
               }}
             >
             {/* Search Input */}

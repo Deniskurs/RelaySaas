@@ -497,7 +497,7 @@ export default function AdminPanel() {
                 title="Connected"
                 value={overview.connected_users}
                 icon={Activity}
-                className="bg-accent-purple/10"
+                className="bg-accent-teal/10"
               />
             </div>
           )}

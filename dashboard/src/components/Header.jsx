@@ -8,11 +8,11 @@ export default function Header({ isConnected, isPaused, onPause, onResume }) {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-none bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center">
+            <div className="w-10 h-10 rounded-none bg-accent-teal flex items-center justify-center">
               <Activity className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold gradient-text">Signal Copier</h1>
+              <h1 className="text-xl font-bold text-foreground">Relay</h1>
               <p className="text-xs text-gray-500">Telegram → MT5</p>
             </div>
           </div>

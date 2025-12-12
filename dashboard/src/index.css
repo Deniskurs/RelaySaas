@@ -49,9 +49,13 @@
     --border: 240 3.7% 15.9%;
     --border-subtle: 240 3.7% 10%;
 
-    /* Primary Accent: Sophisticated Indigo/Violet glow */
-    --primary: 252 87% 65%; /* Vivid Indigo */
-    --primary-foreground: 0 0% 100%;
+    /* Primary Accent: Warm Platinum (premium monochromatic) */
+    --primary: 220 14% 96%; /* Sophisticated silver-white #F4F5F7 */
+    --primary-foreground: 240 10% 4%;
+
+    /* Accent Colors - Use sparingly */
+    --accent-teal: 173 58% 39%; /* #29A19C - Active states, success */
+    --accent-gold: 43 74% 66%; /* #E5C07B - Premium highlights only */
 
     /* Semantic Colors: Vivid against the dark background */
     --success: 142 71% 45%;
@@ -77,7 +81,7 @@
     --accent-foreground: 0 0% 98%;
 
     --input: 240 3.7% 15.9%;
-    --ring: 252 87% 65%; /* Matches primary */
+    --ring: 220 14% 80%; /* Softer focus ring - matches platinum primary */
   }
 
   * {
@@ -91,19 +95,18 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    @apply bg-background text-foreground antialiased selection:bg-white/20 selection:text-foreground;
     font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-    /* Subtle mesh gradient background effect could go here if implemented via image/canvas, 
-       but for pure CSS, a radial gradient works well */
+    /* Premium subtle white mesh - whisper, don't shout */
     background-image: radial-gradient(
         circle at 15% 50%,
-        rgba(76, 29, 149, 0.08),
-        transparent 25%
+        rgba(255, 255, 255, 0.012),
+        transparent 35%
       ),
       radial-gradient(
         circle at 85% 30%,
-        rgba(56, 189, 248, 0.05),
-        transparent 25%
+        rgba(255, 255, 255, 0.008),
+        transparent 40%
       );
     background-attachment: fixed;
   }
@@ -137,12 +140,13 @@
     @apply bg-card/50 backdrop-blur-md border border-white/5 transition-all duration-300 hover:bg-card/70 hover:border-white/10 rounded-none;
   }
 
+  /* Removed purple glows - premium design uses subtle shadows instead */
   .text-glow {
-    text-shadow: 0 0 20px rgba(139, 92, 246, 0.5); /* Violet glow */
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.15); /* Subtle white glow */
   }
 
   .border-glow {
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
   }
 }
 
@@ -193,9 +197,10 @@
   }
 
   .nav-pill-active {
-    background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.12));
-    border: 1px solid rgba(139,92,246,0.2);
-    box-shadow: 0 0 20px rgba(139,92,246,0.08);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 2px solid hsl(173 58% 39% / 0.6); /* Teal indicator */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .command-backdrop {
@@ -203,7 +208,7 @@
   }
 
   .premium-glow {
-    box-shadow: 0 0 30px rgba(139,92,246,0.1), 0 0 60px rgba(139,92,246,0.05);
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.04), 0 0 60px rgba(255, 255, 255, 0.02);
   }
 
   .premium-border {

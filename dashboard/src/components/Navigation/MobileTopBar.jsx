@@ -43,7 +43,7 @@ export default function MobileTopBar({
       case "admin":
         return "Admin";
       default:
-        return "SignalCopier";
+        return "Relay";
     }
   };
 

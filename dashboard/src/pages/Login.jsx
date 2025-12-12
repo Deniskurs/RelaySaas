@@ -55,7 +55,7 @@ export default function Login() {
               <TrendingUp className="w-7 h-7 text-primary" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Signal Copier</h1>
+          <h1 className="text-2xl font-bold text-foreground">Relay</h1>
           <p className="text-sm text-foreground-muted">
             Sign in to your trading dashboard
           </p>

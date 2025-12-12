@@ -123,7 +123,7 @@ export default function Sidebar({
             <motion.div
               className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
               style={{
-                background: "radial-gradient(circle, rgba(139,92,246,0.4), transparent 70%)",
+                background: "radial-gradient(circle, rgba(41,161,156,0.3), transparent 70%)",
                 filter: "blur(8px)",
               }}
             />
@@ -137,7 +137,7 @@ export default function Sidebar({
                 transition={{ duration: 0.15 }}
                 className="text-base font-semibold tracking-tight text-foreground whitespace-nowrap uppercase"
               >
-                Signal<span className="text-primary">Copier</span>
+                Relay
               </motion.span>
             )}
           </AnimatePresence>
@@ -220,8 +220,8 @@ export default function Sidebar({
                   layoutId="sidebar-active"
                   className="absolute inset-0"
                   style={{
-                    background: "linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))",
-                    borderLeft: "2px solid rgba(139,92,246,0.6)",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    borderLeft: "2px solid rgba(41, 161, 156, 0.6)",
                   }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
@@ -280,8 +280,8 @@ export default function Sidebar({
                 layoutId="sidebar-active"
                 className="absolute inset-0"
                 style={{
-                  background: "linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))",
-                  borderLeft: "2px solid rgba(139,92,246,0.6)",
+                  background: "rgba(255, 255, 255, 0.06)",
+                  borderLeft: "2px solid rgba(41, 161, 156, 0.6)",
                 }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
               />
