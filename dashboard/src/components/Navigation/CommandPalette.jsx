@@ -248,16 +248,16 @@ export default function CommandPalette({
             className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
           />
 
-          {/* Dialog */}
+          {/* Dialog - Centered on screen with sharp corners */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -20 }}
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -20 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-              "fixed left-1/2 top-[15%] -translate-x-1/2 z-[101]",
+              "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[101]",
               "w-[90vw] max-w-[560px]",
-              "rounded-2xl overflow-hidden",
+              "rounded-none overflow-hidden",
               "border border-white/[0.08]"
             )}
             style={{
@@ -282,7 +282,7 @@ export default function CommandPalette({
                 )}
               />
               <div className="flex items-center gap-1 text-xs text-foreground-subtle">
-                <kbd className="px-1.5 py-0.5 rounded bg-white/[0.06] font-mono">
+                <kbd className="px-1.5 py-0.5 rounded-none bg-white/[0.06] font-mono border border-white/[0.04]">
                   ESC
                 </kbd>
                 <span>to close</span>
@@ -368,7 +368,7 @@ export default function CommandPalette({
                           </div>
 
                           {cmd.badge && (
-                            <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-xs font-medium text-foreground-muted">
+                            <span className="px-1.5 py-0.5 rounded-none bg-white/[0.06] text-xs font-medium text-foreground-muted border border-white/[0.04]">
                               {cmd.badge}
                             </span>
                           )}

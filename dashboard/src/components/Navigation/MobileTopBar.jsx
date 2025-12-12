@@ -73,7 +73,7 @@ export default function MobileTopBar({
             className="w-full h-full object-cover"
           />
         </div>
-        <span className="text-base font-semibold tracking-tight text-foreground font-serif">
+        <span className="text-sm font-semibold tracking-tight text-foreground uppercase">
           {getPageTitle()}
         </span>
       </motion.div>

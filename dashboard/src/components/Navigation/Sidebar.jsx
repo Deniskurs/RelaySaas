@@ -135,9 +135,9 @@ export default function Sidebar({
                 animate={{ opacity: 1, width: "auto" }}
                 exit={{ opacity: 0, width: 0 }}
                 transition={{ duration: 0.15 }}
-                className="text-lg font-semibold tracking-tight text-foreground whitespace-nowrap font-serif"
+                className="text-base font-semibold tracking-tight text-foreground whitespace-nowrap uppercase"
               >
-                SignalCopier
+                Signal<span className="text-primary">Copier</span>
               </motion.span>
             )}
           </AnimatePresence>
