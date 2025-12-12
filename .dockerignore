@@ -1,0 +1,13 @@
+.git
+.env
+.env.local
+*.session
+*.session-journal
+__pycache__
+*.pyc
+node_modules
+dashboard/node_modules
+.pytest_cache
+.venv
+venv
+.claude
