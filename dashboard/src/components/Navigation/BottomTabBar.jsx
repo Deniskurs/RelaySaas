@@ -103,7 +103,7 @@ export default function BottomTabBar({
               className={cn(
                 "w-10 h-10 flex items-center justify-center",
                 isPaused
-                  ? "bg-emerald-500/20 text-emerald-400"
+                  ? "bg-success/20 text-success"
                   : "bg-white/[0.06] text-foreground-muted"
               )}
             >
@@ -113,7 +113,7 @@ export default function BottomTabBar({
           <span
             className={cn(
               "text-[10px] font-medium uppercase tracking-wide",
-              isPaused ? "text-emerald-400" : "text-foreground-subtle"
+              isPaused ? "text-success" : "text-foreground-subtle"
             )}
           >
             {isPaused ? "Resume" : "Active"}

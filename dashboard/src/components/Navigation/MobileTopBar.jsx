@@ -86,12 +86,12 @@ export default function MobileTopBar({
             <motion.div
               className={cn(
                 "w-2 h-2",
-                isConnected ? "bg-emerald-400" : "bg-neutral-500"
+                isConnected ? "bg-success" : "bg-muted-foreground"
               )}
             />
             {isConnected && (
               <motion.div
-                className="absolute inset-0 bg-emerald-400"
+                className="absolute inset-0 bg-success"
                 animate={{ scale: [1, 2, 2], opacity: [0.6, 0, 0] }}
                 transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
               />
@@ -102,18 +102,19 @@ export default function MobileTopBar({
           </span>
         </div>
 
-        {/* Search Button */}
+        {/* Search Button - 44px touch target for accessibility */}
         <motion.button
           onClick={onOpenCommandPalette}
           whileTap={{ scale: 0.95 }}
           className={cn(
-            "w-8 h-8 flex items-center justify-center",
+            "w-10 h-10 flex items-center justify-center",
             "bg-white/[0.04] hover:bg-white/[0.08]",
             "border border-white/[0.04]",
             "text-foreground-muted"
           )}
+          aria-label="Open search"
         >
-          <Search size={16} />
+          <Search size={18} />
         </motion.button>
 
         {/* User Menu */}

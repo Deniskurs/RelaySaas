@@ -328,12 +328,12 @@ export default function Sidebar({
             <motion.div
               className={cn(
                 "w-2 h-2",
-                isConnected ? "bg-emerald-400" : "bg-neutral-500"
+                isConnected ? "bg-success" : "bg-muted-foreground"
               )}
             />
             {isConnected && (
               <motion.div
-                className="absolute inset-0 bg-emerald-400"
+                className="absolute inset-0 bg-success"
                 animate={{ scale: [1, 2, 2], opacity: [0.6, 0, 0] }}
                 transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
               />
@@ -363,7 +363,7 @@ export default function Sidebar({
             "text-sm font-medium transition-all duration-200",
             isCollapsed && "justify-center px-0",
             isPaused
-              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              ? "bg-success/10 text-success border border-success/20"
               : "bg-white/[0.03] text-foreground-muted hover:text-foreground border border-white/[0.04] hover:bg-white/[0.06]"
           )}
         >
