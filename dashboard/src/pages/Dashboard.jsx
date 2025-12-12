@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,14 +15,15 @@ import { useCommandPalette } from "@/components/Navigation/useCommandPalette";
 import LiveFeed from "@/components/LiveFeed";
 import OpenPositions from "@/components/OpenPositions";
 import RecentSignals from "@/components/RecentSignals";
-import StatsBar from "@/components/StatsBar";
-import AccountCard from "@/components/AccountCard";
+import HeroMetrics from "@/components/HeroMetrics";
+import AlertBanner, { useAlertSystem } from "@/components/AlertBanner";
 import PerformanceChart from "@/components/PerformanceChart";
 import SettingsPage from "@/components/Settings/SettingsPage";
 import AdminPanel from "@/components/Admin/AdminPanel";
 import SetupBanner from "@/components/SetupBanner";
 import ProfilePage from "@/components/Profile/ProfilePage";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 export default function Dashboard() {
   const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${
@@ -167,6 +168,25 @@ export default function Dashboard() {
   };
 
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [liveFeedExpanded, setLiveFeedExpanded] = useState(false);
+
+  // Alert system for critical events
+  const { alerts } = useAlertSystem({
+    telegramStatus,
+    mt5Connected: isConnected,
+    account,
+    recentFailures: signals.filter(s =>
+      s.status?.toLowerCase() === "failed" &&
+      s.timestamp &&
+      Date.now() - new Date(s.timestamp).getTime() < 5 * 60 * 1000
+    ).map(s => ({ timestamp: s.timestamp, reason: s.failureReason })),
+  });
+
+  // Get pending signals that need action
+  const pendingSignals = useMemo(() =>
+    signals.filter(s => s.status?.toLowerCase() === "pending_confirmation"),
+    [signals]
+  );
 
   const handleTelegramReconnect = async () => {
     if (isReconnecting) return; // Prevent multiple clicks
@@ -200,23 +220,53 @@ export default function Dashboard() {
     if (accountData) setAccount(accountData);
   }, [fetchData]);
 
+  // Handle alert actions
+  const handleAlertAction = (actionId, alert) => {
+    switch (actionId) {
+      case "reconnect":
+        handleTelegramReconnect();
+        break;
+      case "settings":
+        setActiveTab("settings");
+        break;
+      case "view_signals":
+        setActiveTab("signals");
+        break;
+      default:
+        break;
+    }
+  };
+
   const renderDashboard = () => (
     <div className="space-y-6">
+      {/* CRITICAL ALERTS - Sticky at top */}
+      <AlertBanner
+        alerts={alerts}
+        onAction={handleAlertAction}
+        onDismiss={(alertId) => console.log("Dismissed:", alertId)}
+      />
+
       {/* Setup Banner - shows if system not configured */}
       <SetupBanner onNavigateToAdmin={() => setActiveTab("admin")} />
 
-      {/* Top Section: Account Overview */}
-      <section>
-        <AccountCard account={account} />
-        {stats && <StatsBar stats={stats} />}
-      </section>
+      {/* HERO METRICS - Most important info first */}
+      <HeroMetrics
+        stats={stats}
+        account={account}
+        openTrades={openTrades}
+      />
 
-      {/* Main Grid - 3 Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* Column 1: Recent Signals (Detailed) */}
-        <div className="lg:col-span-1">
+      {/* ACTIVE MONITORING - 2 Column Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Open Positions - Left Column */}
+        <div>
+          <OpenPositions trades={openTrades} isLoading={isLoading} />
+        </div>
+
+        {/* Recent/Pending Signals - Right Column */}
+        <div>
           <RecentSignals
-            signals={signals}
+            signals={pendingSignals.length > 0 ? pendingSignals : signals.slice(0, 5)}
             isLoading={isLoading}
             onRefresh={() =>
               fetchData("/signals?limit=20").then(
@@ -229,20 +279,56 @@ export default function Dashboard() {
             onNavigateSettings={() => setActiveTab("settings")}
           />
         </div>
-
-        {/* Column 2: Open Positions */}
-        <div className="lg:col-span-1">
-          <OpenPositions trades={openTrades} isLoading={isLoading} />
-        </div>
-
-        {/* Column 3: Activity (Live Feed) */}
-        <div className="lg:col-span-2 xl:col-span-1">
-          <LiveFeed events={events} />
-        </div>
       </div>
 
-      {/* Performance - Full Width Below */}
+      {/* PERFORMANCE - Full Width Chart */}
       <PerformanceChart stats={stats} isLoading={isLoading} />
+
+      {/* SYSTEM HEALTH - Collapsible Live Feed */}
+      <div className="border border-white/[0.06] rounded-none bg-black/40 backdrop-blur-sm overflow-hidden">
+        <button
+          onClick={() => setLiveFeedExpanded(!liveFeedExpanded)}
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-foreground/90">
+              System Activity
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-success" : "bg-destructive"}`} />
+              <span className="text-xs text-foreground-muted">
+                {isConnected ? "Connected" : "Disconnected"}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {events.length > 0 && (
+              <span className="text-xs text-foreground-muted font-mono">
+                {events.length} events
+              </span>
+            )}
+            {liveFeedExpanded ? (
+              <ChevronUp size={16} className="text-foreground-muted" />
+            ) : (
+              <ChevronDown size={16} className="text-foreground-muted" />
+            )}
+          </div>
+        </button>
+
+        <AnimatePresence>
+          {liveFeedExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="border-t border-white/[0.06] overflow-hidden"
+            >
+              <LiveFeed events={events} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 

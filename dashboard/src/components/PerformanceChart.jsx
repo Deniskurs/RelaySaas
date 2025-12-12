@@ -1,15 +1,72 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
-const COLORS = {
-  success: "#10b981", // emerald-500
-  destructive: "#f43f5e", // rose-500
-  primary: "#3b82f6", // blue-500
-  warning: "#eab308", // yellow-500
-  muted: "#71717a", // zinc-500
+/**
+ * Get computed color from CSS variable
+ * Converts HSL CSS variables to hex for use with Recharts
+ */
+const getComputedColor = (cssVar) => {
+  if (typeof window === 'undefined') return '#888888';
+
+  const root = document.documentElement;
+  const style = getComputedStyle(root);
+  const hslValue = style.getPropertyValue(cssVar).trim();
+
+  if (!hslValue) return '#888888';
+
+  // Parse HSL values (format: "142 71% 45%")
+  const [h, s, l] = hslValue.split(' ').map((v, i) =>
+    i === 0 ? parseFloat(v) : parseFloat(v.replace('%', '')) / 100
+  );
+
+  // Convert HSL to RGB
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+  };
+
+  const r = Math.round(f(0) * 255);
+  const g = Math.round(f(8) * 255);
+  const b = Math.round(f(4) * 255);
+
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+// Hook to get colors from CSS variables (updates on theme change)
+const useChartColors = () => {
+  const [colors, setColors] = useState({
+    success: '#10b981',
+    destructive: '#f43f5e',
+    primary: '#3b82f6',
+    warning: '#eab308',
+    muted: '#71717a',
+  });
+
+  useEffect(() => {
+    const updateColors = () => {
+      setColors({
+        success: getComputedColor('--success'),
+        destructive: getComputedColor('--destructive'),
+        primary: getComputedColor('--primary'),
+        warning: getComputedColor('--warning'),
+        muted: getComputedColor('--muted'),
+      });
+    };
+
+    updateColors();
+
+    // Listen for potential theme changes
+    const observer = new MutationObserver(updateColors);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
+
+  return colors;
 };
 
 const CustomTooltip = ({ active, payload }) => {
@@ -42,6 +99,7 @@ const StatRow = ({ label, value, color }) => (
 
 export default function PerformanceChart({ stats, isLoading = false }) {
   const { formatPnL } = useCurrency();
+  const COLORS = useChartColors();
 
   const getTradeData = () => {
     if (!stats) return [];
@@ -75,7 +133,7 @@ export default function PerformanceChart({ stats, isLoading = false }) {
             <div
               className={cn(
                 "text-sm font-mono font-medium",
-                totalProfit >= 0 ? "text-emerald-500" : "text-rose-500"
+                totalProfit >= 0 ? "text-success" : "text-destructive"
               )}
             >
               {formatPnL(totalProfit)}
@@ -87,7 +145,7 @@ export default function PerformanceChart({ stats, isLoading = false }) {
       <CardContent className="p-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-[160px]">
-            <div className="w-24 h-24 rounded-full border-4 border-white/5 border-t-emerald-500/50 animate-spin" />
+            <div className="w-24 h-24 rounded-full border-4 border-white/5 border-t-success/50 animate-spin" />
           </div>
         ) : !stats ? (
           <div className="flex items-center justify-center h-[160px] text-foreground-muted text-sm">

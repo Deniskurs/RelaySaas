@@ -25,24 +25,118 @@ const formatTime = (timestamp) => {
   return isValid(date) ? format(date, "HH:mm") : "--:--";
 };
 
+/**
+ * StatusBadge - Enhanced signal status indicator with icons
+ *
+ * Features:
+ * - Larger, more visible badges
+ * - Semantic icons for each state
+ * - Distinct colors (no duplicates)
+ * - Screen reader support
+ * - Design tokens instead of hardcoded colors
+ */
+const StatusBadge = ({ status }) => {
+  const statusConfig = {
+    executed: {
+      icon: CheckCircle,
+      bg: "bg-success/10",
+      text: "text-success",
+      border: "border-success/20",
+      label: "Executed",
+    },
+    validated: {
+      icon: CheckCircle,
+      bg: "bg-primary/10",
+      text: "text-primary",
+      border: "border-primary/20",
+      label: "Validated",
+    },
+    pending: {
+      icon: Clock,
+      bg: "bg-warning/10",
+      text: "text-warning",
+      border: "border-warning/20",
+      label: "Pending",
+    },
+    pending_confirmation: {
+      icon: AlertTriangle,
+      bg: "bg-primary/10",
+      text: "text-primary",
+      border: "border-primary/20",
+      label: "Awaiting",
+      pulse: true,
+    },
+    rejected: {
+      icon: XCircle,
+      bg: "bg-destructive/10",
+      text: "text-destructive",
+      border: "border-destructive/20",
+      label: "Rejected",
+    },
+    failed: {
+      icon: XCircle,
+      bg: "bg-destructive/15",
+      text: "text-destructive",
+      border: "border-destructive/30",
+      label: "Failed",
+    },
+    skipped: {
+      icon: AlertTriangle,
+      bg: "bg-warning/10",
+      text: "text-warning",
+      border: "border-warning/20",
+      label: "Skipped",
+    },
+    received: {
+      icon: Clock,
+      bg: "bg-muted/50",
+      text: "text-foreground-muted",
+      border: "border-muted",
+      label: "Received",
+    },
+  };
+
+  const config = statusConfig[status?.toLowerCase()] || statusConfig.received;
+  const Icon = config.icon;
+
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2 py-1 rounded-none border text-[10px] font-medium uppercase tracking-wider",
+        config.bg,
+        config.text,
+        config.border,
+        config.pulse && "animate-pulse"
+      )}
+    >
+      <Icon size={12} className="shrink-0" />
+      <span>{config.label}</span>
+      {/* Screen reader only - full status */}
+      <span className="sr-only">Signal status: {config.label}</span>
+    </div>
+  );
+};
+
+// Legacy StatusDot for backward compatibility (smaller variant)
 const StatusDot = ({ status }) => {
   const colorMap = {
-    executed: "bg-emerald-500",
-    validated: "bg-emerald-500",
-    pending: "bg-yellow-500",
-    pending_confirmation: "bg-blue-500",
-    rejected: "bg-red-500",
-    failed: "bg-red-500",
-    skipped: "bg-orange-500",
-    received: "bg-gray-500",
+    executed: "bg-success",
+    validated: "bg-primary",
+    pending: "bg-warning",
+    pending_confirmation: "bg-primary",
+    rejected: "bg-destructive",
+    failed: "bg-destructive",
+    skipped: "bg-warning",
+    received: "bg-muted-foreground",
   };
 
   return (
     <div
       className={cn(
-        "w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.3)]",
-        colorMap[status?.toLowerCase()] || "bg-gray-500"
+        "w-2 h-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.3)]",
+        colorMap[status?.toLowerCase()] || "bg-muted-foreground"
       )}
+      aria-hidden="true"
     />
   );
 };
@@ -72,28 +166,29 @@ const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconn
   const lastActivity = getTimeAgo(last_activity);
   const lastHealthCheck = getTimeAgo(last_health_check);
 
+  // Use design tokens instead of hardcoded colors
   const statusConfig = reconnecting
     ? {
-        color: "bg-yellow-500",
-        pulseColor: "bg-yellow-400",
+        color: "bg-warning",
+        pulseColor: "bg-warning/70",
         icon: RefreshCw,
         text: reconnect_attempts > 0 ? `Reconnecting (${reconnect_attempts})...` : "Reconnecting...",
-        textColor: "text-yellow-500",
+        textColor: "text-warning",
       }
     : connected
     ? {
-        color: "bg-emerald-500",
-        pulseColor: "bg-emerald-400",
+        color: "bg-success",
+        pulseColor: "bg-success/70",
         icon: Wifi,
         text: `Live${channels_count > 0 ? ` · ${channels_count}ch` : ""}`,
-        textColor: "text-emerald-500",
+        textColor: "text-success",
       }
     : {
-        color: "bg-red-500",
-        pulseColor: "bg-red-400",
+        color: "bg-destructive",
+        pulseColor: "bg-destructive/70",
         icon: WifiOff,
         text: "Disconnected",
-        textColor: "text-red-500",
+        textColor: "text-destructive",
       };
 
   const Icon = statusConfig.icon;
@@ -154,30 +249,32 @@ const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconn
         </div>
       </div>
 
-      {/* Refresh button - always visible */}
+      {/* Refresh button - always visible, larger touch target on mobile */}
       {onReconnect && (
         <Button
           variant="ghost"
           size="icon"
-          className="h-5 w-5 hover:bg-white/10"
+          className="h-8 w-8 lg:h-6 lg:w-6 hover:bg-white/10"
           onClick={onReconnect}
           disabled={propIsReconnecting || reconnecting}
           title="Refresh Telegram connection"
+          aria-label="Refresh Telegram connection"
         >
-          <RefreshCw className={cn("w-3 h-3 text-foreground-muted", (propIsReconnecting || reconnecting) && "animate-spin")} />
+          <RefreshCw className={cn("w-4 h-4 lg:w-3 lg:h-3 text-foreground-muted", (propIsReconnecting || reconnecting) && "animate-spin")} />
         </Button>
       )}
 
-      {/* Settings link */}
+      {/* Settings link - larger touch target on mobile */}
       {onNavigateSettings && (
         <Button
           variant="ghost"
           size="icon"
-          className="h-5 w-5 hover:bg-white/10"
+          className="h-8 w-8 lg:h-6 lg:w-6 hover:bg-white/10"
           onClick={onNavigateSettings}
           title="Telegram settings"
+          aria-label="Open Telegram settings"
         >
-          <Settings className="w-3 h-3 text-foreground-muted" />
+          <Settings className="w-4 h-4 lg:w-3 lg:h-3 text-foreground-muted" />
         </Button>
       )}
     </div>
@@ -233,8 +330,8 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
     <div className="group rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all duration-200 overflow-hidden">
       {/* Header Section */}
       <div className="p-4 border-b border-white/5 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <StatusDot status={status} />
+        <div className="flex items-start gap-3">
+          <StatusBadge status={status} />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-foreground">
@@ -243,7 +340,7 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
               <span
                 className={cn(
                   "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-none bg-white/5",
-                  signal.type === "BUY" ? "text-emerald-400" : "text-rose-400"
+                  signal.type === "BUY" ? "text-success" : "text-destructive"
                 )}
               >
                 {signal.type}
@@ -274,8 +371,8 @@ const SignalCard = ({ signal, onCorrect, onConfirm, onReject }) => {
                 className={cn(
                   "text-[10px] font-mono",
                   signal.confidence >= 0.8
-                    ? "text-emerald-400"
-                    : "text-yellow-400"
+                    ? "text-success"
+                    : "text-warning"
                 )}
               >
                 {(signal.confidence * 100).toFixed(0)}%
