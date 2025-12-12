@@ -703,6 +703,9 @@ export default function SettingsPage() {
             ? localSettings.telegram_channel_ids.join(",")
             : localSettings.telegram_channel_ids;
           await putData("/admin/config", { telegram_channel_ids: channelIdsString });
+
+          // Auto-refresh Telegram to pick up new channel list
+          await postData("/admin/telegram/reconnect");
         } catch (e) {
           // Non-critical - user settings were saved, admin config sync is optional
           console.warn("Could not sync channels to admin config:", e);
