@@ -223,16 +223,19 @@ async def get_settings_endpoint():
     """Get all application settings from Supabase."""
     try:
         settings = supabase_db.get_settings()
+        print(f"[API] Settings from user_settings_v2: telegram_channel_ids = {settings.get('telegram_channel_ids')}")
 
         # If no channels in user_settings, check system_config (for backward compatibility)
         if not settings.get("telegram_channel_ids"):
             system_config = supabase_db.get_system_config()
             channel_str = system_config.get("telegram_channel_ids", "")
+            print(f"[API] System config telegram_channel_ids = '{channel_str}'")
             if channel_str:
                 # Convert comma-separated string to list
                 settings["telegram_channel_ids"] = [
                     c.strip() for c in channel_str.split(",") if c.strip()
                 ]
+                print(f"[API] Parsed channels: {settings['telegram_channel_ids']}")
 
         return SettingsResponse(**settings)
     except Exception as e:

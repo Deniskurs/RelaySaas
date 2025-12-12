@@ -652,6 +652,20 @@ export default function SettingsPage() {
           };
           setTelegramCreds(creds);
           setTelegramCredsOriginal(creds);
+
+          // If channels are not in user settings, load from admin config
+          if (adminConfig.telegram_channel_ids && (!localSettings.telegram_channel_ids || localSettings.telegram_channel_ids.length === 0)) {
+            const channelsFromAdmin = adminConfig.telegram_channel_ids
+              .split(",")
+              .map(c => c.trim())
+              .filter(c => c);
+            if (channelsFromAdmin.length > 0) {
+              setLocalSettings(prev => ({
+                ...prev,
+                telegram_channel_ids: channelsFromAdmin
+              }));
+            }
+          }
         }
       } catch (e) {
         console.error("Error loading admin config:", e);
