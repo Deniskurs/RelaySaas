@@ -204,8 +204,9 @@ export default function Dashboard() {
               )
             }
             telegramStatus={telegramStatus}
-            onReconnect={isAdmin ? handleTelegramReconnect : null}
+            onReconnect={handleTelegramReconnect}
             isReconnecting={isReconnecting}
+            onNavigateSettings={() => setActiveTab("settings")}
           />
         </div>
 
@@ -240,8 +241,9 @@ export default function Dashboard() {
               )
             }
             telegramStatus={telegramStatus}
-            onReconnect={isAdmin ? handleTelegramReconnect : null}
+            onReconnect={handleTelegramReconnect}
             isReconnecting={isReconnecting}
+            onNavigateSettings={() => setActiveTab("settings")}
             fullPage
           />
         );

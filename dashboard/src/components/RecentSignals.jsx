@@ -7,6 +7,7 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -47,7 +48,7 @@ const StatusDot = ({ status }) => {
 };
 
 // Telegram connection status indicator
-const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconnecting }) => {
+const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconnecting, onNavigateSettings }) => {
   if (!status) return null;
 
   const { connected, reconnecting, last_activity, last_health_check, channels_count, reconnect_attempts } = status;
@@ -153,16 +154,30 @@ const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconn
         </div>
       </div>
 
-      {/* Reconnect button when disconnected */}
-      {!connected && !reconnecting && onReconnect && (
+      {/* Refresh button - always visible */}
+      {onReconnect && (
         <Button
           variant="ghost"
           size="icon"
           className="h-5 w-5 hover:bg-white/10"
           onClick={onReconnect}
-          disabled={propIsReconnecting}
+          disabled={propIsReconnecting || reconnecting}
+          title="Refresh Telegram connection"
         >
-          <RefreshCw className={cn("w-3 h-3 text-foreground-muted", propIsReconnecting && "animate-spin")} />
+          <RefreshCw className={cn("w-3 h-3 text-foreground-muted", (propIsReconnecting || reconnecting) && "animate-spin")} />
+        </Button>
+      )}
+
+      {/* Settings link */}
+      {onNavigateSettings && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 hover:bg-white/10"
+          onClick={onNavigateSettings}
+          title="Telegram settings"
+        >
+          <Settings className="w-3 h-3 text-foreground-muted" />
         </Button>
       )}
     </div>
@@ -441,6 +456,7 @@ export default function RecentSignals({
   telegramStatus = null,
   onReconnect = null,
   isReconnecting = false,
+  onNavigateSettings = null,
 }) {
   const { postData } = useApi();
 
@@ -477,6 +493,7 @@ export default function RecentSignals({
             status={telegramStatus}
             onReconnect={onReconnect}
             isReconnecting={isReconnecting}
+            onNavigateSettings={onNavigateSettings}
           />
         </div>
         <Badge
