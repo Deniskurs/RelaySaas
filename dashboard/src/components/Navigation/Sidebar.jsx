@@ -89,11 +89,14 @@ export default function Sidebar({
 
   const sidebarWidth = isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 
+  // Shared transition config for synchronized animations
+  const sidebarTransition = { duration: 0.25, ease: [0.25, 0.1, 0.25, 1] };
+
   return (
     <motion.aside
       initial={false}
       animate={{ width: sidebarWidth }}
-      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      transition={sidebarTransition}
       className={cn(
         "hidden lg:flex flex-col fixed left-0 top-0 h-screen z-40",
         "border-r border-white/[0.04]"
@@ -105,57 +108,94 @@ export default function Sidebar({
       }}
     >
       {/* Header: Logo + Collapse Toggle */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-white/[0.04]">
-        <motion.div
-          className="flex items-center gap-3 cursor-pointer group overflow-hidden"
-          onClick={() => onTabChange("dashboard")}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <div className="relative flex-shrink-0">
-            <div className="w-8 h-8 overflow-hidden relative z-10">
+      <div className={cn(
+        "h-16 flex items-center border-b border-white/[0.04]",
+        isCollapsed ? "justify-center px-0" : "justify-between px-4"
+      )}>
+        {/* When collapsed: Logo becomes expand trigger */}
+        {isCollapsed ? (
+          <motion.button
+            onClick={() => setIsCollapsed(false)}
+            className="relative w-10 h-10 flex items-center justify-center group"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {/* Logo */}
+            <div className="w-8 h-8 overflow-hidden relative z-10 transition-opacity duration-200 group-hover:opacity-60">
               <img
                 src="/logo.png"
                 alt="Logo"
                 className="w-full h-full object-cover"
               />
             </div>
+            {/* Expand icon overlay on hover */}
             <motion.div
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            >
+              <ChevronRight size={16} className="text-foreground" />
+            </motion.div>
+            {/* Glow effect */}
+            <motion.div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
               style={{
-                background: "radial-gradient(circle, rgba(41,161,156,0.3), transparent 70%)",
+                background: "radial-gradient(circle, rgba(41,161,156,0.25), transparent 70%)",
                 filter: "blur(8px)",
               }}
             />
-          </div>
-          <AnimatePresence>
-            {!isCollapsed && (
+          </motion.button>
+        ) : (
+          <>
+            {/* When expanded: Logo goes to dashboard */}
+            <motion.div
+              className="flex items-center gap-3 cursor-pointer group overflow-hidden"
+              onClick={() => onTabChange("dashboard")}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div className="relative flex-shrink-0">
+                <div className="w-8 h-8 overflow-hidden relative z-10">
+                  <img
+                    src="/logo.png"
+                    alt="Logo"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <motion.div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{
+                    background: "radial-gradient(circle, rgba(41,161,156,0.3), transparent 70%)",
+                    filter: "blur(8px)",
+                  }}
+                />
+              </div>
               <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "auto" }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.15 }}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2, delay: 0.05 }}
                 className="text-base font-semibold tracking-tight text-foreground whitespace-nowrap uppercase"
               >
                 Relay
               </motion.span>
-            )}
-          </AnimatePresence>
-        </motion.div>
+            </motion.div>
 
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className={cn(
-            "w-6 h-6 flex items-center justify-center",
-            "text-foreground-subtle hover:text-foreground",
-            "hover:bg-white/[0.06] transition-colors",
-            isCollapsed && "mx-auto"
-          )}
-        >
-          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </motion.button>
+            {/* Collapse button */}
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2, delay: 0.1 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setIsCollapsed(true)}
+              className={cn(
+                "w-6 h-6 flex items-center justify-center",
+                "text-foreground-subtle hover:text-foreground",
+                "hover:bg-white/[0.06] transition-colors"
+              )}
+            >
+              <ChevronLeft size={14} />
+            </motion.button>
+          </>
+        )}
       </div>
 
       {/* Search Trigger */}
@@ -165,36 +205,34 @@ export default function Sidebar({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           className={cn(
-            "w-full flex items-center gap-3 px-3 py-2",
+            "w-full flex items-center gap-3 py-2 overflow-hidden",
             "bg-white/[0.03] hover:bg-white/[0.06]",
             "border border-white/[0.04] hover:border-white/[0.08]",
             "text-foreground-muted hover:text-foreground",
             "transition-all duration-200",
-            isCollapsed && "justify-center px-0"
+            isCollapsed ? "justify-center px-2" : "px-3"
           )}
         >
           <Search size={16} className="flex-shrink-0" />
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex-1 flex items-center justify-between"
-              >
-                <span className="text-sm">Search</span>
-                <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/[0.06] text-[10px] font-medium text-foreground-subtle">
-                  <Command size={10} />
-                  <span>K</span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {!isCollapsed && (
+            <motion.div
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2, delay: 0.05 }}
+              className="flex-1 flex items-center justify-between"
+            >
+              <span className="text-sm">Search</span>
+              <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-white/[0.06] text-[10px] font-medium text-foreground-subtle">
+                <Command size={10} />
+                <span>K</span>
+              </div>
+            </motion.div>
+          )}
         </motion.button>
       </div>
 
       {/* Navigation Items */}
-      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto overflow-x-hidden">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           const Icon = item.icon;
@@ -206,9 +244,9 @@ export default function Sidebar({
               onMouseEnter={() => setIsHoveringNav(item.id)}
               onMouseLeave={() => setIsHoveringNav(null)}
               className={cn(
-                "relative w-full flex items-center gap-3 px-3 py-2.5",
+                "relative w-full flex items-center gap-3 py-2.5 overflow-hidden",
                 "text-sm font-medium transition-colors duration-150",
-                isCollapsed && "justify-center px-0",
+                isCollapsed ? "justify-center px-2" : "px-3",
                 isActive
                   ? "text-foreground"
                   : "text-foreground-muted hover:text-foreground"
@@ -229,18 +267,16 @@ export default function Sidebar({
 
               <Icon size={18} className="relative z-10 flex-shrink-0" />
 
-              <AnimatePresence>
-                {!isCollapsed && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="relative z-10"
-                  >
-                    {item.label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              {!isCollapsed && (
+                <motion.span
+                  initial={{ opacity: 0, x: -4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="relative z-10 whitespace-nowrap"
+                >
+                  {item.label}
+                </motion.span>
+              )}
 
               {/* Tooltip for collapsed state */}
               {isCollapsed && isHoveringNav === item.id && (
@@ -267,9 +303,9 @@ export default function Sidebar({
             onMouseEnter={() => setIsHoveringNav("admin")}
             onMouseLeave={() => setIsHoveringNav(null)}
             className={cn(
-              "relative w-full flex items-center gap-3 px-3 py-2.5",
+              "relative w-full flex items-center gap-3 py-2.5 overflow-hidden",
               "text-sm font-medium transition-colors duration-150",
-              isCollapsed && "justify-center px-0",
+              isCollapsed ? "justify-center px-2" : "px-3",
               activeTab === "admin"
                 ? "text-foreground"
                 : "text-foreground-muted hover:text-foreground"
@@ -287,18 +323,16 @@ export default function Sidebar({
               />
             )}
             <Shield size={18} className="relative z-10 flex-shrink-0" />
-            <AnimatePresence>
-              {!isCollapsed && (
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="relative z-10"
-                >
-                  Admin
-                </motion.span>
-              )}
-            </AnimatePresence>
+            {!isCollapsed && (
+              <motion.span
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.15 }}
+                className="relative z-10 whitespace-nowrap"
+              >
+                Admin
+              </motion.span>
+            )}
 
             {isCollapsed && isHoveringNav === "admin" && (
               <motion.div
@@ -318,11 +352,11 @@ export default function Sidebar({
       </nav>
 
       {/* Status Section */}
-      <div className="px-3 py-3 border-t border-white/[0.04] space-y-2">
+      <div className="px-3 py-3 border-t border-white/[0.04] space-y-2 overflow-hidden">
         {/* Connection Status */}
         <div className={cn(
-          "flex items-center gap-3 px-3 py-2",
-          isCollapsed && "justify-center px-0"
+          "flex items-center gap-3 py-2",
+          isCollapsed ? "justify-center px-2" : "px-3"
         )}>
           <div className="relative flex-shrink-0">
             <motion.div
@@ -339,18 +373,16 @@ export default function Sidebar({
               />
             )}
           </div>
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-foreground-muted"
-              >
-                {isConnected ? "Live" : "Offline"}
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {!isCollapsed && (
+            <motion.span
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.15 }}
+              className="text-xs text-foreground-muted whitespace-nowrap"
+            >
+              {isConnected ? "Live" : "Offline"}
+            </motion.span>
+          )}
         </div>
 
         {/* Pause/Resume Button */}
@@ -359,9 +391,9 @@ export default function Sidebar({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           className={cn(
-            "w-full flex items-center gap-3 px-3 py-2.5",
+            "w-full flex items-center gap-3 py-2.5 overflow-hidden",
             "text-sm font-medium transition-all duration-200",
-            isCollapsed && "justify-center px-0",
+            isCollapsed ? "justify-center px-2" : "px-3",
             isPaused
               ? "bg-success/10 text-success border border-success/20"
               : "bg-white/[0.03] text-foreground-muted hover:text-foreground border border-white/[0.04] hover:bg-white/[0.06]"
@@ -372,33 +404,32 @@ export default function Sidebar({
           ) : (
             <PauseCircle size={18} className="flex-shrink-0" />
           )}
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                {isPaused ? "Resume" : "Active"}
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {!isCollapsed && (
+            <motion.span
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.15 }}
+              className="whitespace-nowrap"
+            >
+              {isPaused ? "Resume" : "Active"}
+            </motion.span>
+          )}
         </motion.button>
       </div>
 
       {/* User Section */}
-      <div className="px-3 py-3 border-t border-white/[0.04]">
+      <div className="px-3 py-3 border-t border-white/[0.04] overflow-hidden">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className={cn(
-                "w-full flex items-center gap-3 px-2 py-2",
+                "w-full flex items-center gap-3 py-2 overflow-hidden",
                 "bg-white/[0.02] hover:bg-white/[0.05]",
                 "border border-white/[0.03] hover:border-white/[0.06]",
                 "transition-all duration-200",
-                isCollapsed && "justify-center px-0"
+                isCollapsed ? "justify-center px-2" : "px-2"
               )}
             >
               <div className="w-8 h-8 bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -412,23 +443,21 @@ export default function Sidebar({
                   <User size={16} className="text-foreground-muted" />
                 )}
               </div>
-              <AnimatePresence>
-                {!isCollapsed && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex-1 text-left overflow-hidden"
-                  >
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {profile?.full_name || user?.email?.split("@")[0] || "User"}
-                    </p>
-                    <p className="text-xs text-foreground-subtle truncate">
-                      {user?.email}
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {!isCollapsed && (
+                <motion.div
+                  initial={{ opacity: 0, x: -4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex-1 text-left overflow-hidden"
+                >
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {profile?.full_name || user?.email?.split("@")[0] || "User"}
+                  </p>
+                  <p className="text-xs text-foreground-subtle truncate">
+                    {user?.email}
+                  </p>
+                </motion.div>
+              )}
             </motion.button>
           </DropdownMenuTrigger>
 
