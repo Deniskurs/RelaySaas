@@ -238,35 +238,34 @@ export default function CommandPalette({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop + Centering Container */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             onClick={onClose}
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
-          />
-
-          {/* Dialog - Centered on screen with sharp corners */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -10 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className={cn(
-              "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[101]",
-              "w-[90vw] max-w-[560px]",
-              "rounded-none overflow-hidden",
-              "border border-white/[0.08]"
-            )}
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(20,20,25,0.98), rgba(15,15,20,0.98))",
-              boxShadow:
-                "0 0 0 1px rgba(255,255,255,0.03), 0 25px 80px -20px rgba(0,0,0,0.6), 0 0 100px rgba(139,92,246,0.08)",
-            }}
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[15vh] px-4 overflow-y-auto"
           >
+            {/* Dialog - Centered with sharp corners */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "w-full max-w-[560px]",
+                "rounded-none overflow-hidden",
+                "border border-white/[0.08]"
+              )}
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(20,20,25,0.98), rgba(15,15,20,0.98))",
+                boxShadow:
+                  "0 0 0 1px rgba(255,255,255,0.03), 0 25px 80px -20px rgba(0,0,0,0.6), 0 0 100px rgba(139,92,246,0.08)",
+              }}
+            >
             {/* Search Input */}
             <div className="flex items-center gap-3 px-4 py-4 border-b border-white/[0.06]">
               <Search size={18} className="text-foreground-muted flex-shrink-0" />
@@ -406,6 +405,7 @@ export default function CommandPalette({
                 <span>K to open</span>
               </div>
             </div>
+            </motion.div>
           </motion.div>
         </>
       )}
