@@ -1,4 +1,23 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* ITC Garamond Std - Add your font files to /public/fonts/ */
+@font-face {
+  font-family: 'ITC Garamond Std';
+  src: url('/fonts/ITCGaramondStd-Lt.woff2') format('woff2'),
+       url('/fonts/ITCGaramondStd-Lt.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ITC Garamond Std';
+  src: url('/fonts/ITCGaramondStd-Bd.woff2') format('woff2'),
+       url('/fonts/ITCGaramondStd-Bd.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
@@ -132,6 +151,18 @@
   .tracking-tighter-headers {
     letter-spacing: -0.02em;
   }
+
+  /* Premium Serif Font - Falls back to Cormorant Garamond if ITC Garamond not available */
+  .font-garamond {
+    font-family: 'ITC Garamond Std', 'Cormorant Garamond', Georgia, serif;
+    font-feature-settings: 'liga' 1, 'kern' 1;
+  }
+
+  .font-garamond-light {
+    font-family: 'ITC Garamond Std', 'Cormorant Garamond', Georgia, serif;
+    font-weight: 300;
+    font-feature-settings: 'liga' 1, 'kern' 1;
+  }
 }
 
 /* Animations using standard CSS where Tailwind plugin might fall short */
@@ -204,5 +235,14 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* iOS safe area padding */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }

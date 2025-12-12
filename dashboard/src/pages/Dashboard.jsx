@@ -7,7 +7,9 @@ import {
   transformSignals,
   transformStats,
 } from "@/lib/transformers";
-import PremiumTopBar from "@/components/Navigation/PremiumTopBar";
+import Sidebar, { SIDEBAR_EXPANDED_WIDTH, SIDEBAR_COLLAPSED_WIDTH, STORAGE_KEY } from "@/components/Navigation/Sidebar";
+import MobileTopBar from "@/components/Navigation/MobileTopBar";
+import BottomTabBar from "@/components/Navigation/BottomTabBar";
 import CommandPalette from "@/components/Navigation/CommandPalette";
 import { useCommandPalette } from "@/components/Navigation/useCommandPalette";
 import LiveFeed from "@/components/LiveFeed";
@@ -45,6 +47,24 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [telegramStatus, setTelegramStatus] = useState(null);
+
+  // Track sidebar collapsed state for layout
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : false;
+  });
+
+  // Listen for sidebar collapse changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      setSidebarCollapsed(stored ? JSON.parse(stored) : false);
+    };
+
+    // Poll for changes since storage events don't fire in same window
+    const interval = setInterval(handleStorageChange, 100);
+    return () => clearInterval(interval);
+  }, []);
 
   // Command palette keyboard shortcut
   useCommandPalette(() => setCommandPaletteOpen(true));
@@ -287,10 +307,12 @@ export default function Dashboard() {
     }
   };
 
+  const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
+
   return (
     <div className="min-h-screen bg-background font-sans selection:bg-primary/20">
-      {/* Premium Top Navigation */}
-      <PremiumTopBar
+      {/* Desktop Sidebar Navigation */}
+      <Sidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         isPaused={isPaused}
@@ -298,6 +320,23 @@ export default function Dashboard() {
         onResume={handleResume}
         isConnected={isConnected}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      />
+
+      {/* Mobile Top Bar */}
+      <MobileTopBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        isConnected={isConnected}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      />
+
+      {/* Mobile Bottom Tab Bar */}
+      <BottomTabBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        isPaused={isPaused}
+        onPause={handlePause}
+        onResume={handleResume}
       />
 
       {/* Command Palette */}
@@ -312,12 +351,30 @@ export default function Dashboard() {
       />
 
       {/* Main Content */}
+      <motion.div
+        initial={false}
+        animate={{ marginLeft: sidebarWidth }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        className="hidden lg:block"
+      >
+        <motion.main
+          key={activeTab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className="px-6 py-6 min-h-screen max-w-[1600px]"
+        >
+          {renderPage()}
+        </motion.main>
+      </motion.div>
+
+      {/* Mobile Main Content */}
       <motion.main
-        key={activeTab}
+        key={`mobile-${activeTab}`}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="px-4 md:px-6 py-6 max-w-[1600px] mx-auto min-h-[calc(100vh-64px)]"
+        className="lg:hidden px-4 py-4 pb-24 min-h-screen"
       >
         {renderPage()}
       </motion.main>
