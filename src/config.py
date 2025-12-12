@@ -2,6 +2,7 @@
 from pydantic_settings import BaseSettings
 from typing import List
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
@@ -51,11 +52,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Supabase (required for bootstrap)
-    supabase_url: str
-    supabase_key: str
-    supabase_service_key: str = ""  # Optional for read-only mode
-    supabase_jwt_secret: str = ""   # Optional for JWT verification
+    # Supabase (required for bootstrap) - read directly from os.environ as fallback
+    supabase_url: str = os.environ.get("SUPABASE_URL", "")
+    supabase_key: str = os.environ.get("SUPABASE_KEY", "")
+    supabase_service_key: str = os.environ.get("SUPABASE_SERVICE_KEY", "")
+    supabase_jwt_secret: str = os.environ.get("SUPABASE_JWT_SECRET", "")
 
     @property
     def channel_list(self) -> List[str]:
@@ -86,7 +87,20 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    return Settings()
+    s = Settings()
+
+    # Validate required Supabase credentials
+    if not s.supabase_url or not s.supabase_key:
+        import sys
+        print("=" * 50, file=sys.stderr)
+        print("FATAL: Missing required Supabase credentials!", file=sys.stderr)
+        print(f"  SUPABASE_URL set: {bool(s.supabase_url)}", file=sys.stderr)
+        print(f"  SUPABASE_KEY set: {bool(s.supabase_key)}", file=sys.stderr)
+        print(f"  ENV keys available: {list(os.environ.keys())}", file=sys.stderr)
+        print("=" * 50, file=sys.stderr)
+        sys.exit(1)
+
+    return s
 
 
 settings = get_settings()
