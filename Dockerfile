@@ -23,5 +23,5 @@ COPY src/ ./src/
 # Expose port
 EXPOSE 8000
 
-# Start server - debug env vars then start
-CMD ["sh", "-c", "echo 'SUPABASE_URL set:' ${SUPABASE_URL:+yes}${SUPABASE_URL:-no} && python -m uvicorn src.api.server:app --host 0.0.0.0 --port 8000"]
+# Start server
+CMD ["python", "-m", "uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
