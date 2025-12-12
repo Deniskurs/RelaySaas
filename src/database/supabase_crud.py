@@ -278,3 +278,60 @@ async def get_last_trade(user_id: Optional[str] = None) -> Optional[dict]:
 
     result = query.execute()
     return result.data[0] if result.data else None
+
+
+async def get_open_trades_for_sync(user_id: Optional[str] = None) -> List[dict]:
+    """Get all trades with status pending/open for sync checking.
+
+    Returns trades that might need to be marked as closed when
+    their positions no longer exist in MetaApi.
+    """
+    supabase = get_supabase_admin()
+
+    query = (
+        supabase.table("trades_v2")
+        .select("id, order_id, symbol, status, created_at")
+        .in_("status", ["pending", "open"])
+    )
+
+    if user_id:
+        query = query.eq("user_id", user_id)
+
+    result = query.execute()
+    return result.data or []
+
+
+async def mark_trade_closed(
+    trade_id: int,
+    close_price: float,
+    profit: float,
+    closed_at: str,
+    open_price: Optional[float] = None,
+) -> Optional[dict]:
+    """Mark a trade as closed with final P&L data.
+
+    Args:
+        trade_id: Database trade ID.
+        close_price: Price at which position was closed.
+        profit: Final profit/loss amount.
+        closed_at: ISO timestamp when position closed.
+        open_price: Actual open price if different from entry.
+
+    Returns:
+        Updated trade record.
+    """
+    supabase = get_supabase_admin()
+
+    updates = {
+        "status": "closed",
+        "close_price": close_price,
+        "profit": profit,
+        "closed_at": closed_at,
+    }
+
+    if open_price is not None:
+        updates["open_price"] = open_price
+
+    result = supabase.table("trades_v2").update(updates).eq("id", trade_id).execute()
+
+    return result.data[0] if result.data else None

@@ -511,6 +511,29 @@ class TradeExecutor:
                 position_id=position_id,
             )
 
+    async def get_deals_by_position(self, position_id: str) -> List[Dict[str, Any]]:
+        """Get deal history for a position to retrieve close price/profit.
+
+        Args:
+            position_id: The MetaApi position ID.
+
+        Returns:
+            List of deal records with profit, price, time, etc.
+        """
+        if not self.connection:
+            raise RuntimeError("Not connected to MetaApi")
+
+        user_tag = self._get_user_tag()
+        try:
+            deals = await self.connection.get_deals_by_position(position_id)
+            return deals or []
+        except Exception as e:
+            log.warning(
+                f"{user_tag}Failed to get deals for position {position_id}",
+                error=str(e),
+            )
+            return []
+
     async def disconnect(self):
         """Disconnect from MetaApi."""
         user_tag = self._get_user_tag()

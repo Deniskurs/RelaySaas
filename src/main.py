@@ -1017,8 +1017,124 @@ class SignalCopier:
             modifier_type=modifier_type,
         )
 
+    async def _sync_closed_trades(self):
+        """Sync closed trades by comparing DB records with MetaApi positions.
+
+        Called periodically to detect positions that have closed and update
+        the database with profit/close data for accurate stats.
+        """
+        try:
+            # Get current live positions from MetaApi
+            account_info = await self.executor.get_account_info()
+            live_positions = account_info.get("positions", [])
+
+            # Build set of currently open position IDs
+            # MetaApi uses 'id' or 'positionId' depending on context
+            live_position_ids = set()
+            for pos in live_positions:
+                pos_id = str(pos.get("id") or pos.get("positionId", ""))
+                if pos_id:
+                    live_position_ids.add(pos_id)
+
+            # Get all "open" or "pending" trades from database
+            db_trades = await crud.get_open_trades_for_sync()
+
+            for trade in db_trades:
+                order_id = str(trade.get("order_id", ""))
+                trade_id = trade["id"]
+
+                # Check if this trade's order_id matches any live position
+                if order_id and order_id not in live_position_ids:
+                    # Position has closed - fetch deal history
+                    await self._process_closed_trade(trade_id, order_id)
+
+        except Exception as e:
+            log.error("Trade sync failed", error=str(e))
+
+    async def _process_closed_trade(self, trade_id: int, position_id: str):
+        """Process a trade that appears to have closed.
+
+        Fetches deal history to get close price and profit, then updates DB.
+
+        Args:
+            trade_id: Database trade ID.
+            position_id: MetaApi position/order ID.
+        """
+        try:
+            # Fetch deal history from MetaApi
+            deals = await self.executor.get_deals_by_position(position_id)
+
+            if not deals:
+                log.warning(
+                    f"No deals found for position {position_id}, marking as closed with unknown P&L"
+                )
+                await crud.mark_trade_closed(
+                    trade_id=trade_id,
+                    close_price=0,
+                    profit=0,
+                    closed_at=datetime.utcnow().isoformat(),
+                )
+                return
+
+            # Find the closing deal (DEAL_ENTRY_OUT) and opening deal (DEAL_ENTRY_IN)
+            close_deal = None
+            open_deal = None
+            total_profit = 0
+
+            for deal in deals:
+                entry_type = deal.get("entryType", "")
+                if entry_type == "DEAL_ENTRY_OUT":
+                    close_deal = deal
+                elif entry_type == "DEAL_ENTRY_IN":
+                    open_deal = deal
+                # Sum up all profits (handles partial closes)
+                total_profit += deal.get("profit", 0) or 0
+
+            # Extract close data
+            close_price = close_deal.get("price", 0) if close_deal else 0
+            closed_at = (
+                close_deal.get("time", datetime.utcnow().isoformat())
+                if close_deal
+                else datetime.utcnow().isoformat()
+            )
+            open_price = open_deal.get("price") if open_deal else None
+
+            # Update database
+            await crud.mark_trade_closed(
+                trade_id=trade_id,
+                close_price=close_price,
+                profit=total_profit,
+                closed_at=closed_at,
+                open_price=open_price,
+            )
+
+            log.info(
+                "Trade closed",
+                trade_id=trade_id,
+                position_id=position_id,
+                profit=total_profit,
+                close_price=close_price,
+            )
+
+            # Emit event for WebSocket clients
+            await event_bus.emit(
+                Events.TRADE_CLOSED,
+                {
+                    "trade_id": trade_id,
+                    "position_id": position_id,
+                    "profit": total_profit,
+                    "close_price": close_price,
+                },
+            )
+
+        except Exception as e:
+            log.error(f"Failed to process closed trade {trade_id}", error=str(e))
+
     async def _update_account_loop(self):
-        """Periodically update account info and broadcast to clients."""
+        """Periodically update account info, sync closed trades, and broadcast to clients."""
+        sync_counter = 0
+        SYNC_INTERVAL = 6  # Sync trades every 6 iterations (30 seconds)
+
         while True:
             try:
                 info = await self.executor.get_account_info()
@@ -1046,8 +1162,11 @@ class SignalCopier:
                     },
                 )
 
-                # Save snapshot periodically (every 5 minutes worth of updates)
-                # This is handled separately to avoid DB spam
+                # Sync closed trades every 30 seconds (6 * 5s)
+                sync_counter += 1
+                if sync_counter >= SYNC_INTERVAL:
+                    sync_counter = 0
+                    await self._sync_closed_trades()
 
             except Exception as e:
                 log.error("Account update failed", error=str(e))
