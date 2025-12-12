@@ -22,6 +22,12 @@ import SettingsPage from "@/components/Settings/SettingsPage";
 import AdminPanel from "@/components/Admin/AdminPanel";
 import SetupBanner from "@/components/SetupBanner";
 import ProfilePage from "@/components/Profile/ProfilePage";
+import { PricingPage } from "@/components/Plans";
+import {
+  SoftUpgradeBanner,
+  WarningUpgradeBanner,
+  LimitReachedModal,
+} from "@/components/Plans";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
@@ -366,6 +372,15 @@ export default function Dashboard() {
         );
       case "profile":
         return <ProfilePage />;
+      case "pricing":
+        return (
+          <PricingPage
+            onSelectPlan={(planId) => {
+              console.log("Selected plan:", planId);
+              // TODO: Integrate with Stripe checkout
+            }}
+          />
+        );
       case "admin":
         return isAdmin ? <AdminPanel /> : renderDashboard();
       case "dashboard":
@@ -386,6 +401,8 @@ export default function Dashboard() {
         return "Account";
       case "profile":
         return "Profile";
+      case "pricing":
+        return "Pricing Plans";
       case "admin":
         return "Admin Dashboard";
       default:

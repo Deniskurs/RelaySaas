@@ -13,6 +13,7 @@ import {
   PlayCircle,
   Search,
   Command,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +31,7 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Logo, BrandName } from "../Brand/Brand";
+import { PlanBadge, UsageMeter } from "@/components/Plans";
 
 const SIDEBAR_EXPANDED_WIDTH = 240;
 const SIDEBAR_COLLAPSED_WIDTH = 64;
@@ -353,6 +355,18 @@ export default function Sidebar({
         )}
       </nav>
 
+      {/* Usage Meter Section (Free users) */}
+      {!isCollapsed && profile?.subscription_tier?.toLowerCase() === "free" && (
+        <div className="px-3 py-3 border-t border-white/[0.04] overflow-hidden">
+          <UsageMeter
+            signalsUsedToday={0}
+            mtAccountsConnected={1}
+            telegramChannelsActive={1}
+            variant="compact"
+          />
+        </div>
+      )}
+
       {/* Status Section */}
       <div className="px-3 py-3 border-t border-white/[0.04] space-y-2 overflow-hidden">
         {/* Connection Status */}
@@ -480,9 +494,15 @@ export default function Sidebar({
           >
             {/* User Info Header */}
             <div className="px-2 py-2 mb-1">
-              <p className="text-sm font-medium text-foreground truncate">
-                {profile?.full_name || user?.email?.split("@")[0] || "User"}
-              </p>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {profile?.full_name || user?.email?.split("@")[0] || "User"}
+                </p>
+                <PlanBadge
+                  size="sm"
+                  showDropdown={false}
+                />
+              </div>
               <p className="text-xs text-foreground-muted truncate">
                 {user?.email}
               </p>
@@ -497,6 +517,15 @@ export default function Sidebar({
             >
               <User size={14} className="text-foreground-muted" />
               <span>Profile</span>
+            </DropdownMenuItem>
+
+            {/* Plans */}
+            <DropdownMenuItem
+              onClick={() => onTabChange("pricing")}
+              className="gap-2 py-2 cursor-pointer focus:bg-white/[0.06]"
+            >
+              <Sparkles size={14} className="text-foreground-muted" />
+              <span>Plans & Pricing</span>
             </DropdownMenuItem>
 
             {/* Currency Submenu */}
