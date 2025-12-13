@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { CheckoutModal } from "./CheckoutModal";
 
-// Plan definitions with all features
+// Plan definitions with all features (prices in GBP to match Stripe)
 export const PLANS = {
   free: {
     id: "free",
@@ -21,6 +22,7 @@ export const PLANS = {
     tagline: "Get started with signal copying",
     monthlyPrice: 0,
     annualPrice: 0,
+    currency: "£",
     icon: Sparkles,
     popular: false,
     features: [
@@ -38,8 +40,10 @@ export const PLANS = {
     id: "pro",
     name: "Pro",
     tagline: "For serious traders who want more",
-    monthlyPrice: 29,
-    annualPrice: 19, // ~33% off
+    monthlyPrice: 22.99,
+    annualPrice: 15.00, // £179.99/year = £15/mo
+    annualTotal: 179.99,
+    currency: "£",
     icon: Shield,
     popular: true,
     badge: "Most Popular",
@@ -60,8 +64,10 @@ export const PLANS = {
     id: "premium",
     name: "Premium",
     tagline: "Maximum power for professionals",
-    monthlyPrice: 79,
-    annualPrice: 53, // ~33% off
+    monthlyPrice: 62.99,
+    annualPrice: 41.67, // £499.99/year = ~£41.67/mo
+    annualTotal: 499.99,
+    currency: "£",
     icon: Crown,
     popular: false,
     badge: "Best Value",
@@ -213,17 +219,17 @@ function PricingCard({
       {/* Price */}
       <div className="mb-6">
         <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-bold text-foreground">${price}</span>
+          <span className="text-4xl font-bold text-foreground">{plan.currency || "£"}{price}</span>
           <span className="text-sm text-foreground-muted">/mo</span>
         </div>
-        {isAnnual && price > 0 && (
+        {isAnnual && price > 0 && plan.annualTotal && (
           <p className="text-xs text-foreground-muted mt-1">
-            Billed annually (${price * 12}/year)
+            Billed annually ({plan.currency || "£"}{plan.annualTotal}/year)
           </p>
         )}
         {!isAnnual && plan.monthlyPrice > 0 && (
           <p className="text-xs text-[hsl(var(--accent-teal))] mt-1">
-            Save ${(plan.monthlyPrice - plan.annualPrice) * 12}/year with annual
+            Save {plan.currency || "£"}{((plan.monthlyPrice - plan.annualPrice) * 12).toFixed(0)}/year with annual
           </p>
         )}
       </div>
@@ -288,8 +294,22 @@ export function PricingCards({
 }) {
   const { profile } = useAuth();
   const [isAnnual, setIsAnnual] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
 
   const currentTier = profile?.subscription_tier?.toLowerCase() || "free";
+
+  const handleSelectPlan = (planId) => {
+    // Free plan doesn't need checkout
+    if (planId === "free") {
+      onSelectPlan?.(planId);
+      return;
+    }
+
+    // Open checkout modal for paid plans
+    setSelectedPlan(planId);
+    setCheckoutOpen(true);
+  };
 
   return (
     <div className={cn("w-full", className)}>
@@ -315,7 +335,7 @@ export function PricingCards({
               plan={plan}
               isAnnual={isAnnual}
               isCurrent={currentTier === plan.id}
-              onSelect={onSelectPlan}
+              onSelect={handleSelectPlan}
             />
           </motion.div>
         ))}
@@ -336,6 +356,14 @@ export function PricingCards({
           <span>Cancel anytime</span>
         </div>
       </div>
+
+      {/* Checkout Modal */}
+      <CheckoutModal
+        open={checkoutOpen}
+        onOpenChange={setCheckoutOpen}
+        plan={selectedPlan}
+        billing={isAnnual ? "annual" : "monthly"}
+      />
     </div>
   );
 }
@@ -405,7 +433,7 @@ export function PricingCardsCompact({
             </div>
 
             <div className="text-right shrink-0">
-              <span className="text-lg font-semibold text-foreground">${plan.monthlyPrice}</span>
+              <span className="text-lg font-semibold text-foreground">{plan.currency || "£"}{plan.monthlyPrice}</span>
               <span className="text-xs text-foreground-muted">/mo</span>
             </div>
 

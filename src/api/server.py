@@ -10,6 +10,7 @@ from .routes import router
 from .onboarding_routes import router as onboarding_router
 from .admin_routes import router as admin_router
 from .plans_routes import router as plans_router
+from .stripe_routes import router as stripe_router
 from .websocket import websocket_endpoint, setup_websocket_events
 from ..utils.logger import log
 
@@ -48,6 +49,7 @@ app.include_router(router, prefix="/api")
 app.include_router(onboarding_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(plans_router, prefix="/api")
+app.include_router(stripe_router, prefix="/api")
 
 # WebSocket endpoint
 app.add_api_websocket_route("/ws", websocket_endpoint)
