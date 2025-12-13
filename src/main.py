@@ -82,33 +82,58 @@ def get_active_user_settings() -> dict:
 def check_system_config() -> Tuple[bool, List[str]]:
     """Check if system configuration is complete.
 
+    Checks both system_config (global settings) and user_credentials (per-user).
+
     Returns:
         Tuple of (is_configured, list of missing/issues)
     """
     config = get_system_config()
     issues = []
 
-    # Check Anthropic API key
+    # Check Anthropic API key (global in system_config)
     if not config.get("anthropic_api_key"):
         issues.append("Anthropic API Key not set")
 
-    # Check MetaApi
+    # Check MetaApi token (global in system_config)
     if not config.get("metaapi_token"):
         issues.append("MetaApi Token not set")
-    if not config.get("metaapi_account_id"):
-        issues.append("MetaApi Account ID not set")
 
-    # Check Telegram
-    if not config.get("telegram_api_id"):
-        issues.append("Telegram API ID not set")
-    if not config.get("telegram_api_hash"):
-        issues.append("Telegram API Hash not set")
-    if not config.get("telegram_phone"):
-        issues.append("Telegram Phone not set")
+    # For Telegram and MetaApi account - check user_credentials for admin user
+    try:
+        supabase = get_supabase_admin()
+        admin_result = supabase.table("profiles").select("id").eq("role", "admin").limit(1).execute()
 
-    # Channel IDs are optional but warn if empty
-    if not config.get("telegram_channel_ids"):
-        issues.append("No Telegram channels configured (signals won't be received)")
+        if admin_result.data:
+            admin_id = admin_result.data[0]["id"]
+            creds_result = supabase.table("user_credentials").select("*").eq("user_id", admin_id).execute()
+
+            if creds_result.data:
+                creds = creds_result.data[0]
+
+                # Check MetaApi account (per-user in user_credentials)
+                if not creds.get("metaapi_account_id"):
+                    issues.append("MetaApi Account ID not set")
+
+                # Check Telegram credentials (per-user in user_credentials)
+                if not creds.get("telegram_api_id"):
+                    issues.append("Telegram API ID not set")
+                if not creds.get("telegram_api_hash"):
+                    issues.append("Telegram API Hash not set")
+                if not creds.get("telegram_phone"):
+                    issues.append("Telegram Phone not set")
+
+                # Check channels (per-user in user_settings_v2)
+                settings_result = supabase.table("user_settings_v2").select("telegram_channel_ids").eq("user_id", admin_id).execute()
+                if not settings_result.data or not settings_result.data[0].get("telegram_channel_ids"):
+                    issues.append("No Telegram channels configured (signals won't be received)")
+            else:
+                issues.append("Admin user credentials not configured")
+        else:
+            issues.append("No admin user found")
+
+    except Exception as e:
+        log.warning(f"Error checking user credentials: {e}")
+        issues.append("Could not check user credentials")
 
     return len(issues) == 0 or (len(issues) == 1 and "channels" in issues[0].lower()), issues
 
@@ -1351,6 +1376,10 @@ async def run_copier():
 async def run_multi_tenant():
     """Run the multi-tenant signal copier."""
     log.info("Starting multi-tenant signal copier")
+
+    # Set the global copier reference so admin endpoints work
+    # (Even in multi-tenant mode, admin needs to manage Telegram via the copier)
+    set_copier(copier)
 
     # Set up signal router as the message handler
     user_manager.set_message_handler(signal_router.route_message)
