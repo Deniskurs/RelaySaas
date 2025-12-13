@@ -396,10 +396,26 @@ async def update_settings_endpoint(
         updates = settings.model_dump(exclude_none=True)
         print(f"[API] PUT /settings for user {user_id[:8]}...")
         print(f"[API] Updates received: {updates}")
-        if "telegram_channel_ids" in updates:
+
+        # Check if telegram channels are being updated
+        channels_changed = "telegram_channel_ids" in updates
+        if channels_changed:
             print(f"[API] telegram_channel_ids being saved: {updates['telegram_channel_ids']}")
+
         updated = supabase_db.update_settings(user_id, updates)
         print(f"[API] Updated settings returned: telegram_channel_ids = {updated.get('telegram_channel_ids')}")
+
+        # Auto-restart Telegram listener if channels changed
+        if channels_changed:
+            copier = get_copier()
+            if copier:
+                try:
+                    import asyncio
+                    asyncio.create_task(copier.restart_telegram())
+                    print(f"[API] Telegram listener restart triggered after channel update")
+                except Exception as restart_err:
+                    print(f"[API] Warning: Could not restart Telegram listener: {restart_err}")
+
         return SettingsResponse(**updated)
     except Exception as e:
         print(f"[API] Error updating settings: {e}")
