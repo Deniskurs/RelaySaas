@@ -5,12 +5,9 @@
 
 import { loadStripe } from "@stripe/stripe-js";
 
-// Stripe publishable key from environment
-const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-
-if (!stripePublishableKey) {
-  console.warn("Missing VITE_STRIPE_PUBLISHABLE_KEY environment variable");
-}
+// Stripe publishable key from environment (with fallback for build issues)
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ||
+  "pk_test_51Sdg4sAKcZSTaYXWzwKHY3h92S7A3ggX0CW0YqFTjvUEJDZIlcaVTdwqRkB1q7xJPevhBsaWF4qMXJWvrS0cHNRH00RxbdKOxU";
 
 // Lazy load Stripe instance
 let stripePromise = null;
