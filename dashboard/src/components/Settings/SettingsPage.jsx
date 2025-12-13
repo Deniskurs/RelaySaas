@@ -280,6 +280,478 @@ function PasswordInput({ value, onChange, placeholder, className, disabled }) {
   );
 }
 
+function MetaTraderSection({
+  mtCreds,
+  onCredsChange,
+  isLoading: credsLoading,
+}) {
+  const { fetchData, postData } = useApi();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [provisioningStatus, setProvisioningStatus] = useState(null);
+  const [provisioningMessage, setProvisioningMessage] = useState("");
+  const [accountId, setAccountId] = useState(null);
+  const [suggestedServers, setSuggestedServers] = useState([]);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    login: mtCreds.mt_login || "",
+    password: "",
+    server: mtCreds.mt_server || "",
+    platform: mtCreds.mt_platform || "mt5",
+    broker_keywords: "",
+  });
+
+  // Poll for account deployment status
+  useEffect(() => {
+    if (provisioningStatus === "provisioning" && accountId) {
+      const pollInterval = setInterval(async () => {
+        try {
+          const result = await fetchData(`/onboarding/metatrader/status/${accountId}`);
+          if (result) {
+            if (result.state === "DEPLOYED" && result.connection_status === "CONNECTED") {
+              setProvisioningStatus("deployed");
+              setProvisioningMessage("Account connected successfully!");
+              clearInterval(pollInterval);
+              // Reload credentials after successful connection
+              setTimeout(() => {
+                window.location.reload();
+              }, 2000);
+            } else if (result.state === "DEPLOYED") {
+              setProvisioningMessage(`Account deployed. Connecting to broker... (${result.connection_status || "waiting"})`);
+            } else {
+              setProvisioningMessage(`Setting up your account... (${result.state || "initializing"})`);
+            }
+          }
+        } catch (e) {
+          console.error("Error polling status:", e);
+        }
+      }, 3000);
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [provisioningStatus, accountId, fetchData]);
+
+  const handleConnectAccount = async () => {
+    setConnectionError("");
+    setSuggestedServers([]);
+
+    // Validation
+    if (!formData.login || !formData.password || !formData.server) {
+      setConnectionError("Please fill in all required fields (Login, Password, Server)");
+      return;
+    }
+
+    if (!/^\d+$/.test(formData.login)) {
+      setConnectionError("Account number must contain only digits");
+      return;
+    }
+
+    setIsConnecting(true);
+    setProvisioningStatus("provisioning");
+    setProvisioningMessage("Creating your trading account connection...");
+
+    try {
+      const result = await postData("/onboarding/metatrader", {
+        login: formData.login,
+        password: formData.password,
+        server: formData.server,
+        platform: formData.platform,
+        broker_keywords: formData.broker_keywords ? formData.broker_keywords.split(",").map(k => k.trim()) : [],
+      });
+
+      if (result) {
+        if (result.success) {
+          setAccountId(result.account_id);
+
+          if (result.provisioning_status === "DEPLOYED") {
+            setProvisioningStatus("deployed");
+            setProvisioningMessage("Account connected successfully!");
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          } else {
+            setProvisioningMessage(`Account created. Deploying... (${result.provisioning_status || "initializing"})`);
+          }
+        } else {
+          setProvisioningStatus("error");
+          setConnectionError(result.message || "Failed to create account");
+
+          if (result.suggested_servers && result.suggested_servers.length > 0) {
+            setSuggestedServers(result.suggested_servers);
+          }
+        }
+      } else {
+        setProvisioningStatus("error");
+        setConnectionError("Failed to connect to the server. Please try again.");
+      }
+    } catch (e) {
+      setProvisioningStatus("error");
+      setConnectionError(e.message || "An unexpected error occurred");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRetry = () => {
+    setProvisioningStatus(null);
+    setProvisioningMessage("");
+    setConnectionError("");
+    setAccountId(null);
+  };
+
+  const updateFormField = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const inputClass = cn(
+    "h-10 font-mono text-[13px]",
+    "bg-white/[0.03] border-white/[0.08] rounded-none",
+    "hover:border-white/[0.12] hover:bg-white/[0.04]",
+    "focus:border-white/[0.20] focus:bg-white/[0.05]",
+    "focus:ring-2 focus:ring-white/[0.06] focus:ring-offset-0",
+    "transition-all duration-200 placeholder:text-foreground-muted/40"
+  );
+
+  if (credsLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Connection Status */}
+      {mtCreds.mt_connected ? (
+        <div className={cn(
+          "flex items-center justify-between p-5 rounded-md mb-4",
+          "bg-emerald-500/[0.06] border border-emerald-500/20",
+          "shadow-[inset_0_1px_0_rgba(16,185,129,0.1)]"
+        )}>
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            <div>
+              <p className="text-sm font-medium text-emerald-400">Connected</p>
+              <p className="text-xs text-foreground-muted/70 italic mt-0.5">
+                Account {mtCreds.mt_login} on {mtCreds.mt_server}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="h-8 px-3 text-foreground-muted hover:text-foreground hover:bg-white/[0.05]"
+            >
+              {isExpanded ? "Hide" : "Update Account"}
+            </Button>
+          </div>
+        </div>
+      ) : mtCreds.metaapi_account_id ? (
+        <div className={cn(
+          "flex items-center justify-between p-5 rounded-md mb-4",
+          "bg-amber-500/[0.06] border border-amber-500/20",
+          "shadow-[inset_0_1px_0_rgba(245,158,11,0.1)]"
+        )}>
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+            <div>
+              <p className="text-sm font-medium text-amber-400">Connecting...</p>
+              <p className="text-xs text-foreground-muted/70 italic mt-0.5">
+                Account {mtCreds.mt_login} is being set up
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-8 px-3 text-foreground-muted hover:text-foreground hover:bg-white/[0.05]"
+          >
+            {isExpanded ? "Hide" : "Update"}
+          </Button>
+        </div>
+      ) : (
+        <div className={cn(
+          "flex items-center justify-between p-5 rounded-md mb-4",
+          "bg-white/[0.02] border border-white/[0.06]"
+        )}>
+          <div className="flex items-center gap-3">
+            <BarChart3 className="w-5 h-5 text-foreground-muted/50" />
+            <div>
+              <p className="text-sm font-medium text-foreground-muted">Not Connected</p>
+              <p className="text-xs text-foreground-muted/70 italic mt-0.5">
+                Connect your MetaTrader account to start copying trades
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-8 px-3 text-foreground hover:text-foreground hover:bg-white/[0.05]"
+          >
+            {isExpanded ? "Hide" : "Connect Account"}
+          </Button>
+        </div>
+      )}
+
+      {/* Editable Form (collapsed by default when connected) */}
+      {isExpanded && (
+        <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+          {/* Security Notice */}
+          <div className={cn(
+            "p-4 rounded-md",
+            "bg-emerald-500/[0.06] border border-emerald-500/20",
+            "shadow-[inset_0_1px_0_rgba(16,185,129,0.05)]"
+          )}>
+            <div className="flex items-start gap-3">
+              <Shield className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-[12px] font-medium text-foreground">
+                  Your credentials are secure
+                </p>
+                <p className="text-[11px] text-foreground-muted/70 leading-relaxed mt-1">
+                  Your password is transmitted securely to MetaAPI and is never stored on our servers.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Error Display */}
+          {connectionError && (
+            <div className="flex items-start gap-2 p-4 rounded-md bg-rose-500/10 border border-rose-500/20">
+              <AlertCircle size={14} className="mt-0.5 text-rose-400 flex-shrink-0" />
+              <div className="space-y-2 flex-1">
+                <p className="text-sm text-rose-400">{connectionError}</p>
+                {suggestedServers.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-foreground-muted">Did you mean one of these servers?</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedServers.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            updateFormField("server", s);
+                            setConnectionError("");
+                            setSuggestedServers([]);
+                          }}
+                          className="text-xs px-3 py-1.5 bg-white/[0.05] rounded-sm hover:bg-white/[0.08] transition-colors"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {provisioningStatus === "error" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRetry}
+                    className="h-8 px-3"
+                  >
+                    Try Again
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Provisioning Status */}
+          {(provisioningStatus === "provisioning" || provisioningStatus === "deployed") && (
+            <div className={cn(
+              "p-5 rounded-md border text-center space-y-3",
+              provisioningStatus === "deployed"
+                ? "bg-emerald-500/[0.06] border-emerald-500/20"
+                : "bg-blue-500/[0.06] border-blue-500/20"
+            )}>
+              {provisioningStatus === "deployed" ? (
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+              ) : (
+                <Loader2 className="w-10 h-10 text-blue-400 mx-auto animate-spin" />
+              )}
+              <div>
+                <h3 className="text-base font-semibold text-foreground">
+                  {provisioningStatus === "deployed" ? "Connected!" : "Setting Up Your Account"}
+                </h3>
+                <p className="text-sm text-foreground-muted mt-1">
+                  {provisioningMessage}
+                </p>
+              </div>
+              {provisioningStatus === "provisioning" && (
+                <p className="text-xs text-foreground-muted/70">
+                  This usually takes 30-60 seconds. Please wait...
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Form Fields */}
+          {!provisioningStatus && (
+            <>
+              <SettingRow
+                label="Platform"
+                description="MetaTrader version"
+              >
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateFormField("platform", "mt4")}
+                    disabled={isConnecting}
+                    className={cn(
+                      "px-4 py-2 rounded-none text-xs font-medium transition-all duration-200",
+                      formData.platform === "mt4"
+                        ? "bg-foreground text-background shadow-[0_2px_8px_rgba(255,255,255,0.1)]"
+                        : "bg-white/[0.04] text-foreground-muted hover:bg-white/[0.08] hover:text-foreground"
+                    )}
+                  >
+                    MT4
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateFormField("platform", "mt5")}
+                    disabled={isConnecting}
+                    className={cn(
+                      "px-4 py-2 rounded-none text-xs font-medium transition-all duration-200",
+                      formData.platform === "mt5"
+                        ? "bg-foreground text-background shadow-[0_2px_8px_rgba(255,255,255,0.1)]"
+                        : "bg-white/[0.04] text-foreground-muted hover:bg-white/[0.08] hover:text-foreground"
+                    )}
+                  >
+                    MT5
+                  </button>
+                </div>
+              </SettingRow>
+
+              <SettingRow
+                label="Account Number"
+                description="Your trading account login (digits only)"
+              >
+                <Input
+                  type="text"
+                  value={formData.login}
+                  onChange={(e) => updateFormField("login", e.target.value.replace(/\D/g, ""))}
+                  placeholder="12345678"
+                  disabled={isConnecting}
+                  className={cn(inputClass, "w-32")}
+                />
+              </SettingRow>
+
+              <SettingRow
+                label="Password"
+                description="Your MetaTrader account password (never stored)"
+              >
+                <PasswordInput
+                  value={formData.password}
+                  onChange={(e) => updateFormField("password", e.target.value)}
+                  placeholder="Enter password"
+                  disabled={isConnecting}
+                  className={cn(inputClass, "w-44")}
+                />
+              </SettingRow>
+
+              <SettingRow
+                label="Server"
+                description="Broker server name"
+              >
+                <Input
+                  type="text"
+                  value={formData.server}
+                  onChange={(e) => updateFormField("server", e.target.value)}
+                  placeholder="BrokerName-Live"
+                  disabled={isConnecting}
+                  className={cn(inputClass, "w-52")}
+                />
+              </SettingRow>
+
+              <SettingRow
+                label="Broker Name (Optional)"
+                description="Helps find correct server settings"
+              >
+                <Input
+                  type="text"
+                  value={formData.broker_keywords}
+                  onChange={(e) => updateFormField("broker_keywords", e.target.value)}
+                  placeholder="e.g., IC Markets"
+                  disabled={isConnecting}
+                  className={cn(inputClass, "w-52")}
+                />
+              </SettingRow>
+
+              {/* Connect Button */}
+              <div className="pt-2 border-t border-white/[0.04]">
+                <Button
+                  onClick={handleConnectAccount}
+                  disabled={isConnecting || !formData.login || !formData.password || !formData.server}
+                  className={cn(
+                    "w-full h-11 rounded-none font-medium",
+                    "bg-foreground text-background",
+                    "hover:shadow-[0_4px_20px_rgba(255,255,255,0.2)]",
+                    "active:scale-[0.99]",
+                    "disabled:opacity-40 disabled:bg-white/[0.08] disabled:text-foreground-muted disabled:shadow-none",
+                    "transition-all duration-200"
+                  )}
+                >
+                  {isConnecting ? (
+                    <>
+                      <Loader2 size={14} className="mr-2 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <BarChart3 size={14} className="mr-2" />
+                      {mtCreds.mt_connected ? "Reconnect Account" : "Connect Account"}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Read-only info when collapsed and connected */}
+      {!isExpanded && mtCreds.mt_connected && (
+        <div className="space-y-2 pt-2">
+          <SettingRow
+            label="Platform"
+            description="MetaTrader version"
+          >
+            <Badge variant="outline" className="px-3 py-1 text-xs font-medium uppercase">
+              {mtCreds.mt_platform === "mt4" ? "MT4" : "MT5"}
+            </Badge>
+          </SettingRow>
+
+          <SettingRow
+            label="Account Number"
+            description="Your trading account login"
+          >
+            <span className="text-sm font-mono text-foreground/80">
+              {mtCreds.mt_login || "—"}
+            </span>
+          </SettingRow>
+
+          <SettingRow
+            label="Server"
+            description="Broker server name"
+          >
+            <span className="text-sm font-mono text-foreground/80">
+              {mtCreds.mt_server || "—"}
+            </span>
+          </SettingRow>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TelegramSection({
   telegramCreds,
   onCredsChange,
@@ -981,96 +1453,11 @@ export default function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-8 pt-5 pb-8">
-              <div className="space-y-2">
-                {/* Connection Status */}
-                {mtCreds.mt_connected ? (
-                  <div className={cn(
-                    "flex items-center justify-between p-5 rounded-md mb-4",
-                    "bg-emerald-500/[0.06] border border-emerald-500/20",
-                    "shadow-[inset_0_1px_0_rgba(16,185,129,0.1)]"
-                  )}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <div>
-                        <p className="text-sm font-medium text-emerald-400">Connected</p>
-                        <p className="text-xs text-foreground-muted/70 italic mt-0.5">
-                          Account {mtCreds.mt_login} on {mtCreds.mt_server}
-                        </p>
-                      </div>
-                    </div>
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                  </div>
-                ) : mtCreds.metaapi_account_id ? (
-                  <div className={cn(
-                    "flex items-center justify-between p-5 rounded-md mb-4",
-                    "bg-amber-500/[0.06] border border-amber-500/20",
-                    "shadow-[inset_0_1px_0_rgba(245,158,11,0.1)]"
-                  )}>
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
-                      <div>
-                        <p className="text-sm font-medium text-amber-400">Connecting...</p>
-                        <p className="text-xs text-foreground-muted/70 italic mt-0.5">
-                          Account {mtCreds.mt_login} is being set up
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={cn(
-                    "flex items-center gap-3 p-5 rounded-md mb-4",
-                    "bg-white/[0.02] border border-white/[0.06]"
-                  )}>
-                    <BarChart3 className="w-5 h-5 text-foreground-muted/50" />
-                    <div>
-                      <p className="text-sm font-medium text-foreground-muted">Not Connected</p>
-                      <p className="text-xs text-foreground-muted/70 italic mt-0.5">
-                        Connect via onboarding to start copying trades
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Account Details (read-only display) */}
-                <SettingRow
-                  label="Platform"
-                  description="MetaTrader version"
-                >
-                  <Badge variant="outline" className="px-3 py-1 text-xs font-medium uppercase">
-                    {mtCreds.mt_platform === "mt4" ? "MT4" : "MT5"}
-                  </Badge>
-                </SettingRow>
-
-                <SettingRow
-                  label="Account Number"
-                  description="Your trading account login"
-                >
-                  <span className="text-sm font-mono text-foreground/80">
-                    {mtCreds.mt_login || "—"}
-                  </span>
-                </SettingRow>
-
-                <SettingRow
-                  label="Server"
-                  description="Broker server name"
-                >
-                  <span className="text-sm font-mono text-foreground/80">
-                    {mtCreds.mt_server || "—"}
-                  </span>
-                </SettingRow>
-
-                {/* Info notice */}
-                <div className={cn(
-                  "mt-4 p-4 rounded-md",
-                  "bg-white/[0.025] border border-white/[0.06]",
-                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
-                )}>
-                  <p className="text-[12px] text-foreground-muted/70 leading-relaxed">
-                    To change your MetaTrader account, please contact support or re-complete the onboarding process.
-                    Your password is never stored - it was sent directly to MetaAPI during setup.
-                  </p>
-                </div>
-              </div>
+              <MetaTraderSection
+                mtCreds={mtCreds}
+                onCredsChange={() => {}}
+                isLoading={telegramLoading}
+              />
             </CardContent>
           </Card>
 
