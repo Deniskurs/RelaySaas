@@ -155,20 +155,26 @@ def update_settings(user_id: str, settings: dict) -> dict:
 
         if not existing.data:
             # Create with provided settings
+            print(f"[Supabase] Creating new settings for user {user_id[:8]}...")
             new_settings = {**DEFAULT_SETTINGS, **updates, "user_id": user_id}
             result = supabase.table("user_settings_v2") \
                 .insert(new_settings) \
                 .execute()
         else:
             # Update existing
+            print(f"[Supabase] Updating existing settings for user {user_id[:8]}...")
+            print(f"[Supabase] Updates to apply: {updates}")
             result = supabase.table("user_settings_v2") \
                 .update(updates) \
                 .eq("user_id", user_id) \
                 .execute()
+            print(f"[Supabase] Update result.data: {result.data}")
 
         if result.data and len(result.data) > 0:
+            print(f"[Supabase] Success! telegram_channel_ids in result: {result.data[0].get('telegram_channel_ids')}")
             return _format_settings(result.data[0])
 
+        print(f"[Supabase] WARNING: No data returned from update, fetching current settings")
         return get_settings(user_id)
 
     except Exception as e:
