@@ -133,9 +133,14 @@ def update_user_credentials(user_id: str, updates: Dict[str, Any]) -> bool:
 
         result = supabase.table("user_credentials").update(filtered_updates).eq("user_id", user_id).execute()
 
-        return bool(result.data)
+        success = bool(result.data)
+        if success:
+            log.info("User credentials updated", user_id=user_id, fields=list(filtered_updates.keys()))
+        else:
+            log.warning("User credentials update returned no data", user_id=user_id, fields=list(filtered_updates.keys()))
+        return success
     except Exception as e:
-        log.error("Error updating user credentials", user_id=user_id, error=str(e))
+        log.error("Error updating user credentials", user_id=user_id, error=str(e), fields=list(updates.keys()))
         return False
 
 
