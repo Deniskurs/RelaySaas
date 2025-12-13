@@ -137,7 +137,6 @@ export default function Checkout() {
     ? {
         clientSecret,
         onComplete: handleComplete,
-        appearance: stripeAppearance,
       }
     : null;
 

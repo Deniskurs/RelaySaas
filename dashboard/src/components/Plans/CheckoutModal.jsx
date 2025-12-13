@@ -132,7 +132,6 @@ export function CheckoutModal({
     ? {
         clientSecret,
         onComplete: handleComplete,
-        appearance: stripeAppearance,
       }
     : null;
 
