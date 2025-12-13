@@ -1,7 +1,7 @@
 """Supabase CRUD operations for signals and trades."""
 from datetime import datetime, timedelta
 from typing import Optional, List
-from .supabase import get_supabase_admin, get_default_user_id
+from .supabase import get_supabase_admin
 
 
 async def create_signal(
@@ -9,7 +9,7 @@ async def create_signal(
     channel_name: str,
     channel_id: Optional[str] = None,
     message_id: Optional[int] = None,
-    user_id: Optional[str] = None,
+    user_id: str = None,
 ) -> dict:
     """Create a new signal record in Supabase.
 
@@ -18,15 +18,18 @@ async def create_signal(
         channel_name: Name of the Telegram channel.
         channel_id: ID of the Telegram channel.
         message_id: Telegram message ID (for deduplication).
-        user_id: User UUID. If None, uses system user for single-user mode.
+        user_id: User UUID (REQUIRED in multi-tenant mode).
 
     Returns:
         The created signal record, or None if duplicate.
-    """
-    supabase = get_supabase_admin()
 
-    # Use system user ID if none provided (single-user/legacy mode)
-    effective_user_id = user_id or get_default_user_id()
+    Raises:
+        ValueError: If user_id is not provided.
+    """
+    if not user_id:
+        raise ValueError("user_id is required for creating signals")
+
+    supabase = get_supabase_admin()
 
     # Check for duplicate message to prevent double-processing
     if message_id and channel_id:
@@ -40,7 +43,7 @@ async def create_signal(
             return None
 
     data = {
-        "user_id": effective_user_id,
+        "user_id": user_id,
         "raw_message": raw_message,
         "channel_name": channel_name,
         "channel_id": channel_id,
@@ -106,7 +109,7 @@ async def create_trade(
     stop_loss: float,
     take_profit: float,
     tp_index: int,
-    user_id: Optional[str] = None,
+    user_id: str = None,
 ) -> dict:
     """Create a new trade record in Supabase.
 
@@ -120,18 +123,21 @@ async def create_trade(
         stop_loss: Stop loss price.
         take_profit: Take profit price.
         tp_index: Take profit index (for split TPs).
-        user_id: User UUID. If None, uses system user for single-user mode.
+        user_id: User UUID (REQUIRED in multi-tenant mode).
 
     Returns:
         The created trade record.
+
+    Raises:
+        ValueError: If user_id is not provided.
     """
+    if not user_id:
+        raise ValueError("user_id is required for creating trades")
+
     supabase = get_supabase_admin()
 
-    # Use system user ID if none provided (single-user/legacy mode)
-    effective_user_id = user_id or get_default_user_id()
-
     data = {
-        "user_id": effective_user_id,
+        "user_id": user_id,
         "signal_id": signal_id,
         "order_id": order_id,
         "symbol": symbol,

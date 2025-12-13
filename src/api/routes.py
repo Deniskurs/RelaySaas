@@ -615,6 +615,97 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
+# Multi-tenant debug endpoint
+@router.get("/system/multi-tenant-status")
+async def get_multi_tenant_status(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Get multi-tenant system status for debugging.
+
+    Shows connection status for all users (admin only) or current user.
+    """
+    import os
+    from ..users.manager import user_manager
+
+    multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
+
+    result = {
+        "multi_tenant_mode": multi_tenant,
+        "user_manager_running": user_manager._running,
+        "active_users": user_manager.active_users,
+        "connected_users": user_manager.connected_users,
+    }
+
+    # Get current user's connection status
+    conn = user_manager.get_connection(user.id)
+    if conn:
+        result["your_connection"] = {
+            "is_active": conn.is_active,
+            "telegram_connected": conn.telegram_connected,
+            "metaapi_connected": conn.metaapi_connected,
+            "has_credentials": conn.credentials is not None,
+            "has_settings": conn.settings is not None,
+            "connected_at": conn.connected_at.isoformat() if conn.connected_at else None,
+            "telegram_listener_exists": conn.telegram_listener is not None,
+            "metaapi_executor_exists": conn.metaapi_executor is not None,
+        }
+
+        # Get telegram listener status if exists
+        if conn.telegram_listener:
+            try:
+                tg_status = conn.telegram_listener.get_connection_status()
+                result["your_telegram_listener"] = tg_status
+            except Exception as e:
+                result["your_telegram_listener_error"] = str(e)
+    else:
+        result["your_connection"] = None
+        result["reason"] = "User connection not found in user_manager"
+
+    return result
+
+
+# Manual connection trigger for multi-tenant mode
+@router.post("/system/connect-me")
+async def connect_current_user(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Manually connect/reconnect the current user in multi-tenant mode.
+
+    Use this if:
+    - User completed onboarding after server started
+    - Connection failed and needs to be retried
+    - User wants to reconnect after settings change
+    """
+    import os
+    from ..users.manager import user_manager
+
+    multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
+
+    if not multi_tenant:
+        return {"error": "Not in multi-tenant mode"}
+
+    # Disconnect first if already connected
+    existing = user_manager.get_connection(user.id)
+    if existing:
+        await user_manager.disconnect_user(user.id)
+
+    # Connect user
+    success = await user_manager.connect_user(user.id)
+
+    if success:
+        conn = user_manager.get_connection(user.id)
+        return {
+            "status": "connected",
+            "telegram_connected": conn.telegram_connected if conn else False,
+            "metaapi_connected": conn.metaapi_connected if conn else False,
+        }
+    else:
+        return {
+            "status": "failed",
+            "error": "Could not connect - check credentials and settings",
+        }
+
+
 # System status endpoint
 class SystemStatusResponse(BaseModel):
     """System configuration status."""
@@ -792,15 +883,45 @@ class TelegramConnectionStatus(BaseModel):
 
 
 @router.get("/telegram/connection-status", response_model=TelegramConnectionStatus)
-async def get_telegram_connection_status():
+async def get_telegram_connection_status(
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
     """Get Telegram listener connection status for dashboard display.
-    
-    This is a lightweight endpoint that returns the current connection state
-    without requiring admin authentication.
+
+    In multi-tenant mode, checks per-user connection status.
+    In single-user mode, checks global copier.
     """
+    import os
+    from ..users.manager import user_manager
+
+    multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
+
+    if multi_tenant and user:
+        # Check user's specific connection status
+        conn = user_manager.get_connection(user.id)
+        if conn and conn.telegram_listener:
+            try:
+                listener = conn.telegram_listener
+                status = listener.get_connection_status()
+                return TelegramConnectionStatus(
+                    connected=status.get("connected", False),
+                    reconnecting=status.get("reconnecting", False),
+                    last_activity=status.get("last_activity"),
+                    last_health_check=status.get("last_health_check"),
+                    started_at=status.get("started_at"),
+                    reconnect_attempts=status.get("reconnect_attempts", 0),
+                    channels_count=status.get("channels_count", 0),
+                )
+            except Exception:
+                pass
+
+        # User not connected yet or no listener
+        return TelegramConnectionStatus(connected=conn.telegram_connected if conn else False)
+
+    # Single-user mode or no auth - check global copier
     if not _copier or not hasattr(_copier, 'telegram'):
         return TelegramConnectionStatus()
-    
+
     try:
         status = _copier.telegram.get_connection_status()
         return TelegramConnectionStatus(

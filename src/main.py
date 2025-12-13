@@ -10,7 +10,7 @@ from .config import settings
 from .api.server import app
 from .api.routes import set_account_info, set_live_positions, set_copier
 from .database import supabase_crud as crud
-from .database.supabase import get_settings as get_db_settings, get_system_config, SYSTEM_USER_ID, get_supabase_admin
+from .database.supabase import get_settings as get_db_settings, get_system_config, get_supabase_admin
 from .telegram.listener import TelegramListener
 from .telegram.client import TelegramConfigError
 from .parser.llm_parser import SignalParser
@@ -564,10 +564,21 @@ class SignalCopier:
         # Ensure lot size is within bounds
         lot_size = max(0.01, min(lot_size, max_lot_size))
 
-        # Check plan limits before executing (legacy single-user mode)
-        limit_check = await check_signal_limit(SYSTEM_USER_ID)
+        # Get user_id from signal (required in multi-tenant mode)
+        signal_user_id = signal.get("user_id")
+        if not signal_user_id:
+            log.error("Signal has no user_id", signal_id=signal_id)
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Signal has no associated user",
+            )
+            return False
+
+        # Check plan limits before executing
+        limit_check = await check_signal_limit(signal_user_id)
         if not limit_check.get("allowed", True):
-            log.warning("Signal blocked by plan limit", signal_id=signal_id)
+            log.warning("Signal blocked by plan limit", signal_id=signal_id, user_id=signal_user_id[:8] if signal_user_id else None)
             await crud.update_signal(
                 signal_id,
                 status="failed",
@@ -613,10 +624,11 @@ class SignalCopier:
                 stop_loss=exe.stop_loss,
                 take_profit=exe.take_profit,
                 tp_index=exe.tp_index,
+                user_id=signal_user_id,
             )
 
-        # Increment daily signal count after successful execution (legacy single-user mode)
-        await increment_signal_count(SYSTEM_USER_ID)
+        # Increment daily signal count after successful execution
+        await increment_signal_count(signal_user_id)
 
         await event_bus.emit(
             Events.TRADE_OPENED,
@@ -692,6 +704,17 @@ class SignalCopier:
 
         if not signal:
             log.error("Signal not found for correction", signal_id=signal_id)
+            return False
+
+        # Get user_id from signal
+        signal_user_id = signal.get("user_id")
+        if not signal_user_id:
+            log.error("Signal has no user_id", signal_id=signal_id)
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Signal has no associated user",
+            )
             return False
 
         # Check we have the required fields
@@ -795,12 +818,14 @@ class SignalCopier:
                 stop_loss=exe.stop_loss,
                 take_profit=exe.take_profit,
                 tp_index=exe.tp_index,
+                user_id=signal_user_id,
             )
 
         await event_bus.emit(
             Events.TRADE_OPENED,
             {
                 "signal_id": signal_id,
+                "user_id": signal_user_id,
                 "symbol": parsed.symbol,
                 "direction": direction,
                 "trades": len(executions),
