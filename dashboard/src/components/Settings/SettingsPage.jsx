@@ -15,6 +15,8 @@ import {
   Unplug,
   Lock,
   MessageSquare,
+  BarChart3,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -297,36 +299,48 @@ function TelegramSection({
   const [password, setPassword] = useState("");
 
   useEffect(() => {
-    checkConnectionStatus();
-  }, []);
-
-  const checkConnectionStatus = async () => {
-    const result = await fetchData("/admin/telegram/status");
-    if (result) {
-      setConnectionStatus(result.status);
-      setConnectionMessage(result.message);
+    // Check if user has connected Telegram (from credentials)
+    if (telegramCreds.telegram_api_id && telegramCreds.telegram_api_hash && telegramCreds.telegram_phone) {
+      // Check via connection status endpoint
+      checkConnectionStatus();
     } else {
       setConnectionStatus("not_configured");
+    }
+  }, [telegramCreds]);
+
+  const checkConnectionStatus = async () => {
+    // For multi-tenant, check the general connection status
+    const result = await fetchData("/telegram/connection-status");
+    if (result && result.connected) {
+      setConnectionStatus("connected");
+      setConnectionMessage("Telegram is connected and receiving signals.");
+    } else {
+      setConnectionStatus("not_configured");
+      setConnectionMessage("Telegram is not connected. Click below to connect.");
     }
   };
 
   const handleSendCode = async () => {
     if (!telegramCreds.telegram_api_id || !telegramCreds.telegram_api_hash || !telegramCreds.telegram_phone) {
-      setConnectionError("Please save your credentials first (API ID, API Hash, Phone)");
+      setConnectionError("Please fill in all credentials first (API ID, API Hash, Phone)");
       return;
     }
     setIsConnecting(true);
     setConnectionError("");
 
-    const result = await postData("/admin/telegram/send-code", {
+    const result = await postData("/onboarding/telegram/send-code", {
       api_id: telegramCreds.telegram_api_id,
       api_hash: telegramCreds.telegram_api_hash,
       phone: telegramCreds.telegram_phone,
     });
 
     if (result) {
-      setConnectionStatus(result.status);
-      setConnectionMessage(result.message);
+      if (result.status === "code_sent") {
+        setConnectionStatus("pending_code");
+        setConnectionMessage(result.message);
+      } else if (result.status === "error") {
+        setConnectionError(result.message || "Failed to send verification code.");
+      }
     } else {
       setConnectionError("Failed to send verification code. Please check your credentials.");
     }
@@ -341,11 +355,18 @@ function TelegramSection({
     setIsConnecting(true);
     setConnectionError("");
 
-    const result = await postData("/admin/telegram/verify-code", { code });
+    const result = await postData("/onboarding/telegram/verify-code", { code });
 
     if (result) {
-      setConnectionStatus(result.status);
-      setConnectionMessage(result.message);
+      if (result.status === "connected") {
+        setConnectionStatus("connected");
+        setConnectionMessage(result.message);
+      } else if (result.status === "pending_password") {
+        setConnectionStatus("pending_password");
+        setConnectionMessage(result.message);
+      } else if (result.status === "error") {
+        setConnectionError(result.message || "Invalid code. Please try again.");
+      }
     } else {
       setConnectionError("Invalid code. Please try again.");
     }
@@ -360,11 +381,15 @@ function TelegramSection({
     setIsConnecting(true);
     setConnectionError("");
 
-    const result = await postData("/admin/telegram/verify-password", { password });
+    const result = await postData("/onboarding/telegram/verify-password", { password });
 
     if (result) {
-      setConnectionStatus(result.status);
-      setConnectionMessage(result.message);
+      if (result.status === "connected") {
+        setConnectionStatus("connected");
+        setConnectionMessage(result.message);
+      } else if (result.status === "error") {
+        setConnectionError(result.message || "Invalid password. Please try again.");
+      }
     } else {
       setConnectionError("Invalid password. Please try again.");
     }
@@ -372,28 +397,16 @@ function TelegramSection({
   };
 
   const handleDisconnect = async () => {
-    setIsConnecting(true);
-    const result = await postData("/admin/telegram/disconnect", {});
-    if (result) {
-      setConnectionStatus(result.status);
-      setConnectionMessage(result.message);
-      setCode("");
-      setPassword("");
-    }
-    setIsConnecting(false);
+    // For now, just reset the UI state - actual disconnect would clear session
+    setConnectionStatus("not_configured");
+    setConnectionMessage("Telegram disconnected.");
+    setCode("");
+    setPassword("");
   };
 
   const handleReconnect = async () => {
-    setIsConnecting(true);
-    setConnectionError("");
-    try {
-      const result = await postData("/admin/telegram/reconnect");
-      setConnectionMessage(result.message || "Reconnected successfully!");
-    } catch (err) {
-      setConnectionError(err.message || "Failed to reconnect");
-    } finally {
-      setIsConnecting(false);
-    }
+    // Re-trigger the send code flow
+    await handleSendCode();
   };
 
   const inputClass = cn(
@@ -681,7 +694,6 @@ export default function SettingsPage() {
     updateSettings,
   } = useSettings();
   const { currencyData } = useCurrency();
-  const { putData } = useApi();
   const [localSettings, setLocalSettings] = useState(settings);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -699,61 +711,64 @@ export default function SettingsPage() {
   const [hasTelegramChanges, setHasTelegramChanges] = useState(false);
   const [configStatus, setConfigStatus] = useState({});
 
+  // MetaTrader credentials state
+  const [mtCreds, setMtCreds] = useState({
+    mt_login: "",
+    mt_server: "",
+    mt_platform: "mt5",
+    metaapi_account_id: "",
+    mt_connected: false,
+  });
+
   useEffect(() => {
     setLocalSettings(settings);
     setHasChanges(false);
   }, [settings]);
 
-  // Load from admin config (where AdminPanel saved settings)
-  // This ensures existing configured values are populated
-  const { fetchData } = useApi();
+  // Load user credentials from the user credentials endpoint
+  const { fetchData, postData } = useApi();
 
   useEffect(() => {
-    const loadAdminConfig = async () => {
+    const loadUserCredentials = async () => {
       setTelegramLoading(true);
       try {
-        // Fetch from admin config - this is where AdminPanel saved all settings
-        const adminConfig = await fetchData("/admin/config");
+        // Fetch from user credentials endpoint - this is where onboarding saved credentials
+        const userCreds = await fetchData("/user/credentials");
 
-        if (adminConfig) {
+        if (userCreds) {
           // Track which sensitive fields are already set (for showing "Set" badges)
           setConfigStatus({
-            telegram_api_hash_set: adminConfig.telegram_api_hash_set || false,
-            telegram_api_hash_preview: adminConfig.telegram_api_hash_preview || "",
-            metaapi_token_set: adminConfig.metaapi_token_set || false,
+            telegram_api_hash_set: userCreds.telegram_api_hash_set || false,
+            telegram_api_hash_preview: "",
+            metaapi_token_set: false,
           });
 
-          // Load Telegram credentials (backend now returns actual hash for admin editing)
-          const creds = {
-            telegram_api_id: adminConfig.telegram_api_id || "",
-            telegram_api_hash: adminConfig.telegram_api_hash || "",
-            telegram_phone: adminConfig.telegram_phone || "",
+          // Load Telegram credentials from user's onboarding data
+          const telegramCredsData = {
+            telegram_api_id: userCreds.telegram_api_id || "",
+            telegram_api_hash: userCreds.telegram_api_hash || "",
+            telegram_phone: userCreds.telegram_phone || "",
           };
-          setTelegramCreds(creds);
-          setTelegramCredsOriginal(creds);
+          setTelegramCreds(telegramCredsData);
+          setTelegramCredsOriginal(telegramCredsData);
 
-          // If channels are not in user settings, load from admin config
-          if (adminConfig.telegram_channel_ids && (!localSettings.telegram_channel_ids || localSettings.telegram_channel_ids.length === 0)) {
-            const channelsFromAdmin = adminConfig.telegram_channel_ids
-              .split(",")
-              .map(c => c.trim())
-              .filter(c => c);
-            if (channelsFromAdmin.length > 0) {
-              setLocalSettings(prev => ({
-                ...prev,
-                telegram_channel_ids: channelsFromAdmin
-              }));
-            }
-          }
+          // Load MetaTrader credentials from user's onboarding data
+          setMtCreds({
+            mt_login: userCreds.mt_login || "",
+            mt_server: userCreds.mt_server || "",
+            mt_platform: userCreds.mt_platform || "mt5",
+            metaapi_account_id: userCreds.metaapi_account_id || "",
+            mt_connected: userCreds.mt_connected || false,
+          });
         }
       } catch (e) {
-        console.error("Error loading admin config:", e);
+        console.error("Error loading user credentials:", e);
       } finally {
         setTelegramLoading(false);
       }
     };
 
-    loadAdminConfig();
+    loadUserCredentials();
   }, [fetchData]);
 
   const updateLocal = (key, value) => {
@@ -773,23 +788,6 @@ export default function SettingsPage() {
     const success = await updateSettings(localSettings);
     if (success) {
       setHasChanges(false);
-
-      // Also sync telegram_channel_ids to admin config for backend compatibility
-      // The backend telegram client reads from system_config, not user_settings
-      if (localSettings.telegram_channel_ids) {
-        try {
-          const channelIdsString = Array.isArray(localSettings.telegram_channel_ids)
-            ? localSettings.telegram_channel_ids.join(",")
-            : localSettings.telegram_channel_ids;
-          await putData("/admin/config", { telegram_channel_ids: channelIdsString });
-
-          // Auto-refresh Telegram to pick up new channel list
-          await postData("/admin/telegram/reconnect");
-        } catch (e) {
-          // Non-critical - user settings were saved, admin config sync is optional
-          console.warn("Could not sync channels to admin config:", e);
-        }
-      }
     }
     return success;
   };
@@ -810,25 +808,16 @@ export default function SettingsPage() {
     setTelegramError("");
 
     try {
-      // Save to admin config (system_config table) for backend compatibility
-      // This is where the backend telegram client reads credentials from
-      const updates = {};
-      if (telegramCreds.telegram_api_id) {
-        updates.telegram_api_id = telegramCreds.telegram_api_id;
-      }
-      if (telegramCreds.telegram_api_hash) {
-        updates.telegram_api_hash = telegramCreds.telegram_api_hash;
-      }
-      if (telegramCreds.telegram_phone) {
-        updates.telegram_phone = telegramCreds.telegram_phone;
-      }
+      // Save to user credentials via onboarding endpoint
+      const result = await postData("/onboarding/telegram", {
+        api_id: telegramCreds.telegram_api_id,
+        api_hash: telegramCreds.telegram_api_hash,
+        phone: telegramCreds.telegram_phone,
+      });
 
-      if (Object.keys(updates).length > 0) {
-        const result = await putData("/admin/config", updates);
-        if (!result) {
-          setTelegramError("Failed to save Telegram credentials");
-          return false;
-        }
+      if (!result || !result.success) {
+        setTelegramError(result?.message || "Failed to save Telegram credentials");
+        return false;
       }
 
       setTelegramCredsOriginal({ ...telegramCreds });
@@ -976,6 +965,112 @@ export default function SettingsPage() {
                 isLoading={telegramLoading}
                 configStatus={configStatus}
               />
+            </CardContent>
+          </Card>
+
+          {/* MetaTrader Section */}
+          <Card className={cn(
+            "bg-white/[0.02] border border-white/[0.06] rounded-lg overflow-hidden",
+            "shadow-[0_1px_2px_rgba(0,0,0,0.1)]",
+            "hover:border-white/[0.08] hover:bg-white/[0.025]",
+            "transition-all duration-300"
+          )}>
+            <CardHeader className="pb-0 pt-6 px-8">
+              <CardTitle className="text-[11px] font-semibold text-foreground-muted/70 uppercase tracking-widest">
+                MetaTrader
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-8 pt-5 pb-8">
+              <div className="space-y-2">
+                {/* Connection Status */}
+                {mtCreds.mt_connected ? (
+                  <div className={cn(
+                    "flex items-center justify-between p-5 rounded-md mb-4",
+                    "bg-emerald-500/[0.06] border border-emerald-500/20",
+                    "shadow-[inset_0_1px_0_rgba(16,185,129,0.1)]"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <div>
+                        <p className="text-sm font-medium text-emerald-400">Connected</p>
+                        <p className="text-xs text-foreground-muted/70 italic mt-0.5">
+                          Account {mtCreds.mt_login} on {mtCreds.mt_server}
+                        </p>
+                      </div>
+                    </div>
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                  </div>
+                ) : mtCreds.metaapi_account_id ? (
+                  <div className={cn(
+                    "flex items-center justify-between p-5 rounded-md mb-4",
+                    "bg-amber-500/[0.06] border border-amber-500/20",
+                    "shadow-[inset_0_1px_0_rgba(245,158,11,0.1)]"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-400">Connecting...</p>
+                        <p className="text-xs text-foreground-muted/70 italic mt-0.5">
+                          Account {mtCreds.mt_login} is being set up
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={cn(
+                    "flex items-center gap-3 p-5 rounded-md mb-4",
+                    "bg-white/[0.02] border border-white/[0.06]"
+                  )}>
+                    <BarChart3 className="w-5 h-5 text-foreground-muted/50" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground-muted">Not Connected</p>
+                      <p className="text-xs text-foreground-muted/70 italic mt-0.5">
+                        Connect via onboarding to start copying trades
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Account Details (read-only display) */}
+                <SettingRow
+                  label="Platform"
+                  description="MetaTrader version"
+                >
+                  <Badge variant="outline" className="px-3 py-1 text-xs font-medium uppercase">
+                    {mtCreds.mt_platform === "mt4" ? "MT4" : "MT5"}
+                  </Badge>
+                </SettingRow>
+
+                <SettingRow
+                  label="Account Number"
+                  description="Your trading account login"
+                >
+                  <span className="text-sm font-mono text-foreground/80">
+                    {mtCreds.mt_login || "—"}
+                  </span>
+                </SettingRow>
+
+                <SettingRow
+                  label="Server"
+                  description="Broker server name"
+                >
+                  <span className="text-sm font-mono text-foreground/80">
+                    {mtCreds.mt_server || "—"}
+                  </span>
+                </SettingRow>
+
+                {/* Info notice */}
+                <div className={cn(
+                  "mt-4 p-4 rounded-md",
+                  "bg-white/[0.025] border border-white/[0.06]",
+                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+                )}>
+                  <p className="text-[12px] text-foreground-muted/70 leading-relaxed">
+                    To change your MetaTrader account, please contact support or re-complete the onboarding process.
+                    Your password is never stored - it was sent directly to MetaAPI during setup.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

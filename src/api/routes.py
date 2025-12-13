@@ -8,6 +8,9 @@ from pydantic import BaseModel
 from ..database import supabase_crud as crud
 from ..database import supabase as supabase_db
 from ..database.supabase import SYSTEM_USER_ID
+from ..auth.middleware import get_optional_user, get_current_user
+from ..auth.models import AuthUser
+from ..users.credentials import get_user_credentials
 
 
 router = APIRouter()
@@ -145,9 +148,15 @@ async def get_signals(
     limit: int = Query(50, le=200),
     offset: int = 0,
     status: Optional[str] = None,
+    user: Optional[AuthUser] = Depends(get_optional_user),
 ):
-    """Get list of signals with optional filtering."""
-    signals = await crud.get_signals(limit=limit, offset=offset, status=status)
+    """Get list of signals with optional filtering.
+
+    When authenticated, returns signals for the current user only.
+    When unauthenticated (single-user mode), returns all signals.
+    """
+    user_id = user.id if user else None
+    signals = await crud.get_signals(limit=limit, offset=offset, status=status, user_id=user_id)
     return signals
 
 
@@ -166,24 +175,41 @@ async def get_trades(
     limit: int = Query(50, le=200),
     offset: int = 0,
     status: Optional[str] = None,
+    user: Optional[AuthUser] = Depends(get_optional_user),
 ):
-    """Get list of trades with optional filtering."""
-    trades = await crud.get_trades(limit=limit, offset=offset, status=status)
+    """Get list of trades with optional filtering.
+
+    When authenticated, returns trades for the current user only.
+    """
+    user_id = user.id if user else None
+    trades = await crud.get_trades(limit=limit, offset=offset, status=status, user_id=user_id)
     return trades
 
 
 @router.get("/trades/open", response_model=List[TradeResponse])
-async def get_open_trades():
-    """Get all open trades."""
-    trades = await crud.get_open_trades()
+async def get_open_trades(
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
+    """Get all open trades.
+
+    When authenticated, returns open trades for the current user only.
+    """
+    user_id = user.id if user else None
+    trades = await crud.get_open_trades(user_id=user_id)
     return trades
 
 
 # Statistics endpoint
 @router.get("/stats", response_model=StatsResponse)
-async def get_stats():
-    """Get trading statistics."""
-    stats = await crud.get_stats()
+async def get_stats(
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
+    """Get trading statistics.
+
+    When authenticated, returns stats for the current user only.
+    """
+    user_id = user.id if user else None
+    stats = await crud.get_stats(user_id=user_id)
     return StatsResponse(**stats)
 
 
@@ -219,10 +245,17 @@ async def get_live_positions():
 
 # Settings endpoints
 @router.get("/settings", response_model=SettingsResponse)
-async def get_settings_endpoint():
-    """Get all application settings from Supabase."""
+async def get_settings_endpoint(
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
+    """Get all application settings from Supabase.
+
+    When authenticated, returns settings for the current user.
+    When unauthenticated (single-user mode), uses system user ID.
+    """
     try:
-        settings = supabase_db.get_settings()
+        user_id = user.id if user else None
+        settings = supabase_db.get_settings(user_id=user_id)
         print(f"[API] Settings from user_settings_v2: telegram_channel_ids = {settings.get('telegram_channel_ids')}")
 
         # If no channels in user_settings, check system_config (for backward compatibility)
@@ -246,11 +279,16 @@ async def get_settings_endpoint():
 @router.put("/settings", response_model=SettingsResponse)
 async def update_settings_endpoint(
     settings: SettingsUpdate,
+    user: Optional[AuthUser] = Depends(get_optional_user),
 ):
-    """Update application settings in Supabase."""
+    """Update application settings in Supabase.
+
+    When authenticated, updates settings for the current user.
+    """
     try:
+        user_id = user.id if user else SYSTEM_USER_ID
         updates = settings.model_dump(exclude_none=True)
-        updated = supabase_db.update_settings(SYSTEM_USER_ID, updates)
+        updated = supabase_db.update_settings(user_id, updates)
         return SettingsResponse(**updated)
     except Exception as e:
         print(f"[API] Error updating settings: {e}")
@@ -259,16 +297,22 @@ async def update_settings_endpoint(
 
 # Control endpoints
 @router.post("/control/pause", response_model=StatusResponse)
-async def pause_processing():
+async def pause_processing(
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
     """Pause signal processing."""
-    supabase_db.update_settings(SYSTEM_USER_ID, {"paused": True})
+    user_id = user.id if user else SYSTEM_USER_ID
+    supabase_db.update_settings(user_id, {"paused": True})
     return StatusResponse(status="paused")
 
 
 @router.post("/control/resume", response_model=StatusResponse)
-async def resume_processing():
+async def resume_processing(
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
     """Resume signal processing."""
-    supabase_db.update_settings(SYSTEM_USER_ID, {"paused": False})
+    user_id = user.id if user else SYSTEM_USER_ID
+    supabase_db.update_settings(user_id, {"paused": False})
     return StatusResponse(status="resumed")
 
 
@@ -544,9 +588,12 @@ class LastTradeLotResponse(BaseModel):
 
 
 @router.get("/account/last-trade-lot", response_model=LastTradeLotResponse)
-async def get_last_trade_lot():
+async def get_last_trade_lot(
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
     """Get the lot size of the most recently executed trade."""
-    trade = await crud.get_last_trade()
+    user_id = user.id if user else None
+    trade = await crud.get_last_trade(user_id=user_id)
 
     if trade:
         return LastTradeLotResponse(
@@ -594,4 +641,52 @@ async def get_telegram_connection_status():
         )
     except Exception:
         return TelegramConnectionStatus()
+
+
+# User credentials endpoint (for multi-tenant mode)
+class UserCredentialsResponse(BaseModel):
+    """User credentials for Settings page."""
+
+    # Telegram
+    telegram_api_id: Optional[str] = None
+    telegram_api_hash: Optional[str] = None
+    telegram_api_hash_set: bool = False  # Flag instead of exposing hash
+    telegram_phone: Optional[str] = None
+    telegram_connected: bool = False
+
+    # MetaTrader
+    mt_login: Optional[str] = None
+    mt_server: Optional[str] = None
+    mt_platform: str = "mt5"
+    metaapi_account_id: Optional[str] = None
+    mt_connected: bool = False
+
+
+@router.get("/user/credentials", response_model=UserCredentialsResponse)
+async def get_user_credentials_endpoint(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Get current user's credentials for Settings page.
+
+    Returns Telegram and MetaTrader credentials configured during onboarding.
+    Note: Sensitive fields like telegram_api_hash are returned for editing,
+    but should not be displayed in full (use telegram_api_hash_set flag for UI).
+    """
+    credentials = get_user_credentials(user.id)
+
+    if not credentials:
+        return UserCredentialsResponse()
+
+    return UserCredentialsResponse(
+        telegram_api_id=credentials.telegram_api_id,
+        telegram_api_hash=credentials.telegram_api_hash,
+        telegram_api_hash_set=bool(credentials.telegram_api_hash),
+        telegram_phone=credentials.telegram_phone,
+        telegram_connected=credentials.telegram_connected,
+        mt_login=credentials.mt_login,
+        mt_server=credentials.mt_server,
+        mt_platform=credentials.mt_platform,
+        metaapi_account_id=credentials.metaapi_account_id,
+        mt_connected=credentials.mt_connected,
+    )
 

@@ -124,6 +124,76 @@ Positions are split across take-profit levels:
 - Maximum concurrent trades (default 5)
 - Lot size auto-adjustment based on SL distance
 
+## Multi-Tenant SaaS Deployment
+
+For running as a SaaS with multiple users, each with their own MetaTrader and Telegram connections:
+
+### Railway Configuration
+
+Set the following environment variable in your Railway dashboard:
+
+```env
+MULTI_TENANT_MODE=true
+```
+
+### What Multi-Tenant Mode Does
+
+1. **User Isolation**: Each user has their own:
+   - Telegram listener with their own session
+   - MetaTrader account via MetaAPI
+   - Trading settings and preferences
+   - Signal/trade history
+
+2. **Per-User Data Storage**:
+   - `user_credentials` table: Stores Telegram API keys, session, and MetaTrader account info
+   - `user_settings_v2` table: Stores trading preferences per user
+   - `signals_v2` and `trades_v2` tables: Filtered by `user_id` via RLS
+
+3. **Onboarding Flow**:
+   - Users complete onboarding to connect their own Telegram and MetaTrader accounts
+   - Telegram verification flow: credentials → code → 2FA password → connected
+   - MetaTrader provisioning: credentials sent to MetaAPI → account created → deployed
+
+4. **Signal Routing**:
+   - `signal_router.py` routes signals to the correct user's TradeExecutor
+   - `UserConnectionManager` manages per-user connections
+
+### Required Supabase Tables
+
+```sql
+-- User credentials (encrypted columns recommended)
+CREATE TABLE user_credentials (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id),
+  telegram_api_id TEXT,
+  telegram_api_hash TEXT,
+  telegram_phone TEXT,
+  telegram_session_encrypted TEXT,
+  telegram_connected BOOLEAN DEFAULT FALSE,
+  mt_login TEXT,
+  mt_server TEXT,
+  mt_platform TEXT DEFAULT 'mt5',
+  metaapi_account_id TEXT,
+  mt_connected BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE user_credentials ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own credentials"
+  ON user_credentials FOR ALL USING (auth.uid() = user_id);
+```
+
+### Single-User vs Multi-Tenant
+
+| Feature | Single-User Mode | Multi-Tenant Mode |
+|---------|------------------|-------------------|
+| `MULTI_TENANT_MODE` | Not set or `false` | `true` |
+| Telegram Session | `system_config` table | `user_credentials` per user |
+| MetaTrader Account | Single `METAAPI_ACCOUNT_ID` | Per-user `metaapi_account_id` |
+| Settings | `user_settings_v2` with `SYSTEM_USER_ID` | Per-user rows |
+| API Endpoints | No authentication required | JWT authentication, user-scoped |
+
 ## Running Tests
 
 ```bash
