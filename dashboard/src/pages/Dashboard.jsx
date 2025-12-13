@@ -21,6 +21,7 @@ import PerformanceChart from "@/components/PerformanceChart";
 import SettingsPage from "@/components/Settings/SettingsPage";
 import AdminPanel from "@/components/Admin/AdminPanel";
 import SetupBanner from "@/components/SetupBanner";
+import UserSetupBanner from "@/components/UserSetupBanner";
 import ProfilePage from "@/components/Profile/ProfilePage";
 import { PricingPage } from "@/components/Plans";
 import {
@@ -252,8 +253,11 @@ export default function Dashboard() {
         onDismiss={(alertId) => console.log("Dismissed:", alertId)}
       />
 
-      {/* Setup Banner - shows if system not configured */}
+      {/* Setup Banner - shows if system not configured (admin only) */}
       <SetupBanner onNavigateToAdmin={() => setActiveTab("admin")} />
+
+      {/* User Setup Banner - shows if user's personal setup incomplete (all users) */}
+      <UserSetupBanner onNavigateToSettings={() => setActiveTab("settings")} />
 
       {/* HERO METRICS - Most important info first */}
       <HeroMetrics

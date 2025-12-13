@@ -490,9 +490,10 @@ class SystemStatusResponse(BaseModel):
 
 @router.get("/system/status", response_model=SystemStatusResponse)
 async def get_system_status():
-    """Check if the system is properly configured.
+    """Check if ADMIN infrastructure is properly configured.
 
-    Returns configuration status and any missing items.
+    This only checks system_config (admin-level settings).
+    For per-user setup status, use /user/setup-status instead.
     """
     from ..database.supabase import get_system_config
 
@@ -500,28 +501,74 @@ async def get_system_status():
     missing = []
     warnings = []
 
-    # Check required configuration
+    # Check required ADMIN configuration only
+    # (Telegram credentials are now per-user in user_credentials, not system_config)
     if not config.get("anthropic_api_key"):
         missing.append("Anthropic API Key")
     if not config.get("metaapi_token"):
         missing.append("MetaApi Token")
     if not config.get("metaapi_account_id"):
         missing.append("MetaApi Account ID")
-    if not config.get("telegram_api_id"):
-        missing.append("Telegram API ID")
-    if not config.get("telegram_api_hash"):
-        missing.append("Telegram API Hash")
-    if not config.get("telegram_phone"):
-        missing.append("Telegram Phone")
-
-    # Check optional but important config
-    if not config.get("telegram_channel_ids"):
-        warnings.append("No Telegram channels configured - signals won't be received")
 
     return SystemStatusResponse(
         is_configured=len(missing) == 0,
         missing_config=missing,
         warnings=warnings,
+    )
+
+
+# User setup status endpoint
+class UserSetupStatusResponse(BaseModel):
+    """User's personal setup status."""
+    is_setup_complete: bool
+    telegram_connected: bool
+    mt_connected: bool
+    channels_configured: bool
+    missing_steps: List[str] = []
+
+
+@router.get("/user/setup-status", response_model=UserSetupStatusResponse)
+async def get_user_setup_status(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Check if the current user has completed their personal setup.
+
+    Returns status of Telegram, MetaTrader, and channel configuration.
+    """
+    # Get user credentials
+    credentials = get_user_credentials(user.id)
+
+    # Get user settings for channel config
+    settings = supabase_db.get_settings(user.id)
+
+    missing = []
+
+    # Check Telegram setup
+    telegram_connected = False
+    if credentials:
+        telegram_connected = credentials.telegram_connected or False
+    if not telegram_connected:
+        missing.append("Connect Telegram")
+
+    # Check MT setup
+    mt_connected = False
+    if credentials:
+        mt_connected = credentials.mt_connected or False
+    if not mt_connected:
+        missing.append("Connect MetaTrader")
+
+    # Check channel configuration
+    channels = settings.get("telegram_channel_ids", [])
+    channels_configured = bool(channels and len(channels) > 0)
+    if not channels_configured:
+        missing.append("Add Signal Channels")
+
+    return UserSetupStatusResponse(
+        is_setup_complete=len(missing) == 0,
+        telegram_connected=telegram_connected,
+        mt_connected=mt_connected,
+        channels_configured=channels_configured,
+        missing_steps=missing,
     )
 
 
