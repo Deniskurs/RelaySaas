@@ -231,6 +231,25 @@ def set_live_positions(positions: list):
     _live_positions = positions
 
 
+async def _get_metaapi_region(account_id: str, metaapi_token: str) -> str:
+    """Get the region for a MetaAPI account from the provisioning API."""
+    import httpx
+
+    api_url = f"https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/{account_id}"
+    headers = {"auth-token": metaapi_token}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(api_url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("region", "london")  # Default to london
+    except Exception as e:
+        print(f"[API] Error getting MetaAPI region: {e}")
+
+    return "london"  # Default fallback
+
+
 @router.get("/account")
 async def get_account(
     user: AuthUser = Depends(get_current_user),
@@ -258,9 +277,11 @@ async def get_account(
 
     account_id = credentials.metaapi_account_id
 
-    # Fetch account info from MetaAPI
-    # Using the streaming API endpoint for account information
-    api_url = f"https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/{account_id}/account-information"
+    # Get the account's region for the correct API endpoint
+    region = await _get_metaapi_region(account_id, metaapi_token)
+
+    # Fetch account info from MetaAPI using regional endpoint
+    api_url = f"https://mt-client-api-v1.{region}.agiliumtrade.ai/users/current/accounts/{account_id}/account-information"
 
     headers = {
         "auth-token": metaapi_token,
@@ -311,8 +332,11 @@ async def get_live_positions(
 
     account_id = credentials.metaapi_account_id
 
-    # Fetch positions from MetaAPI
-    api_url = f"https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/{account_id}/positions"
+    # Get the account's region for the correct API endpoint
+    region = await _get_metaapi_region(account_id, metaapi_token)
+
+    # Fetch positions from MetaAPI using regional endpoint
+    api_url = f"https://mt-client-api-v1.{region}.agiliumtrade.ai/users/current/accounts/{account_id}/positions"
 
     headers = {
         "auth-token": metaapi_token,
