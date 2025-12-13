@@ -103,7 +103,8 @@ async def get_or_create_stripe_customer(user: AuthUser) -> str:
         # Verify customer still exists in Stripe
         try:
             customer = stripe.Customer.retrieve(profile["stripe_customer_id"])
-            if not customer.deleted:
+            # Check if customer exists and is not deleted
+            if customer and not getattr(customer, 'deleted', False):
                 return profile["stripe_customer_id"]
         except stripe.error.InvalidRequestError:
             # Customer doesn't exist, create new one
