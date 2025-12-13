@@ -1277,6 +1277,7 @@ export default function SettingsPage() {
   }, [fetchData]);
 
   const updateLocal = (key, value) => {
+    console.log("[SettingsPage] updateLocal:", key, "=", value);
     setLocalSettings((prev) => ({ ...prev, [key]: value }));
     setHasChanges(true);
     setSaveSuccess(false);
@@ -1290,6 +1291,9 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
+    console.log("[SettingsPage] handleSave called");
+    console.log("[SettingsPage] localSettings:", localSettings);
+    console.log("[SettingsPage] telegram_channel_ids:", localSettings.telegram_channel_ids);
     const success = await updateSettings(localSettings);
     if (success) {
       setHasChanges(false);

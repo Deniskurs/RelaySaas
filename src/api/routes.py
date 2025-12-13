@@ -213,34 +213,124 @@ async def get_stats(
     return StatsResponse(**stats)
 
 
-# Account endpoint (populated by main app with live data)
-# This is a placeholder - actual data comes from the executor
+# Account endpoint - now fetches per-user from MetaAPI
+# Legacy global cache kept for backward compatibility with main.py update loop
 _account_info = {"balance": 0, "equity": 0, "margin": 0, "freeMargin": 0}
 _live_positions = []
 
 
 def set_account_info(info: dict):
-    """Update cached account info."""
+    """Update cached account info (legacy - used by main.py update loop)."""
     global _account_info
     _account_info = info
 
 
 def set_live_positions(positions: list):
-    """Update cached live positions from MetaApi."""
+    """Update cached live positions from MetaApi (legacy)."""
     global _live_positions
     _live_positions = positions
 
 
 @router.get("/account")
-async def get_account():
-    """Get current account information."""
-    return _account_info
+async def get_account(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Get current user's account information from MetaAPI."""
+    import httpx
+    from ..users.credentials import get_user_credentials
+
+    # Get user's MetaAPI account ID
+    credentials = get_user_credentials(user.id)
+    if not credentials or not credentials.metaapi_account_id:
+        # Return zeros if no MetaAPI account configured
+        return {"balance": 0, "equity": 0, "margin": 0, "freeMargin": 0}
+
+    if not credentials.mt_connected:
+        # Account not connected yet
+        return {"balance": 0, "equity": 0, "margin": 0, "freeMargin": 0}
+
+    # Get MetaAPI token from system_config
+    system_config = supabase_db.get_system_config()
+    metaapi_token = system_config.get("metaapi_token")
+    if not metaapi_token:
+        print("[API] MetaAPI token not configured in system_config")
+        return {"balance": 0, "equity": 0, "margin": 0, "freeMargin": 0}
+
+    account_id = credentials.metaapi_account_id
+
+    # Fetch account info from MetaAPI
+    # Using the streaming API endpoint for account information
+    api_url = f"https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/{account_id}/account-information"
+
+    headers = {
+        "auth-token": metaapi_token,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(api_url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "balance": data.get("balance", 0),
+                    "equity": data.get("equity", 0),
+                    "margin": data.get("margin", 0),
+                    "freeMargin": data.get("freeMargin", 0),
+                }
+            else:
+                print(f"[API] MetaAPI account info error: {response.status_code} - {response.text}")
+                return {"balance": 0, "equity": 0, "margin": 0, "freeMargin": 0}
+
+    except Exception as e:
+        print(f"[API] Error fetching account info: {e}")
+        return {"balance": 0, "equity": 0, "margin": 0, "freeMargin": 0}
 
 
 @router.get("/positions")
-async def get_live_positions():
-    """Get live open positions from MetaTrader."""
-    return _live_positions
+async def get_live_positions(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Get current user's live open positions from MetaTrader."""
+    import httpx
+    from ..users.credentials import get_user_credentials
+
+    # Get user's MetaAPI account ID
+    credentials = get_user_credentials(user.id)
+    if not credentials or not credentials.metaapi_account_id:
+        return []
+
+    if not credentials.mt_connected:
+        return []
+
+    # Get MetaAPI token from system_config
+    system_config = supabase_db.get_system_config()
+    metaapi_token = system_config.get("metaapi_token")
+    if not metaapi_token:
+        return []
+
+    account_id = credentials.metaapi_account_id
+
+    # Fetch positions from MetaAPI
+    api_url = f"https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/{account_id}/positions"
+
+    headers = {
+        "auth-token": metaapi_token,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(api_url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"[API] MetaAPI positions error: {response.status_code}")
+                return []
+
+    except Exception as e:
+        print(f"[API] Error fetching positions: {e}")
+        return []
 
 
 # Settings endpoints

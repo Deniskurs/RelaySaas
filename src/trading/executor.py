@@ -96,14 +96,20 @@ class TradeExecutor:
         return get_system_config()
 
     def _get_account_id(self) -> str:
-        """Get MetaApi account ID from config or database."""
+        """Get MetaApi account ID from user credentials or constructor."""
         if self._account_id:
             return self._account_id
-        config = self._get_config()
-        account_id = config.get("metaapi_account_id", "")
-        if not account_id:
-            raise ValueError("MetaApi Account ID not configured. Set it in Admin > System Config.")
-        return account_id
+
+        # For multi-tenant mode, get from user_credentials
+        if self.user_id:
+            from ..users.credentials import get_user_credentials
+            creds = get_user_credentials(self.user_id)
+            if creds and creds.metaapi_account_id:
+                return creds.metaapi_account_id
+            raise ValueError(f"No MetaAPI account configured for user {self.user_id[:8]}...")
+
+        # Legacy fallback - but this should not be used anymore
+        raise ValueError("MetaApi Account ID not configured. User must complete MetaTrader setup.")
 
     def _get_api_token(self) -> str:
         """Get MetaApi token from config or database."""
