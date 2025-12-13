@@ -502,13 +502,12 @@ async def get_system_status():
     warnings = []
 
     # Check required ADMIN configuration only
-    # (Telegram credentials are now per-user in user_credentials, not system_config)
+    # (Telegram credentials and MetaAPI account IDs are now per-user in user_credentials)
     if not config.get("anthropic_api_key"):
         missing.append("Anthropic API Key")
     if not config.get("metaapi_token"):
         missing.append("MetaApi Token")
-    if not config.get("metaapi_account_id"):
-        missing.append("MetaApi Account ID")
+    # Note: metaapi_account_id is per-user now, not in system_config
 
     return SystemStatusResponse(
         is_configured=len(missing) == 0,
