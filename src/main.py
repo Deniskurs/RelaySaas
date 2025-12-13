@@ -10,7 +10,7 @@ from .config import settings
 from .api.server import app
 from .api.routes import set_account_info, set_live_positions, set_copier
 from .database import supabase_crud as crud
-from .database.supabase import get_settings as get_db_settings, get_system_config
+from .database.supabase import get_settings as get_db_settings, get_system_config, SYSTEM_USER_ID
 from .telegram.listener import TelegramListener
 from .telegram.client import TelegramConfigError
 from .parser.llm_parser import SignalParser
@@ -22,6 +22,9 @@ from .utils.logger import log
 # Multi-tenant imports
 from .users.manager import user_manager
 from .signal_router import signal_router
+
+# Plan limits imports
+from .api.plans_routes import check_signal_limit, increment_signal_count
 
 
 class ConfigurationError(Exception):
@@ -474,6 +477,17 @@ class SignalCopier:
         # Ensure lot size is within bounds
         lot_size = max(0.01, min(lot_size, settings.max_lot_size))
 
+        # Check plan limits before executing (legacy single-user mode)
+        limit_check = await check_signal_limit(SYSTEM_USER_ID)
+        if not limit_check.get("allowed", True):
+            log.warning("Signal blocked by plan limit", signal_id=signal_id)
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=limit_check.get("message", "Daily signal limit reached"),
+            )
+            return False
+
         # Execute
         try:
             executions = await self.executor.execute(parsed, lot_size)
@@ -513,6 +527,9 @@ class SignalCopier:
                 take_profit=exe.take_profit,
                 tp_index=exe.tp_index,
             )
+
+        # Increment daily signal count after successful execution (legacy single-user mode)
+        await increment_signal_count(SYSTEM_USER_ID)
 
         await event_bus.emit(
             Events.TRADE_OPENED,

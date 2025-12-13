@@ -12,6 +12,7 @@ from .users.manager import user_manager, UserConnection
 from .users.credentials import get_user_settings
 from .utils.events import event_bus, Events
 from .utils.logger import log
+from .api.plans_routes import check_signal_limit, increment_signal_count
 
 
 class SignalRouter:
@@ -295,6 +296,31 @@ class SignalRouter:
             )
             return
 
+        # Check plan limits before executing
+        limit_check = await check_signal_limit(user_id)
+        if not limit_check.get("allowed", True):
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=limit_check.get("message", "Daily signal limit reached"),
+            )
+            await event_bus.emit(
+                Events.SIGNAL_FAILED,
+                {
+                    "id": signal_id,
+                    "user_id": user_id,
+                    "reason": "limit_reached",
+                    "message": limit_check.get("message"),
+                },
+            )
+            log.warning(
+                f"{user_tag}Signal blocked by plan limit",
+                signal_id=signal_id,
+                current=limit_check.get("current"),
+                limit=limit_check.get("limit"),
+            )
+            return
+
         # Auto-accept: Execute trades immediately
         try:
             executions = await executor.execute(parsed, lot_size)
@@ -335,6 +361,9 @@ class SignalRouter:
                 tp_index=exe.tp_index,
                 user_id=user_id,
             )
+
+        # Increment daily signal count after successful execution
+        await increment_signal_count(user_id)
 
         await event_bus.emit(
             Events.TRADE_OPENED,

@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +54,7 @@ export default function Sidebar({
 }) {
   const { user, profile, logout } = useAuth();
   const { currency, setCurrency, currencies } = useCurrency();
+  const { usage, effectiveTier, isPaid } = usePlanLimits();
   const navigate = useNavigate();
 
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -356,12 +358,12 @@ export default function Sidebar({
       </nav>
 
       {/* Usage Meter Section (Free users) */}
-      {!isCollapsed && profile?.subscription_tier?.toLowerCase() === "free" && (
+      {!isCollapsed && !isPaid && (
         <div className="px-3 py-3 border-t border-white/[0.04] overflow-hidden">
           <UsageMeter
-            signalsUsedToday={0}
-            mtAccountsConnected={1}
-            telegramChannelsActive={1}
+            signalsUsedToday={usage.signalsToday}
+            mtAccountsConnected={usage.accounts}
+            telegramChannelsActive={usage.channels}
             variant="compact"
           />
         </div>
