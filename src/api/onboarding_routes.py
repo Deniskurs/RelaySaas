@@ -537,6 +537,11 @@ async def get_metatrader_status(
 
                 # Update user credentials if connected
                 if state == "DEPLOYED" and connection_status == "CONNECTED":
+                    log.info(
+                        "MT account connected, updating credentials",
+                        user_id=user.id,
+                        account_id=account_id,
+                    )
                     update_user_credentials(user.id, {
                         "mt_connected": True,
                     })

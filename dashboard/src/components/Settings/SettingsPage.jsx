@@ -303,7 +303,7 @@ function MetaTraderSection({
     broker_keywords: "",
   });
 
-  // Poll for account deployment status
+  // Poll for account deployment status (during active provisioning)
   useEffect(() => {
     if (provisioningStatus === "provisioning" && accountId) {
       const pollInterval = setInterval(async () => {
@@ -332,6 +332,34 @@ function MetaTraderSection({
       return () => clearInterval(pollInterval);
     }
   }, [provisioningStatus, accountId, fetchData]);
+
+  // Auto-poll for connection status when page loads with unconnected account
+  useEffect(() => {
+    // Only poll if: has account_id, not connected, not actively provisioning
+    if (mtCreds.metaapi_account_id && !mtCreds.mt_connected && provisioningStatus === "idle") {
+      console.log("Auto-polling for MT connection status...", mtCreds.metaapi_account_id);
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const result = await fetchData(`/onboarding/metatrader/status/${mtCreds.metaapi_account_id}`);
+          if (result) {
+            if (result.state === "DEPLOYED" && result.connection_status === "CONNECTED") {
+              console.log("Account now connected, reloading...");
+              clearInterval(pollInterval);
+              // Reload to get updated credentials
+              window.location.reload();
+            } else {
+              console.log("Account status:", result.state, result.connection_status);
+            }
+          }
+        } catch (e) {
+          console.error("Error polling connection status:", e);
+        }
+      }, 5000); // Poll every 5 seconds
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [mtCreds.metaapi_account_id, mtCreds.mt_connected, provisioningStatus, fetchData]);
 
   const handleConnectAccount = async () => {
     setConnectionError("");
