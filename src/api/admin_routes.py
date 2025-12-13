@@ -387,53 +387,28 @@ async def _log_activity(user_id: str, action: str, details: dict = None):
 # =============================================================================
 
 class SystemConfigResponse(BaseModel):
-    """System configuration response."""
+    """System configuration response - ONLY global admin settings.
 
-    # LLM
+    User-specific settings (telegram, metatrader, trading) are in:
+    - user_credentials: telegram config, metaapi_account_id
+    - user_settings_v2: trading settings
+    """
+
+    # LLM - shared API key for signal parsing
     anthropic_api_key: str = ""
     llm_model: str = "claude-haiku-4-5-20251001"
-    # MetaApi
+    # MetaApi - shared platform token
     metaapi_token: str = ""
-    metaapi_account_id: str = ""
-    # Telegram
-    telegram_api_id: str = ""
-    telegram_api_hash: str = ""
-    telegram_phone: str = ""
-    telegram_channel_ids: str = ""
-    # Trading defaults
-    default_lot_size: str = "0.01"
-    max_lot_size: str = "0.1"
-    max_open_trades: str = "5"
-    max_risk_percent: str = "2.0"
-    symbol_suffix: str = ""
-    split_tps: str = "true"
-    tp_split_ratios: str = "0.5,0.3,0.2"
-    enable_breakeven: str = "true"
 
 
 class SystemConfigUpdate(BaseModel):
-    """System configuration update request."""
+    """System configuration update request - ONLY global admin settings."""
 
     # LLM
     anthropic_api_key: Optional[str] = None
     llm_model: Optional[str] = None
     # MetaApi
     metaapi_token: Optional[str] = None
-    metaapi_account_id: Optional[str] = None
-    # Telegram
-    telegram_api_id: Optional[str] = None
-    telegram_api_hash: Optional[str] = None
-    telegram_phone: Optional[str] = None
-    telegram_channel_ids: Optional[str] = None
-    # Trading defaults
-    default_lot_size: Optional[str] = None
-    max_lot_size: Optional[str] = None
-    max_open_trades: Optional[str] = None
-    max_risk_percent: Optional[str] = None
-    symbol_suffix: Optional[str] = None
-    split_tps: Optional[str] = None
-    tp_split_ratios: Optional[str] = None
-    enable_breakeven: Optional[str] = None
 
 
 class MaskedSystemConfigResponse(BaseModel):
@@ -446,23 +421,6 @@ class MaskedSystemConfigResponse(BaseModel):
     # MetaApi
     metaapi_token_set: bool = False
     metaapi_token_preview: str = ""
-    metaapi_account_id: str = ""
-    # Telegram - return actual values for admin to see/edit
-    telegram_api_id: str = ""
-    telegram_api_hash: str = ""  # Actual value for admin editing
-    telegram_api_hash_set: bool = False
-    telegram_api_hash_preview: str = ""
-    telegram_phone: str = ""
-    telegram_channel_ids: str = ""
-    # Trading defaults
-    default_lot_size: str = "0.01"
-    max_lot_size: str = "0.1"
-    max_open_trades: str = "5"
-    max_risk_percent: str = "2.0"
-    symbol_suffix: str = ""
-    split_tps: str = "true"
-    tp_split_ratios: str = "0.5,0.3,0.2"
-    enable_breakeven: str = "true"
 
 
 def _mask_api_key(key: str) -> tuple[bool, str]:
@@ -478,14 +436,18 @@ def _mask_api_key(key: str) -> tuple[bool, str]:
 async def get_system_config_endpoint(
     admin: AuthUser = Depends(require_admin),
 ):
-    """Get system configuration (with sensitive values masked)."""
+    """Get system configuration (only global admin settings).
+
+    User-specific settings (telegram, metatrader, trading) are managed through:
+    - Onboarding flow
+    - Settings page
+    """
     try:
         config = get_system_config()
 
         # Mask sensitive values
         anthropic_set, anthropic_preview = _mask_api_key(config.get("anthropic_api_key", ""))
         metaapi_set, metaapi_preview = _mask_api_key(config.get("metaapi_token", ""))
-        telegram_hash_set, telegram_hash_preview = _mask_api_key(config.get("telegram_api_hash", ""))
 
         return MaskedSystemConfigResponse(
             # LLM
@@ -495,23 +457,6 @@ async def get_system_config_endpoint(
             # MetaApi
             metaapi_token_set=metaapi_set,
             metaapi_token_preview=metaapi_preview,
-            metaapi_account_id=config.get("metaapi_account_id", ""),
-            # Telegram - return actual hash for admin editing
-            telegram_api_id=config.get("telegram_api_id", ""),
-            telegram_api_hash=config.get("telegram_api_hash", ""),
-            telegram_api_hash_set=telegram_hash_set,
-            telegram_api_hash_preview=telegram_hash_preview,
-            telegram_phone=config.get("telegram_phone", ""),
-            telegram_channel_ids=config.get("telegram_channel_ids", ""),
-            # Trading defaults
-            default_lot_size=config.get("default_lot_size", "0.01"),
-            max_lot_size=config.get("max_lot_size", "0.1"),
-            max_open_trades=config.get("max_open_trades", "5"),
-            max_risk_percent=config.get("max_risk_percent", "2.0"),
-            symbol_suffix=config.get("symbol_suffix", ""),
-            split_tps=config.get("split_tps", "true"),
-            tp_split_ratios=config.get("tp_split_ratios", "0.5,0.3,0.2"),
-            enable_breakeven=config.get("enable_breakeven", "true"),
         )
 
     except Exception as e:
@@ -524,7 +469,11 @@ async def update_system_config_endpoint(
     config_update: SystemConfigUpdate,
     admin: AuthUser = Depends(require_admin),
 ):
-    """Update system configuration."""
+    """Update system configuration (only global admin settings).
+
+    Only anthropic_api_key, llm_model, and metaapi_token can be set here.
+    User-specific settings are managed through onboarding/settings page.
+    """
     try:
         # Build updates dict, excluding None values
         updates = {k: v for k, v in config_update.model_dump().items() if v is not None}
@@ -536,35 +485,7 @@ async def update_system_config_endpoint(
         # Update config
         updated_config = update_system_config(updates)
 
-        # SYNC trading settings to user_settings_v2 (executor reads from there!)
-        trading_settings_sync = {}
-        if "split_tps" in updates:
-            trading_settings_sync["split_tps"] = updates["split_tps"] == "true"
-        if "tp_split_ratios" in updates:
-            # Convert comma-separated string to list of floats
-            ratios_str = updates["tp_split_ratios"]
-            trading_settings_sync["tp_split_ratios"] = [
-                float(r.strip()) for r in ratios_str.split(",") if r.strip()
-            ]
-        if "max_lot_size" in updates:
-            trading_settings_sync["max_lot_size"] = float(updates["max_lot_size"])
-        if "max_open_trades" in updates:
-            trading_settings_sync["max_open_trades"] = int(updates["max_open_trades"])
-        if "max_risk_percent" in updates:
-            trading_settings_sync["max_risk_percent"] = float(updates["max_risk_percent"])
-        if "symbol_suffix" in updates:
-            trading_settings_sync["symbol_suffix"] = updates["symbol_suffix"]
-        if "enable_breakeven" in updates:
-            trading_settings_sync["enable_breakeven"] = updates["enable_breakeven"] == "true"
-        if "tp_lot_mode" in updates:
-            trading_settings_sync["tp_lot_mode"] = updates["tp_lot_mode"]
-
-        if trading_settings_sync:
-            update_settings(SYSTEM_USER_ID, trading_settings_sync)
-            log.info("Synced trading settings to user_settings_v2", keys=list(trading_settings_sync.keys()))
-
         # Log activity
-        # Don't include actual values in log for security
         await _log_activity(
             admin.id,
             "system.config.updated",
@@ -576,7 +497,6 @@ async def update_system_config_endpoint(
         # Return masked response
         anthropic_set, anthropic_preview = _mask_api_key(updated_config.get("anthropic_api_key", ""))
         metaapi_set, metaapi_preview = _mask_api_key(updated_config.get("metaapi_token", ""))
-        telegram_hash_set, telegram_hash_preview = _mask_api_key(updated_config.get("telegram_api_hash", ""))
 
         return MaskedSystemConfigResponse(
             # LLM
@@ -586,23 +506,6 @@ async def update_system_config_endpoint(
             # MetaApi
             metaapi_token_set=metaapi_set,
             metaapi_token_preview=metaapi_preview,
-            metaapi_account_id=updated_config.get("metaapi_account_id", ""),
-            # Telegram - return actual hash for admin editing
-            telegram_api_id=updated_config.get("telegram_api_id", ""),
-            telegram_api_hash=updated_config.get("telegram_api_hash", ""),
-            telegram_api_hash_set=telegram_hash_set,
-            telegram_api_hash_preview=telegram_hash_preview,
-            telegram_phone=updated_config.get("telegram_phone", ""),
-            telegram_channel_ids=updated_config.get("telegram_channel_ids", ""),
-            # Trading defaults
-            default_lot_size=updated_config.get("default_lot_size", "0.01"),
-            max_lot_size=updated_config.get("max_lot_size", "0.1"),
-            max_open_trades=updated_config.get("max_open_trades", "5"),
-            max_risk_percent=updated_config.get("max_risk_percent", "2.0"),
-            symbol_suffix=updated_config.get("symbol_suffix", ""),
-            split_tps=updated_config.get("split_tps", "true"),
-            tp_split_ratios=updated_config.get("tp_split_ratios", "0.5,0.3,0.2"),
-            enable_breakeven=updated_config.get("enable_breakeven", "true"),
         )
 
     except Exception as e:
