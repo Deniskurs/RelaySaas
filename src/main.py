@@ -10,7 +10,7 @@ from .config import settings
 from .api.server import app
 from .api.routes import set_account_info, set_live_positions, set_copier
 from .database import supabase_crud as crud
-from .database.supabase import get_settings as get_db_settings, get_system_config, SYSTEM_USER_ID
+from .database.supabase import get_settings as get_db_settings, get_system_config, SYSTEM_USER_ID, get_supabase_admin
 from .telegram.listener import TelegramListener
 from .telegram.client import TelegramConfigError
 from .parser.llm_parser import SignalParser
@@ -30,6 +30,53 @@ from .api.plans_routes import check_signal_limit, increment_signal_count
 class ConfigurationError(Exception):
     """Raised when system is not properly configured."""
     pass
+
+
+def get_active_user_settings() -> dict:
+    """Get settings for the active/admin user.
+
+    In multi-tenant mode, each user has their own settings. For now,
+    this returns the first admin user's settings, falling back to defaults.
+
+    TODO: In full multi-tenant mode, this should use signal_router to
+    determine which user a signal belongs to based on channel subscriptions.
+    """
+    try:
+        supabase = get_supabase_admin()
+
+        # Get the admin user's ID
+        result = supabase.table("profiles").select("id").eq("role", "admin").limit(1).execute()
+
+        if result.data and len(result.data) > 0:
+            admin_id = result.data[0]["id"]
+            return get_db_settings(admin_id)
+
+        # Fallback: try to get any active user
+        result = supabase.table("profiles").select("id").eq("status", "active").limit(1).execute()
+        if result.data and len(result.data) > 0:
+            user_id = result.data[0]["id"]
+            return get_db_settings(user_id)
+
+    except Exception as e:
+        log.warning("Could not get active user settings", error=str(e))
+
+    # Return defaults if no user found
+    return {
+        "paused": False,
+        "auto_accept_symbols": ["XAUUSD", "GOLD"],
+        "max_risk_percent": 2.0,
+        "max_lot_size": 0.1,
+        "max_open_trades": 5,
+        "lot_reference_balance": 500.0,
+        "lot_reference_size_gold": 0.04,
+        "lot_reference_size_default": 0.01,
+        "gold_market_threshold": 3.0,
+        "split_tps": True,
+        "tp_split_ratios": [0.5, 0.3, 0.2],
+        "enable_breakeven": True,
+        "symbol_suffix": "",
+        "telegram_channel_ids": [],
+    }
 
 
 def check_system_config() -> Tuple[bool, List[str]]:
@@ -113,8 +160,10 @@ class SignalCopier:
                  length=len(text) if text else 0,
                  preview=text[:30] if text else "")
 
+        # Get user settings from database (reads from admin/active user for now)
+        db_settings = get_active_user_settings()
+
         # Check if paused
-        db_settings = get_db_settings()
         if db_settings.get("paused", False):
             log.info("Processing paused, skipping message")
             return
@@ -299,8 +348,16 @@ class SignalCopier:
             return
 
         # Check if this symbol requires confirmation or auto-executes
+        # Use settings from database instead of static config
         symbol_upper = parsed.symbol.upper()
-        is_auto_accept = symbol_upper in settings.auto_accept_list
+        auto_accept_list = db_settings.get("auto_accept_symbols", ["XAUUSD", "GOLD"])
+        # Normalize auto_accept_list to uppercase strings
+        if isinstance(auto_accept_list, list):
+            auto_accept_list = [s.upper() if isinstance(s, str) else str(s).upper() for s in auto_accept_list]
+        is_auto_accept = symbol_upper in auto_accept_list
+
+        # Get default lot size from database settings
+        default_lot_size = float(db_settings.get("lot_reference_size_default", 0.01))
 
         if not is_auto_accept:
             # Requires manual confirmation - save and wait
@@ -309,7 +366,7 @@ class SignalCopier:
                 status="pending_confirmation",
                 # Store the adjusted lot size for when user confirms
                 warnings=(parsed.warnings or []) + [
-                    f"Awaiting confirmation (lot size: {validation.adjusted_lot_size or settings.default_lot_size})"
+                    f"Awaiting confirmation (lot size: {validation.adjusted_lot_size or default_lot_size})"
                 ],
             )
 
@@ -322,7 +379,7 @@ class SignalCopier:
                     "entry": parsed.entry_price,
                     "sl": parsed.stop_loss,
                     "tps": parsed.take_profits,
-                    "lot_size": validation.adjusted_lot_size or settings.default_lot_size,
+                    "lot_size": validation.adjusted_lot_size or default_lot_size,
                 },
             )
 
@@ -335,7 +392,7 @@ class SignalCopier:
             return
 
         # Auto-accept: Execute trades immediately
-        lot_size = validation.adjusted_lot_size or settings.default_lot_size
+        lot_size = validation.adjusted_lot_size or default_lot_size
 
         try:
             executions = await self.executor.execute(parsed, lot_size)
@@ -462,11 +519,16 @@ class SignalCopier:
         parsed.confidence = signal.get("confidence") or 0.8
         parsed.warnings = ["Manually confirmed"]
 
+        # Get settings from database
+        db_settings = get_active_user_settings()
+        default_lot_size = float(db_settings.get("lot_reference_size_default", 0.01))
+        max_lot_size = float(db_settings.get("max_lot_size", 0.1))
+
         # Get lot size: use override if provided, otherwise extract from warnings or use default
         if lot_size_override is not None and lot_size_override > 0:
             lot_size = lot_size_override
         else:
-            lot_size = settings.default_lot_size
+            lot_size = default_lot_size
             for warning in (signal.get("warnings") or []):
                 if "lot size:" in warning.lower():
                     try:
@@ -475,7 +537,7 @@ class SignalCopier:
                         pass
 
         # Ensure lot size is within bounds
-        lot_size = max(0.01, min(lot_size, settings.max_lot_size))
+        lot_size = max(0.01, min(lot_size, max_lot_size))
 
         # Check plan limits before executing (legacy single-user mode)
         limit_check = await check_signal_limit(SYSTEM_USER_ID)
@@ -663,8 +725,12 @@ class SignalCopier:
             log.warning("Corrected signal validation failed", errors=validation.errors)
             return False
 
+        # Get settings from database
+        db_settings = get_active_user_settings()
+        default_lot_size = float(db_settings.get("lot_reference_size_default", 0.01))
+
         # Execute
-        lot_size = validation.adjusted_lot_size or settings.default_lot_size
+        lot_size = validation.adjusted_lot_size or default_lot_size
 
         try:
             executions = await self.executor.execute(parsed, lot_size)
@@ -944,7 +1010,10 @@ class SignalCopier:
             # For ADD or other, use multiplier
             new_lot_size = round(original_lot * multiplier, 2)
 
-        new_lot_size = max(0.01, min(new_lot_size, settings.max_lot_size))
+        # Get max lot size from database settings
+        db_settings = get_active_user_settings()
+        max_lot_size = float(db_settings.get("max_lot_size", 0.1))
+        new_lot_size = max(0.01, min(new_lot_size, max_lot_size))
 
         # Get current price for market order
         try:

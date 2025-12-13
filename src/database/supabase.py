@@ -130,56 +130,83 @@ def get_settings(user_id: str) -> dict:
 
 def update_settings(user_id: str, settings: dict) -> dict:
     """Update settings for a user."""
-    try:
-        # Use admin client to bypass RLS for backend operations
-        supabase = get_supabase_admin()
+    # Use admin client to bypass RLS for backend operations
+    supabase = get_supabase_admin()
 
-        print(f"[Supabase] update_settings called for user {user_id[:8]}...")
-        print(f"[Supabase] Input settings: {settings}")
+    print(f"[Supabase] update_settings called for user {user_id[:8]}...")
+    print(f"[Supabase] Input settings: {settings}")
 
-        # Filter out None values and internal fields
-        updates = {k: v for k, v in settings.items()
-                   if v is not None and k not in ["id", "user_id", "created_at", "updated_at"]}
+    # Filter out None values and internal fields
+    updates = {k: v for k, v in settings.items()
+               if v is not None and k not in ["id", "user_id", "created_at", "updated_at"]}
 
-        print(f"[Supabase] Filtered updates: {updates}")
+    print(f"[Supabase] Filtered updates: {updates}")
 
-        if not updates:
-            print(f"[Supabase] No updates to apply, returning current settings")
-            return get_settings(user_id)
-
-        # Ensure user exists first
-        existing = supabase.table("user_settings_v2") \
-            .select("id") \
-            .eq("user_id", user_id) \
-            .execute()
-
-        if not existing.data:
-            # Create with provided settings
-            print(f"[Supabase] Creating new settings for user {user_id[:8]}...")
-            new_settings = {**DEFAULT_SETTINGS, **updates, "user_id": user_id}
-            result = supabase.table("user_settings_v2") \
-                .insert(new_settings) \
-                .execute()
-        else:
-            # Update existing
-            print(f"[Supabase] Updating existing settings for user {user_id[:8]}...")
-            print(f"[Supabase] Updates to apply: {updates}")
-            result = supabase.table("user_settings_v2") \
-                .update(updates) \
-                .eq("user_id", user_id) \
-                .execute()
-            print(f"[Supabase] Update result.data: {result.data}")
-
-        if result.data and len(result.data) > 0:
-            print(f"[Supabase] Success! telegram_channel_ids in result: {result.data[0].get('telegram_channel_ids')}")
-            return _format_settings(result.data[0])
-
-        print(f"[Supabase] WARNING: No data returned from update, fetching current settings")
+    if not updates:
+        print(f"[Supabase] No updates to apply, returning current settings")
         return get_settings(user_id)
 
-    except Exception as e:
-        print(f"[Supabase] Error updating settings: {e}")
-        return _get_default_response()
+    # Helper function to attempt the update
+    def try_update(update_dict: dict):
+        """Try to update settings, returns (success, result_or_error)."""
+        try:
+            # Ensure user exists first
+            existing = supabase.table("user_settings_v2") \
+                .select("id") \
+                .eq("user_id", user_id) \
+                .execute()
+
+            if not existing.data:
+                # Create with provided settings
+                print(f"[Supabase] Creating new settings for user {user_id[:8]}...")
+                # Remove tp_lot_mode from DEFAULT_SETTINGS for new inserts (column may not exist)
+                safe_defaults = {k: v for k, v in DEFAULT_SETTINGS.items() if k != "tp_lot_mode"}
+                safe_updates = {k: v for k, v in update_dict.items() if k != "tp_lot_mode"}
+                new_settings = {**safe_defaults, **safe_updates, "user_id": user_id}
+                result = supabase.table("user_settings_v2") \
+                    .insert(new_settings) \
+                    .execute()
+            else:
+                # Update existing
+                print(f"[Supabase] Updating existing settings for user {user_id[:8]}...")
+                print(f"[Supabase] Updates to apply: {update_dict}")
+                result = supabase.table("user_settings_v2") \
+                    .update(update_dict) \
+                    .eq("user_id", user_id) \
+                    .execute()
+                print(f"[Supabase] Update result.data: {result.data}")
+            return True, result
+        except Exception as e:
+            return False, e
+
+    # First attempt with all fields
+    success, result_or_error = try_update(updates)
+
+    if not success:
+        error = result_or_error
+        error_str = str(error)
+        print(f"[Supabase] First update attempt failed: {error_str}")
+
+        # Check if it's a missing column error
+        if "tp_lot_mode" in error_str and ("column" in error_str.lower() or "PGRST204" in error_str):
+            print(f"[Supabase] Retrying without tp_lot_mode column...")
+            # Retry without tp_lot_mode
+            filtered_updates = {k: v for k, v in updates.items() if k != "tp_lot_mode"}
+            if filtered_updates:
+                success, result_or_error = try_update(filtered_updates)
+
+        if not success:
+            print(f"[Supabase] Error updating settings: {result_or_error}")
+            # Return current settings instead of defaults to preserve data
+            return get_settings(user_id)
+
+    result = result_or_error
+    if result.data and len(result.data) > 0:
+        print(f"[Supabase] Success! telegram_channel_ids in result: {result.data[0].get('telegram_channel_ids')}")
+        return _format_settings(result.data[0])
+
+    print(f"[Supabase] WARNING: No data returned from update, fetching current settings")
+    return get_settings(user_id)
 
 
 def _get_default_response() -> dict:
