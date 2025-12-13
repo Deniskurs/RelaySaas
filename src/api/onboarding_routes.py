@@ -431,6 +431,34 @@ async def save_metatrader_credentials(
     if not request.password:
         raise HTTPException(status_code=400, detail="Password is required")
 
+    # FAILSAFE: Check if user already has a MetaAPI account to prevent duplicates
+    existing_credentials = get_user_credentials(user.id)
+    if existing_credentials and existing_credentials.metaapi_account_id:
+        # User already has an account - check if it matches the login
+        if existing_credentials.mt_login == request.login:
+            log.info(
+                "User already has MetaAPI account for this login",
+                user_id=user.id,
+                account_id=existing_credentials.metaapi_account_id,
+                login=request.login,
+            )
+            # Return existing account info
+            return MetaTraderCredentialsResponse(
+                success=True,
+                message="Account already configured. Checking connection status...",
+                account_id=existing_credentials.metaapi_account_id,
+                provisioning_status="DEPLOYED",
+            )
+        else:
+            # Different login - warn but allow (user may be switching accounts)
+            log.warning(
+                "User switching MT account - old account may become orphaned in MetaAPI",
+                user_id=user.id,
+                old_login=existing_credentials.mt_login,
+                new_login=request.login,
+                old_account_id=existing_credentials.metaapi_account_id,
+            )
+
     # Provision MetaApi account with password (password is sent to MetaAPI, never stored)
     result = await _provision_metaapi_account(
         user_id=user.id,
