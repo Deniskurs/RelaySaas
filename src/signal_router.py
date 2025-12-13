@@ -31,7 +31,8 @@ class SignalRouter:
         if user_id not in self._validators:
             executor = user_manager.get_executor(user_id)
             if executor and executor.connection:
-                self._validators[user_id] = TradeValidator(executor.connection)
+                # Pass user_id for multi-tenant settings lookup
+                self._validators[user_id] = TradeValidator(executor.connection, user_id=user_id)
         return self._validators.get(user_id)
 
     async def route_message(self, message: dict):

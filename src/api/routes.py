@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from ..database import supabase_crud as crud
 from ..database import supabase as supabase_db
-from ..database.supabase import SYSTEM_USER_ID
+# SYSTEM_USER_ID import removed - no longer needed in multi-tenant mode
 from ..auth.middleware import get_optional_user, get_current_user
 from ..auth.models import AuthUser
 from ..users.credentials import get_user_credentials
@@ -246,29 +246,20 @@ async def get_live_positions():
 # Settings endpoints
 @router.get("/settings", response_model=SettingsResponse)
 async def get_settings_endpoint(
-    user: Optional[AuthUser] = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),  # REQUIRED auth - no more optional
 ):
     """Get all application settings from Supabase.
 
-    When authenticated, returns settings for the current user.
-    When unauthenticated (single-user mode), uses system user ID.
+    Requires authentication. Returns settings for the current user only.
     """
     try:
-        user_id = user.id if user else None
+        # User is guaranteed to exist due to get_current_user dependency
+        user_id = user.id
         settings = supabase_db.get_settings(user_id=user_id)
-        print(f"[API] Settings from user_settings_v2: telegram_channel_ids = {settings.get('telegram_channel_ids')}")
+        print(f"[API] Settings from user_settings_v2 for user {user_id[:8]}...: telegram_channel_ids = {settings.get('telegram_channel_ids')}")
 
-        # If no channels in user_settings, check system_config (for backward compatibility)
-        if not settings.get("telegram_channel_ids"):
-            system_config = supabase_db.get_system_config()
-            channel_str = system_config.get("telegram_channel_ids", "")
-            print(f"[API] System config telegram_channel_ids = '{channel_str}'")
-            if channel_str:
-                # Convert comma-separated string to list
-                settings["telegram_channel_ids"] = [
-                    c.strip() for c in channel_str.split(",") if c.strip()
-                ]
-                print(f"[API] Parsed channels: {settings['telegram_channel_ids']}")
+        # NO FALLBACK to system_config - each user has their own isolated settings
+        # If user has no channels, they get an empty list (not another user's data)
 
         return SettingsResponse(**settings)
     except Exception as e:
@@ -279,14 +270,15 @@ async def get_settings_endpoint(
 @router.put("/settings", response_model=SettingsResponse)
 async def update_settings_endpoint(
     settings: SettingsUpdate,
-    user: Optional[AuthUser] = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),  # REQUIRED auth - no more optional
 ):
     """Update application settings in Supabase.
 
-    When authenticated, updates settings for the current user.
+    Requires authentication. Updates settings for the current user only.
     """
     try:
-        user_id = user.id if user else SYSTEM_USER_ID
+        # User is guaranteed to exist due to get_current_user dependency
+        user_id = user.id
         updates = settings.model_dump(exclude_none=True)
         updated = supabase_db.update_settings(user_id, updates)
         return SettingsResponse(**updated)
@@ -298,20 +290,20 @@ async def update_settings_endpoint(
 # Control endpoints
 @router.post("/control/pause", response_model=StatusResponse)
 async def pause_processing(
-    user: Optional[AuthUser] = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),  # REQUIRED auth
 ):
-    """Pause signal processing."""
-    user_id = user.id if user else SYSTEM_USER_ID
+    """Pause signal processing for the current user."""
+    user_id = user.id
     supabase_db.update_settings(user_id, {"paused": True})
     return StatusResponse(status="paused")
 
 
 @router.post("/control/resume", response_model=StatusResponse)
 async def resume_processing(
-    user: Optional[AuthUser] = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),  # REQUIRED auth
 ):
-    """Resume signal processing."""
-    user_id = user.id if user else SYSTEM_USER_ID
+    """Resume signal processing for the current user."""
+    user_id = user.id
     supabase_db.update_settings(user_id, {"paused": False})
     return StatusResponse(status="resumed")
 

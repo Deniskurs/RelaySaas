@@ -9,19 +9,23 @@ from ..config import settings as app_settings
 _supabase: Optional[Client] = None
 _supabase_admin: Optional[Client] = None
 
+# DEPRECATED: These constants are kept for backward compatibility but should not be used
+# in multi-tenant mode. All operations now require explicit user_id.
 DEFAULT_USER_ID = "default"
 
-# System user UUID for single-user/legacy mode
-# This is a fixed UUID that represents the "system" user when not in multi-tenant mode
+# System user UUID - DEPRECATED, do not use in new code
+# This was used in single-user/legacy mode but causes data sharing issues
 SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
 def get_default_user_id() -> str:
-    """Get the default user ID for single-user mode.
+    """DEPRECATED: Do not use in multi-tenant mode.
 
-    Returns a valid UUID that can be used in database operations.
-    In multi-tenant mode, this should be replaced with the actual user's ID.
+    This function is kept for backward compatibility only.
+    All new code should require explicit user_id from authentication.
     """
+    import warnings
+    warnings.warn("get_default_user_id() is deprecated - use authenticated user_id instead", DeprecationWarning)
     return SYSTEM_USER_ID
 
 # Default settings (used when creating new user settings)
@@ -82,8 +86,18 @@ def get_supabase_admin() -> Client:
     return _supabase_admin
 
 
-def get_settings(user_id: str = SYSTEM_USER_ID) -> dict:
-    """Get settings for a user, create defaults if not exists."""
+def get_settings(user_id: str) -> dict:
+    """Get settings for a user, create defaults if not exists.
+
+    Args:
+        user_id: Required - the authenticated user's UUID. Must be provided explicitly.
+
+    Raises:
+        ValueError: If user_id is None or empty
+    """
+    if not user_id:
+        raise ValueError("user_id is required - authentication required for settings access")
+
     try:
         # Use admin client to bypass RLS for backend operations
         supabase = get_supabase_admin()

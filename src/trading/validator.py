@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 
 from ..parser.models import ParsedSignal, ValidationResult
 from ..config import settings as static_settings  # Keep for non-overridable settings
-from ..database.supabase import get_settings, SYSTEM_USER_ID
+from ..database.supabase import get_settings
 from ..utils.logger import log
 
 
@@ -95,13 +95,15 @@ def calculate_lot_for_symbol(
 class TradeValidator:
     """Validate signals before execution."""
 
-    def __init__(self, metaapi_connection=None):
+    def __init__(self, metaapi_connection=None, user_id: str = None):
         """Initialize validator.
 
         Args:
             metaapi_connection: MetaApi RPC connection for price checks.
+            user_id: User ID for fetching user-specific settings (required in multi-tenant mode).
         """
         self.connection = metaapi_connection
+        self.user_id = user_id
 
     async def validate(
         self,
@@ -120,8 +122,12 @@ class TradeValidator:
         errors: List[str] = []
         warnings: List[str] = []
 
-        # Fetch current settings from database (dynamic, not static config)
-        db_settings = get_settings(SYSTEM_USER_ID)
+        # Fetch current settings from database for THIS user (multi-tenant)
+        if not self.user_id:
+            log.error("TradeValidator has no user_id - cannot fetch settings")
+            return ValidationResult(valid=False, errors=["No user context for validation"])
+
+        db_settings = get_settings(self.user_id)
         max_lot_size = db_settings.get("max_lot_size", 0.1)
         max_open_trades = db_settings.get("max_open_trades", 5)
         max_risk_percent = db_settings.get("max_risk_percent", 2.0)
