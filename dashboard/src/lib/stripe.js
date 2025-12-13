@@ -246,8 +246,9 @@ export function getCheckoutOptions(clientSecret) {
 
 /**
  * API helper for Stripe endpoints
+ * Uses relative URL when on same domain (Railway), falls back to env var or localhost
  */
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 export async function createCheckoutSession(plan, billing, accessToken) {
   const response = await fetch(`${API_URL}/api/stripe/create-checkout-session`, {
