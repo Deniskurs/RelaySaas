@@ -628,6 +628,20 @@ async def complete_onboarding(
 
         log.info("User completed onboarding", user_id=user.id)
 
+        # Auto-connect user in multi-tenant mode
+        import os
+        multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
+        if multi_tenant:
+            try:
+                from ..users.manager import user_manager
+                success = await user_manager.connect_user(user.id)
+                if success:
+                    log.info("User auto-connected after onboarding", user_id=user.id[:8])
+                else:
+                    log.warning("Failed to auto-connect user after onboarding", user_id=user.id[:8])
+            except Exception as conn_err:
+                log.error("Error auto-connecting user", user_id=user.id[:8], error=str(conn_err))
+
         return OnboardingCompleteResponse(
             success=True,
             message="Onboarding complete! Your account is now active.",
