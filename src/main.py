@@ -80,20 +80,20 @@ class SignalCopier:
         """Start the signal copier."""
         log.info("Starting Signal Copier")
 
-        # Connect to MetaApi
+        # Set copier reference FIRST so API routes work even if MetaAPI fails
+        set_copier(self)
+
+        # Connect to MetaApi (optional - may fail in multi-tenant if no default account)
         try:
             await self.executor.connect()
             self.validator = TradeValidator(self.executor.connection)
             log.info("MetaApi connected successfully")
+
+            # Start account info updater (only if connected)
+            self._account_update_task = asyncio.create_task(self._update_account_loop())
         except Exception as e:
-            log.error("Failed to connect to MetaApi", error=str(e))
-            raise
-
-        # Set copier reference for API routes (signal correction)
-        set_copier(self)
-
-        # Start account info updater
-        self._account_update_task = asyncio.create_task(self._update_account_loop())
+            log.warning("MetaApi connection skipped (multi-tenant mode)", error=str(e))
+            log.info("Account info will be fetched per-user from API endpoints")
 
         # Start Telegram listener (this blocks)
         await self.telegram.start(self.on_message)
