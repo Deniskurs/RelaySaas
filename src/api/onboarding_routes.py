@@ -251,11 +251,12 @@ async def telegram_send_code(
         }
 
         # Save credentials to user_credentials (not session yet)
+        # NOTE: Don't reset telegram_connected here - the old session might still be valid
+        # Only update telegram_connected to True after successful verification
         update_user_credentials(user.id, {
             "telegram_api_id": request.api_id,
             "telegram_api_hash": request.api_hash,
             "telegram_phone": phone,
-            "telegram_connected": False,
         })
 
         log.info("Telegram verification code sent", user_id=user.id, phone=phone)
