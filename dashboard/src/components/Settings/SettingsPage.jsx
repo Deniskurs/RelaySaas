@@ -23,6 +23,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useApi } from "@/hooks/useApi";
+import { useRefresh } from "@/hooks/useRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1218,6 +1219,13 @@ export default function SettingsPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Refresh hook for account data
+  const { isRefreshing: isRefreshingAccount, refresh: refreshAccount } = useRefresh({
+    loadingMessage: "Refreshing account data...",
+    successMessage: "Account data refreshed",
+    errorMessage: "Failed to refresh account data",
+  });
+
   // Telegram credentials state
   const [telegramCreds, setTelegramCreds] = useState({
     telegram_api_id: "",
@@ -1249,49 +1257,56 @@ export default function SettingsPage() {
   // Load user credentials from the user credentials endpoint
   const { fetchData, postData } = useApi();
 
-  useEffect(() => {
-    const loadUserCredentials = async () => {
-      setTelegramLoading(true);
-      try {
-        // Fetch from user credentials endpoint - this is where onboarding saved credentials
-        const userCreds = await fetchData("/user/credentials");
+  const loadUserCredentials = async () => {
+    setTelegramLoading(true);
+    try {
+      // Fetch from user credentials endpoint - this is where onboarding saved credentials
+      const userCreds = await fetchData("/user/credentials");
 
-        if (userCreds) {
-          // Track which sensitive fields are already set (for showing "Set" badges)
-          setConfigStatus({
-            telegram_api_hash_set: userCreds.telegram_api_hash_set || false,
-            telegram_api_hash_preview: "",
-            metaapi_token_set: false,
-          });
+      if (userCreds) {
+        // Track which sensitive fields are already set (for showing "Set" badges)
+        setConfigStatus({
+          telegram_api_hash_set: userCreds.telegram_api_hash_set || false,
+          telegram_api_hash_preview: "",
+          metaapi_token_set: false,
+        });
 
-          // Load Telegram credentials from user's onboarding data
-          const telegramCredsData = {
-            telegram_api_id: userCreds.telegram_api_id || "",
-            telegram_api_hash: userCreds.telegram_api_hash || "",
-            telegram_phone: userCreds.telegram_phone || "",
-            telegram_connected: userCreds.telegram_connected || false,
-          };
-          setTelegramCreds(telegramCredsData);
-          setTelegramCredsOriginal(telegramCredsData);
+        // Load Telegram credentials from user's onboarding data
+        const telegramCredsData = {
+          telegram_api_id: userCreds.telegram_api_id || "",
+          telegram_api_hash: userCreds.telegram_api_hash || "",
+          telegram_phone: userCreds.telegram_phone || "",
+          telegram_connected: userCreds.telegram_connected || false,
+        };
+        setTelegramCreds(telegramCredsData);
+        setTelegramCredsOriginal(telegramCredsData);
 
-          // Load MetaTrader credentials from user's onboarding data
-          setMtCreds({
-            mt_login: userCreds.mt_login || "",
-            mt_server: userCreds.mt_server || "",
-            mt_platform: userCreds.mt_platform || "mt5",
-            metaapi_account_id: userCreds.metaapi_account_id || "",
-            mt_connected: userCreds.mt_connected || false,
-          });
-        }
-      } catch (e) {
-        console.error("Error loading user credentials:", e);
-      } finally {
-        setTelegramLoading(false);
+        // Load MetaTrader credentials from user's onboarding data
+        setMtCreds({
+          mt_login: userCreds.mt_login || "",
+          mt_server: userCreds.mt_server || "",
+          mt_platform: userCreds.mt_platform || "mt5",
+          metaapi_account_id: userCreds.metaapi_account_id || "",
+          mt_connected: userCreds.mt_connected || false,
+        });
       }
-    };
+      return userCreds;
+    } catch (e) {
+      console.error("Error loading user credentials:", e);
+      throw e;
+    } finally {
+      setTelegramLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadUserCredentials();
   }, [fetchData]);
+
+  // Handle account data refresh
+  const handleRefreshAccountData = async () => {
+    await refreshAccount(loadUserCredentials);
+  };
 
   const updateLocal = (key, value) => {
     console.log("[SettingsPage] updateLocal:", key, "=", value);
@@ -1435,6 +1450,18 @@ export default function SettingsPage() {
                 <span className="italic">Saved</span>
               </span>
             )}
+            {/* Refresh Account Data Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefreshAccountData}
+              disabled={isRefreshingAccount}
+              className="text-foreground-muted hover:text-foreground hover:bg-white/[0.05] h-9 px-3"
+              title="Refresh account data from server"
+            >
+              <RefreshCw size={14} className={cn("mr-1.5", isRefreshingAccount && "animate-spin")} />
+              {isRefreshingAccount ? "Refreshing..." : "Refresh"}
+            </Button>
             {anyChanges && (
               <Button
                 variant="ghost"

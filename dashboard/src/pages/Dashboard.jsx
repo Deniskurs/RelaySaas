@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMultiRefresh } from "@/hooks/useRefresh";
 import {
   transformPositions,
   transformSignals,
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const { fetchData, postData } = useApi();
   const { profile } = useAuth();
   const isAdmin = profile?.role === "admin";
+  const { isRefreshing, refreshAll } = useMultiRefresh();
 
   const [account, setAccount] = useState({
     balance: 0,
@@ -213,19 +215,41 @@ export default function Dashboard() {
 
   // Refresh all data - used by command palette
   const handleRefresh = useCallback(async () => {
-    const [statsData, signalsData, positionsData, accountData] =
-      await Promise.all([
-        fetchData("/stats"),
-        fetchData("/signals?limit=20"),
-        fetchData("/positions"),
-        fetchData("/account"),
-      ]);
-
-    if (statsData) setStats(transformStats(statsData));
-    if (signalsData) setSignals(transformSignals(signalsData));
-    if (positionsData) setOpenTrades(transformPositions(positionsData));
-    if (accountData) setAccount(accountData);
-  }, [fetchData]);
+    await refreshAll([
+      {
+        name: "Stats",
+        operation: async () => {
+          const data = await fetchData("/stats");
+          if (data) setStats(transformStats(data));
+          return data;
+        },
+      },
+      {
+        name: "Signals",
+        operation: async () => {
+          const data = await fetchData("/signals?limit=20");
+          if (data) setSignals(transformSignals(data));
+          return data;
+        },
+      },
+      {
+        name: "Positions",
+        operation: async () => {
+          const data = await fetchData("/positions");
+          if (data) setOpenTrades(transformPositions(data));
+          return data;
+        },
+      },
+      {
+        name: "Account",
+        operation: async () => {
+          const data = await fetchData("/account");
+          if (data) setAccount(data);
+          return data;
+        },
+      },
+    ]);
+  }, [fetchData, refreshAll]);
 
   // Handle alert actions
   const handleAlertAction = (actionId, alert) => {

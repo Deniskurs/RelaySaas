@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/hooks/useApi";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useRefresh } from "@/hooks/useRefresh";
 
 const formatTime = (timestamp) => {
   if (!timestamp) return "--:--";
@@ -147,6 +148,13 @@ const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconn
 
   const { connected, reconnecting, last_activity, last_health_check, channels_count, reconnect_attempts } = status;
 
+  // Use refresh hook for better UX feedback
+  const { isRefreshing: isRefreshingConnection, refresh: refreshConnection } = useRefresh({
+    loadingMessage: "Reconnecting to Telegram...",
+    successMessage: "Telegram connection refreshed",
+    errorMessage: "Failed to reconnect to Telegram",
+  });
+
   // Calculate time since timestamp
   const getTimeAgo = (timestamp) => {
     if (!timestamp) return null;
@@ -255,12 +263,12 @@ const ConnectionIndicator = ({ status, onReconnect, isReconnecting: propIsReconn
           variant="ghost"
           size="icon"
           className="h-8 w-8 lg:h-6 lg:w-6 hover:bg-white/10"
-          onClick={onReconnect}
-          disabled={propIsReconnecting || reconnecting}
+          onClick={() => refreshConnection(onReconnect)}
+          disabled={isRefreshingConnection || propIsReconnecting || reconnecting}
           title="Refresh Telegram connection"
           aria-label="Refresh Telegram connection"
         >
-          <RefreshCw className={cn("w-4 h-4 lg:w-3 lg:h-3 text-foreground-muted", (propIsReconnecting || reconnecting) && "animate-spin")} />
+          <RefreshCw className={cn("w-4 h-4 lg:w-3 lg:h-3 text-foreground-muted", (isRefreshingConnection || propIsReconnecting || reconnecting) && "animate-spin")} />
         </Button>
       )}
 
