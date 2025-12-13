@@ -105,67 +105,72 @@ function ComparisonTable({ className }) {
         Compare All Features
       </h3>
 
-      {/* Table header - sticky */}
-      <div className="sticky top-0 z-10 bg-background border-b border-white/[0.06] py-3">
-        <div className="grid grid-cols-4 gap-4">
-          <div className="text-sm font-medium text-foreground-muted">Feature</div>
-          <div className="text-center text-sm font-medium text-foreground-muted">Free</div>
-          <div className="text-center text-sm font-medium text-[hsl(var(--accent-teal))]">Pro</div>
-          <div className="text-center text-sm font-medium text-[hsl(var(--accent-gold))]">Premium</div>
-        </div>
-      </div>
-
-      {/* Feature sections */}
-      <div className="divide-y divide-white/[0.04]">
-        {Object.entries(COMPARISON_FEATURES).map(([section, features]) => (
-          <div key={section}>
-            {/* Section header */}
-            <button
-              onClick={() => toggleSection(section)}
-              className="w-full flex items-center justify-between py-4 hover:bg-white/[0.02] transition-colors"
-            >
-              <span className="text-sm font-medium text-foreground">{section}</span>
-              {expandedSections.includes(section) ? (
-                <ChevronUp size={16} className="text-foreground-muted" />
-              ) : (
-                <ChevronDown size={16} className="text-foreground-muted" />
-              )}
-            </button>
-
-            {/* Features */}
-            <AnimatePresence>
-              {expandedSections.includes(section) && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  {features.map((feature, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-4 gap-4 py-3 border-t border-white/[0.02]"
-                    >
-                      <div className="text-sm text-foreground-muted pl-4">
-                        {feature.name}
-                      </div>
-                      <div className="flex justify-center">
-                        <FeatureValue value={feature.free} />
-                      </div>
-                      <div className="flex justify-center">
-                        <FeatureValue value={feature.pro} />
-                      </div>
-                      <div className="flex justify-center">
-                        <FeatureValue value={feature.premium} />
-                      </div>
-                    </div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+      {/* Mobile scroll wrapper */}
+      <div className="overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="min-w-[500px] lg:min-w-0">
+          {/* Table header - sticky */}
+          <div className="sticky top-0 z-10 bg-background border-b border-white/[0.06] py-3">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-sm font-medium text-foreground-muted">Feature</div>
+              <div className="text-center text-sm font-medium text-foreground-muted">Free</div>
+              <div className="text-center text-sm font-medium text-[hsl(var(--accent-teal))]">Pro</div>
+              <div className="text-center text-sm font-medium text-[hsl(var(--accent-gold))]">Premium</div>
+            </div>
           </div>
-        ))}
+
+          {/* Feature sections */}
+          <div className="divide-y divide-white/[0.04]">
+            {Object.entries(COMPARISON_FEATURES).map(([section, features]) => (
+              <div key={section}>
+                {/* Section header */}
+                <button
+                  onClick={() => toggleSection(section)}
+                  className="w-full flex items-center justify-between py-4 hover:bg-white/[0.02] transition-colors"
+                >
+                  <span className="text-sm font-medium text-foreground">{section}</span>
+                  {expandedSections.includes(section) ? (
+                    <ChevronUp size={16} className="text-foreground-muted" />
+                  ) : (
+                    <ChevronDown size={16} className="text-foreground-muted" />
+                  )}
+                </button>
+
+                {/* Features */}
+                <AnimatePresence>
+                  {expandedSections.includes(section) && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      {features.map((feature, i) => (
+                        <div
+                          key={i}
+                          className="grid grid-cols-4 gap-4 py-3 border-t border-white/[0.02]"
+                        >
+                          <div className="text-sm text-foreground-muted pl-4">
+                            {feature.name}
+                          </div>
+                          <div className="flex justify-center">
+                            <FeatureValue value={feature.free} />
+                          </div>
+                          <div className="flex justify-center">
+                            <FeatureValue value={feature.pro} />
+                          </div>
+                          <div className="flex justify-center">
+                            <FeatureValue value={feature.premium} />
+                          </div>
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

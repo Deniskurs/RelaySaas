@@ -24,11 +24,10 @@ import {
   Crown,
   Sparkles,
   Key,
-  ChevronRight,
-  ExternalLink,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PricingCardsCompact } from "@/components/Plans";
 
 function ProfileRow({ label, description, children, className }) {
   return (
@@ -175,59 +174,8 @@ function StatusBadge({ status }) {
   );
 }
 
-// Plans data
-const PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    price: 0,
-    description: "Get started with basic signal copying",
-    icon: Sparkles,
-    features: [
-      "Up to 5 signals per day",
-      "Basic risk management",
-      "Email support",
-      "1 connected account",
-    ],
-    className: "border-white/[0.06] bg-white/[0.02]",
-    current: true,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: 29,
-    description: "For serious traders who want more control",
-    icon: Shield,
-    features: [
-      "Unlimited signals",
-      "Advanced risk management",
-      "Priority support",
-      "3 connected accounts",
-      "Custom lot sizing",
-      "Telegram channel support",
-    ],
-    className: "border-white/[0.1] bg-white/[0.04]",
-    popular: true,
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    price: 79,
-    description: "Maximum power for professional traders",
-    icon: Crown,
-    features: [
-      "Everything in Pro",
-      "Unlimited accounts",
-      "Dedicated support",
-      "Custom integrations",
-      "API access",
-      "White-label options",
-    ],
-    className: "border-white/[0.12] bg-white/[0.06]",
-  },
-];
-
-function PlansSheet({ open, onOpenChange, currentTier }) {
+// PlansSheet - Uses new PricingCardsCompact component
+function PlansSheet({ open, onOpenChange, onSelectPlan }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg bg-background border-white/[0.06] overflow-y-auto">
@@ -235,101 +183,21 @@ function PlansSheet({ open, onOpenChange, currentTier }) {
           <SheetTitle className="text-xl font-semibold text-foreground">
             Subscription Plans
           </SheetTitle>
-          <SheetDescription className="text-foreground-muted/70 italic">
+          <SheetDescription className="text-foreground-muted/70">
             Choose the plan that best fits your trading needs
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-4">
-          {PLANS.map((plan) => {
-            const Icon = plan.icon;
-            const isCurrent = currentTier?.toLowerCase() === plan.id ||
-              (!currentTier && plan.id === "free");
-
-            return (
-              <div
-                key={plan.id}
-                className={cn(
-                  "relative rounded-2xl border p-5 transition-all",
-                  plan.className,
-                  isCurrent && "ring-1 ring-white/20"
-                )}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-2.5 left-4">
-                    <Badge className="bg-white text-background text-[10px] font-semibold px-2 py-0.5">
-                      Most Popular
-                    </Badge>
-                  </div>
-                )}
-
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-none bg-white/[0.06]">
-                      <Icon size={20} className="text-foreground" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">
-                        {plan.name}
-                      </h3>
-                      <p className="text-xs text-foreground-muted/60 italic">
-                        {plan.description}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-bold text-foreground">
-                      ${plan.price}
-                    </span>
-                    <span className="text-xs text-foreground-muted/60">/mo</span>
-                  </div>
-                </div>
-
-                <ul className="space-y-2 mb-4">
-                  {plan.features.map((feature, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-2 text-sm text-foreground-muted"
-                    >
-                      <Check size={14} className="text-foreground/60 shrink-0" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                {isCurrent ? (
-                  <Button
-                    variant="outline"
-                    className="w-full border-white/10 bg-white/[0.04] text-foreground-muted"
-                    disabled
-                  >
-                    Current Plan
-                  </Button>
-                ) : (
-                  <Button
-                    className={cn(
-                      "w-full",
-                      plan.popular
-                        ? "bg-white text-background hover:bg-white/90"
-                        : "bg-white/[0.08] text-foreground hover:bg-white/[0.12]"
-                    )}
-                  >
-                    {plan.price === 0 ? "Downgrade" : "Upgrade"}
-                    <ChevronRight size={14} className="ml-1" />
-                  </Button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <PricingCardsCompact
+          onSelectPlan={(planId) => {
+            onSelectPlan?.(planId);
+            onOpenChange(false);
+          }}
+        />
 
         <div className="mt-6 p-4 rounded-none bg-white/[0.02] border border-white/[0.04]">
           <p className="text-xs text-foreground-muted/60 text-center">
-            All plans include a 14-day free trial. Cancel anytime.{" "}
-            <a href="#" className="text-foreground/70 hover:text-foreground inline-flex items-center gap-1">
-              View full comparison
-              <ExternalLink size={10} />
-            </a>
+            All plans include a 14-day money-back guarantee. Cancel anytime.
           </p>
         </div>
       </SheetContent>
@@ -764,7 +632,10 @@ export default function ProfilePage() {
       <PlansSheet
         open={plansOpen}
         onOpenChange={setPlansOpen}
-        currentTier={profile?.subscription_tier}
+        onSelectPlan={(planId) => {
+          console.log("Selected plan:", planId);
+          // TODO: Integrate with Stripe checkout
+        }}
       />
     </>
   );
