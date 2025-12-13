@@ -80,16 +80,26 @@ const SetupStep = ({ icon: Icon, label, isComplete, isActive }) => (
  * @param {Function} props.onNavigateToSettings - Callback to navigate to settings page
  */
 export default function UserSetupBanner({ onNavigateToSettings }) {
-  const { fetchData } = useApi();
+  const { fetchData, error } = useApi();
   const [status, setStatus] = useState(null);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
 
   // Fetch user setup status on mount
   useEffect(() => {
     const checkStatus = async () => {
-      const data = await fetchData("/user/setup-status");
-      if (data) {
-        setStatus(data);
+      try {
+        const data = await fetchData("/user/setup-status");
+        if (data) {
+          setStatus(data);
+        } else {
+          // API returned null - likely an error
+          console.warn("UserSetupBanner: No data returned from /user/setup-status");
+          setFetchError("Failed to fetch setup status");
+        }
+      } catch (e) {
+        console.error("UserSetupBanner: Error fetching setup status:", e);
+        setFetchError(e.message);
       }
     };
     checkStatus();
@@ -98,15 +108,31 @@ export default function UserSetupBanner({ onNavigateToSettings }) {
   // Don't show if:
   // - Setup is complete
   // - User dismissed the banner
-  // - Still loading (status is null)
-  if (!status || status.is_setup_complete || isDismissed) {
+  // - Still loading (status is null) AND no error
+  if (isDismissed) {
     return null;
   }
 
-  // Extract connection statuses
-  const telegramConnected = status.telegram_connected || false;
-  const mtConnected = status.mt_connected || false;
-  const channelsConfigured = status.channels_configured || false;
+  // If we have status and setup is complete, don't show
+  if (status && status.is_setup_complete) {
+    return null;
+  }
+
+  // If still loading (no status, no error), don't show yet
+  if (!status && !fetchError) {
+    return null;
+  }
+
+  // If there was an error fetching, log it but still try to show banner
+  // with default incomplete state (safer to prompt setup than hide it)
+  if (fetchError) {
+    console.warn("UserSetupBanner: Showing with default incomplete state due to error:", fetchError);
+  }
+
+  // Extract connection statuses (default to false if status is null/error)
+  const telegramConnected = status?.telegram_connected || false;
+  const mtConnected = status?.mt_connected || false;
+  const channelsConfigured = status?.channels_configured || false;
 
   // Calculate progress
   const completedSteps = [telegramConnected, mtConnected, channelsConfigured].filter(Boolean).length;
@@ -117,7 +143,7 @@ export default function UserSetupBanner({ onNavigateToSettings }) {
   const activeStep = !telegramConnected ? 0 : !mtConnected ? 1 : !channelsConfigured ? 2 : 3;
 
   // Get missing steps for detailed view
-  const missingSteps = status.missing_steps || [];
+  const missingSteps = status?.missing_steps || [];
 
   // Navigate to settings page via callback
   const handleConfigureClick = () => {
