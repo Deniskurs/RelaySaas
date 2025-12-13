@@ -800,8 +800,11 @@ function TelegramSection({
 
   useEffect(() => {
     // Check if user has connected Telegram (from credentials)
-    if (telegramCreds.telegram_api_id && telegramCreds.telegram_api_hash && telegramCreds.telegram_phone) {
-      // Check via connection status endpoint
+    if (telegramCreds.telegram_connected) {
+      // Already connected from onboarding
+      setConnectionStatus("connected");
+    } else if (telegramCreds.telegram_api_id && telegramCreds.telegram_api_hash && telegramCreds.telegram_phone) {
+      // Has credentials but not connected - check via connection status endpoint
       checkConnectionStatus();
     } else {
       setConnectionStatus("not_configured");
@@ -1203,6 +1206,7 @@ export default function SettingsPage() {
     telegram_api_id: "",
     telegram_api_hash: "",
     telegram_phone: "",
+    telegram_connected: false,
   });
   const [telegramCredsOriginal, setTelegramCredsOriginal] = useState(null);
   const [telegramLoading, setTelegramLoading] = useState(true);
@@ -1248,6 +1252,7 @@ export default function SettingsPage() {
             telegram_api_id: userCreds.telegram_api_id || "",
             telegram_api_hash: userCreds.telegram_api_hash || "",
             telegram_phone: userCreds.telegram_phone || "",
+            telegram_connected: userCreds.telegram_connected || false,
           };
           setTelegramCreds(telegramCredsData);
           setTelegramCredsOriginal(telegramCredsData);
