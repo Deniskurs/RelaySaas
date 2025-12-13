@@ -2,7 +2,7 @@
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
-from ..database.supabase import get_supabase
+from ..database.supabase import get_supabase_admin
 from ..utils.logger import log
 
 
@@ -88,7 +88,7 @@ def get_user_credentials(user_id: str) -> Optional[UserCredentials]:
         UserCredentials object or None if not found.
     """
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_admin()
         result = supabase.table("user_credentials").select("*").eq("user_id", user_id).execute()
 
         if result.data and len(result.data) > 0:
@@ -123,7 +123,7 @@ def update_user_credentials(user_id: str, updates: Dict[str, Any]) -> bool:
         True if successful, False otherwise.
     """
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_admin()
 
         # Filter out None values
         filtered_updates = {k: v for k, v in updates.items() if v is not None}
@@ -149,7 +149,7 @@ def get_user_settings(user_id: str) -> Optional[UserSettings]:
         UserSettings object or None if not found.
     """
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_admin()
         result = supabase.table("user_settings_v2").select("*").eq("user_id", user_id).execute()
 
         if result.data and len(result.data) > 0:
@@ -188,7 +188,7 @@ def update_user_settings(user_id: str, updates: Dict[str, Any]) -> bool:
         True if successful, False otherwise.
     """
     try:
-        supabase = get_supabase()
+        supabase = get_supabase_admin()
 
         # Filter out None values
         filtered_updates = {k: v for k, v in updates.items() if v is not None}
