@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,13 @@ const STEPS = [
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile, updateProfile, refreshProfile, isLoading: authLoading } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
+
+  // Allow bypassing active check with ?force=true (for testing)
+  const forceOnboarding = searchParams.get("force") === "true";
 
   // Determine initial step from profile
   useEffect(() => {
@@ -28,11 +32,11 @@ export default function Onboarding() {
         setCurrentStep(stepIndex);
       }
     }
-    // If profile status is active, redirect to dashboard
-    if (profile?.status === "active") {
+    // If profile status is active, redirect to dashboard (unless force mode)
+    if (profile?.status === "active" && !forceOnboarding) {
       navigate("/");
     }
-  }, [profile, navigate]);
+  }, [profile, navigate, forceOnboarding]);
 
   const handleStepComplete = async (stepId) => {
     const nextStepIndex = currentStep + 1;
