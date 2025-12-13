@@ -475,11 +475,16 @@ def get_copier():
 async def correct_signal(
     signal_id: int,
     correction: SignalCorrectionRequest,
+    user: AuthUser = Depends(get_current_user),
 ):
     """Correct a skipped/failed signal's direction and execute it."""
     signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
+
+    # Verify ownership - user can only correct their own signals
+    if signal.get("user_id") != user.id:
+        raise HTTPException(status_code=403, detail="You can only correct your own signals")
 
     if signal.get("status") not in ["skipped", "failed"]:
         raise HTTPException(
@@ -523,11 +528,16 @@ class SignalConfirmRequest(BaseModel):
 async def confirm_signal(
     signal_id: int,
     confirm_request: SignalConfirmRequest = SignalConfirmRequest(),
+    user: AuthUser = Depends(get_current_user),
 ):
     """Confirm and execute a pending signal with optional lot size override."""
     signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
+
+    # Verify ownership - user can only confirm their own signals
+    if signal.get("user_id") != user.id:
+        raise HTTPException(status_code=403, detail="You can only confirm your own signals")
 
     if signal.get("status") != "pending_confirmation":
         raise HTTPException(
@@ -582,11 +592,16 @@ class SignalRejectRequest(BaseModel):
 async def reject_signal(
     signal_id: int,
     rejection: SignalRejectRequest = SignalRejectRequest(),
+    user: AuthUser = Depends(get_current_user),
 ):
     """Reject a pending signal."""
     signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
+
+    # Verify ownership - user can only reject their own signals
+    if signal.get("user_id") != user.id:
+        raise HTTPException(status_code=403, detail="You can only reject your own signals")
 
     if signal.get("status") != "pending_confirmation":
         raise HTTPException(
