@@ -18,7 +18,7 @@ from ..users.credentials import (
     get_user_settings,
     update_user_settings,
 )
-from ..database.supabase import get_supabase
+from ..database.supabase import get_supabase, get_system_config
 from ..utils.logger import log
 
 
@@ -486,7 +486,9 @@ async def get_metatrader_status(
     """Check MetaApi account provisioning/connection status."""
     import httpx
 
-    metaapi_token = os.getenv("METAAPI_TOKEN")
+    # Get MetaAPI token from system_config (admin setting)
+    system_config = get_system_config()
+    metaapi_token = system_config.get("metaapi_token") or os.getenv("METAAPI_TOKEN")
     if not metaapi_token:
         raise HTTPException(status_code=500, detail="MetaAPI not configured")
 
@@ -631,9 +633,11 @@ async def _provision_metaapi_account(
     """
     import httpx
 
-    metaapi_token = os.getenv("METAAPI_TOKEN")
+    # Get MetaAPI token from system_config (admin setting)
+    system_config = get_system_config()
+    metaapi_token = system_config.get("metaapi_token") or os.getenv("METAAPI_TOKEN")
     if not metaapi_token:
-        log.warning("METAAPI_TOKEN not set, skipping account provisioning")
+        log.warning("metaapi_token not configured in system_config or environment")
         return {
             "success": False,
             "message": "MetaAPI is not configured. Please contact support.",
