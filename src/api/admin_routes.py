@@ -19,6 +19,8 @@ from ..database.supabase import (
     SYSTEM_USER_ID,
 )
 from ..users.manager import user_manager
+from ..users.credentials import update_user_credentials
+from ..telegram.client import get_telegram_config, TelegramConfigError
 from ..utils.logger import log
 from .routes import get_copier
 
@@ -720,10 +722,15 @@ async def telegram_verify_code(
             phone_code_hash=_telegram_verification_phone_hash,
         )
 
-        # Success! Save the session string
+        # Success! Save the session string to BOTH locations
         session_string = _telegram_verification_client.session.save()
         update_system_config({
             "telegram_session": session_string,
+        })
+        # Also save to user_credentials (where get_telegram_config prefers to read from)
+        update_user_credentials(admin.id, {
+            "telegram_session_encrypted": session_string,
+            "telegram_connected": True,
         })
 
         # Clean up
@@ -779,10 +786,15 @@ async def telegram_verify_password(
         # Sign in with password
         await _telegram_verification_client.sign_in(password=request.password)
 
-        # Success! Save the session string
+        # Success! Save the session string to BOTH locations
         session_string = _telegram_verification_client.session.save()
         update_system_config({
             "telegram_session": session_string,
+        })
+        # Also save to user_credentials (where get_telegram_config prefers to read from)
+        update_user_credentials(admin.id, {
+            "telegram_session_encrypted": session_string,
+            "telegram_connected": True,
         })
 
         # Clean up
@@ -843,42 +855,45 @@ async def telegram_get_status(
     """Get current Telegram connection status."""
     global _telegram_verification_client, _telegram_verification_phone_hash
 
-    config = get_system_config()
+    # Use unified config getter that checks both system_config AND user_credentials
+    try:
+        config = get_telegram_config()
+        session_string = config.get("session", "")
+        api_id = config.get("api_id")
+        api_hash = config.get("api_hash", "")
 
-    # Check if there's a saved session
-    session_string = config.get("telegram_session", "")
-    api_id = config.get("telegram_api_id", "")
-    api_hash = config.get("telegram_api_hash", "")
-
-    if session_string and api_id and api_hash:
-        # Try to verify the session is still valid
-        try:
-            client = TelegramClient(
-                StringSession(session_string),
-                int(api_id),
-                api_hash,
-            )
-            await client.connect()
-            is_authorized = await client.is_user_authorized()
-            await client.disconnect()
-
-            if is_authorized:
-                return TelegramStatusResponse(
-                    status="connected",
-                    message="Telegram is connected and authorized.",
-                    session_saved=True,
+        if session_string and api_id and api_hash:
+            # Try to verify the session is still valid
+            try:
+                client = TelegramClient(
+                    StringSession(session_string),
+                    int(api_id),
+                    api_hash,
                 )
-            else:
+                await client.connect()
+                is_authorized = await client.is_user_authorized()
+                await client.disconnect()
+
+                if is_authorized:
+                    return TelegramStatusResponse(
+                        status="connected",
+                        message="Telegram is connected and authorized.",
+                        session_saved=True,
+                    )
+                else:
+                    return TelegramStatusResponse(
+                        status="not_configured",
+                        message="Saved session is no longer valid. Please re-authenticate.",
+                    )
+            except Exception as e:
+                log.warning("Error checking Telegram session", error=str(e))
                 return TelegramStatusResponse(
                     status="not_configured",
-                    message="Saved session is no longer valid. Please re-authenticate.",
+                    message=f"Error checking session: {str(e)}",
                 )
-        except Exception as e:
-            log.warning("Error checking Telegram session", error=str(e))
-            return TelegramStatusResponse(
-                status="not_configured",
-                message=f"Error checking session: {str(e)}",
-            )
+    except TelegramConfigError:
+        # Telegram not configured at all - that's fine
+        pass
 
     # Check if verification is in progress
     if _telegram_verification_client and _telegram_verification_phone_hash:
@@ -909,9 +924,15 @@ async def telegram_disconnect(
         _telegram_verification_client = None
         _telegram_verification_phone_hash = None
 
-    # Clear saved session from config
+    # Clear saved session from BOTH system_config and user_credentials
     update_system_config({
         "telegram_session": "",
+    })
+
+    # Also clear from user_credentials (where onboarding saves it)
+    update_user_credentials(admin.id, {
+        "telegram_session_encrypted": None,
+        "telegram_connected": False,
     })
 
     log.info("Telegram disconnected", admin_id=admin.id)
