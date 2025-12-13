@@ -52,14 +52,20 @@ export function SettingsProvider({ children }) {
   const updateSettings = useCallback(async (updates) => {
     setIsSaving(true);
     setError(null);
+    console.log("[SettingsContext] updateSettings called with:", updates);
+    if (updates.telegram_channel_ids) {
+      console.log("[SettingsContext] telegram_channel_ids being sent:", updates.telegram_channel_ids);
+    }
     try {
       const data = await putData("/settings", updates);
+      console.log("[SettingsContext] Response from PUT /settings:", data);
       if (data) {
         setSettings(data);
         return true;
       }
       return false;
     } catch (e) {
+      console.error("[SettingsContext] Error saving settings:", e);
       setError("Failed to save settings");
       return false;
     } finally {

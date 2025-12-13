@@ -134,11 +134,17 @@ def update_settings(user_id: str, settings: dict) -> dict:
         # Use admin client to bypass RLS for backend operations
         supabase = get_supabase_admin()
 
+        print(f"[Supabase] update_settings called for user {user_id[:8]}...")
+        print(f"[Supabase] Input settings: {settings}")
+
         # Filter out None values and internal fields
         updates = {k: v for k, v in settings.items()
                    if v is not None and k not in ["id", "user_id", "created_at", "updated_at"]}
 
+        print(f"[Supabase] Filtered updates: {updates}")
+
         if not updates:
+            print(f"[Supabase] No updates to apply, returning current settings")
             return get_settings(user_id)
 
         # Ensure user exists first

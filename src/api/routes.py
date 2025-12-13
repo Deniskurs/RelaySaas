@@ -280,7 +280,12 @@ async def update_settings_endpoint(
         # User is guaranteed to exist due to get_current_user dependency
         user_id = user.id
         updates = settings.model_dump(exclude_none=True)
+        print(f"[API] PUT /settings for user {user_id[:8]}...")
+        print(f"[API] Updates received: {updates}")
+        if "telegram_channel_ids" in updates:
+            print(f"[API] telegram_channel_ids being saved: {updates['telegram_channel_ids']}")
         updated = supabase_db.update_settings(user_id, updates)
+        print(f"[API] Updated settings returned: telegram_channel_ids = {updated.get('telegram_channel_ids')}")
         return SettingsResponse(**updated)
     except Exception as e:
         print(f"[API] Error updating settings: {e}")
