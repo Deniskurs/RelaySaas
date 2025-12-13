@@ -908,8 +908,25 @@ function TelegramSection({
   };
 
   const handleReconnect = async () => {
-    // Re-trigger the send code flow
-    await handleSendCode();
+    // Reconnect using existing session (don't send new code!)
+    setIsConnecting(true);
+    setConnectionError("");
+    try {
+      const result = await postData("/admin/telegram/reconnect");
+      if (result && result.status === "connected") {
+        setConnectionStatus("connected");
+        setConnectionMessage("Telegram reconnected successfully.");
+      } else {
+        // If reconnect fails, check status
+        await checkConnectionStatus();
+      }
+    } catch (e) {
+      console.error("Reconnect error:", e);
+      // On error, just refresh the status
+      await checkConnectionStatus();
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const inputClass = cn(
