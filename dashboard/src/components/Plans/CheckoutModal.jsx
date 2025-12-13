@@ -173,6 +173,9 @@ export function CheckoutModal({
                   </p>
                 </div>
               </SheetTitle>
+              <SheetDescription className="sr-only">
+                Complete your upgrade to the {planInfo?.name} plan with secure checkout
+              </SheetDescription>
             </SheetHeader>
           </div>
 

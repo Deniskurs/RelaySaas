@@ -177,6 +177,8 @@ async def create_checkout_session(
             }],
             mode="subscription",
             return_url=return_url,
+            # Only redirect if required (3D Secure), otherwise fire onComplete callback
+            redirect_on_completion="if_required",
             # Metadata for webhook processing
             metadata={
                 "user_id": user.id,
