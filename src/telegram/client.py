@@ -81,7 +81,7 @@ def get_telegram_config() -> dict:
     if missing:
         raise TelegramConfigError(
             f"Telegram not configured. Missing: {', '.join(missing)}. "
-            "Go to Admin > System Config to set up Telegram credentials."
+            "Complete the onboarding flow or use Settings to configure Telegram."
         )
 
     # Warn if no session (will require interactive verification)

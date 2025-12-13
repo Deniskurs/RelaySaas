@@ -256,59 +256,34 @@ def _format_settings(data: dict) -> dict:
 # =============================================================================
 
 # Config keys that can be stored in system_config table
+# IMPORTANT: Only GLOBAL admin/infrastructure settings belong here.
+# User-specific settings go in user_credentials or user_settings_v2.
 SYSTEM_CONFIG_KEYS = [
-    # LLM
+    # LLM - shared API key for signal parsing
     "anthropic_api_key",
     "llm_model",
-    # MetaApi
+    # MetaApi - shared platform token (user accounts are in user_credentials)
     "metaapi_token",
-    "metaapi_account_id",
-    # Telegram
-    "telegram_api_id",
-    "telegram_api_hash",
-    "telegram_phone",
-    "telegram_channel_ids",
-    "telegram_session",  # Saved session string for auto-reconnect
-    # Trading defaults
-    "default_lot_size",
-    "max_lot_size",
-    "max_open_trades",
-    "max_risk_percent",
-    "symbol_suffix",
-    "split_tps",
-    "tp_split_ratios",
-    "enable_breakeven",
 ]
+# NOTE: The following are now per-user and should NOT be in system_config:
+# - telegram_* -> user_credentials (telegram_api_id, telegram_session_encrypted, etc.)
+# - metaapi_account_id -> user_credentials (each user has their own MT account)
+# - trading defaults -> user_settings_v2 (max_lot_size, split_tps, etc.)
 
 
 def get_system_config() -> dict:
     """Get all system configuration from Supabase ONLY.
 
-    Does NOT fall back to environment variables - config must be set in database via admin panel.
-    Returns empty strings for unconfigured values.
+    Only returns GLOBAL admin/infrastructure settings.
+    User-specific settings are in user_credentials/user_settings_v2.
     """
-    # Default values (no env var fallback)
+    # Default values - only global admin settings
     defaults = {
-        # LLM
+        # LLM - shared API key for signal parsing
         "anthropic_api_key": "",
         "llm_model": "claude-haiku-4-5-20251001",
-        # MetaApi
+        # MetaApi - shared platform token
         "metaapi_token": "",
-        "metaapi_account_id": "",
-        # Telegram
-        "telegram_api_id": "",
-        "telegram_api_hash": "",
-        "telegram_phone": "",
-        "telegram_channel_ids": "",
-        # Trading defaults
-        "default_lot_size": "0.01",
-        "max_lot_size": "0.1",
-        "max_open_trades": "5",
-        "max_risk_percent": "2.0",
-        "symbol_suffix": "",
-        "split_tps": "true",
-        "tp_split_ratios": "0.5,0.3,0.2",
-        "enable_breakeven": "true",
     }
 
     try:
