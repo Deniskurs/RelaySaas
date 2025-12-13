@@ -33,7 +33,6 @@ import {
   getStripe,
   createCheckoutSession,
   PRICE_INFO,
-  stripeAppearance,
 } from "@/lib/stripe";
 
 // Plan display info
