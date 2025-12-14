@@ -195,56 +195,53 @@ function MetaTraderSection({
     );
   }
 
-  // Collapsed view for connected state
-  const CollapsedView = () => (
-    <div className={cn(
-      "flex items-center justify-between p-4 rounded-md cursor-pointer",
-      "hover:bg-white/[0.02] transition-colors",
-      mtCreds.mt_connected
-        ? "bg-emerald-500/[0.04] border border-emerald-500/15"
-        : mtCreds.metaapi_account_id
-        ? "bg-amber-500/[0.04] border border-amber-500/15"
-        : "bg-white/[0.02] border border-white/[0.06]"
-    )}
-    onClick={() => setIsExpanded(!isExpanded)}
-    >
-      <div className="flex items-center gap-3">
-        <div className={cn(
-          "w-2 h-2 rounded-full",
-          mtCreds.mt_connected ? "bg-emerald-500" : mtCreds.metaapi_account_id ? "bg-amber-500 animate-pulse" : "bg-white/30"
-        )} />
-        <div>
-          <p className={cn(
-            "text-sm font-medium",
-            mtCreds.mt_connected ? "text-emerald-400" : "text-foreground"
-          )}>
-            {mtCreds.mt_connected ? "Connected" : mtCreds.metaapi_account_id ? "Connecting..." : "Not Connected"}
-          </p>
-          {mtCreds.mt_connected ? (
-            <p className="text-xs text-foreground-muted/70 mt-0.5">
-              <span className="font-mono">{mtCreds.mt_login}</span> on {mtCreds.mt_server}
-            </p>
-          ) : (
-            <p className="text-xs text-foreground-muted/70 mt-0.5">
-              Connect your MetaTrader account to start copying trades
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {mtCreds.mt_connected && (
-          <Badge variant="outline" className="text-[10px] uppercase">
-            {mtCreds.mt_platform}
-          </Badge>
-        )}
-        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-3">
-      <CollapsedView />
+      {/* Collapsed/Expandable Header */}
+      <div
+        className={cn(
+          "flex items-center justify-between p-4 rounded-md cursor-pointer",
+          "hover:bg-white/[0.02] transition-colors",
+          mtCreds.mt_connected
+            ? "bg-emerald-500/[0.04] border border-emerald-500/15"
+            : mtCreds.metaapi_account_id
+            ? "bg-amber-500/[0.04] border border-amber-500/15"
+            : "bg-white/[0.02] border border-white/[0.06]"
+        )}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "w-2 h-2 rounded-full",
+            mtCreds.mt_connected ? "bg-emerald-500" : mtCreds.metaapi_account_id ? "bg-amber-500 animate-pulse" : "bg-white/30"
+          )} />
+          <div>
+            <p className={cn(
+              "text-sm font-medium",
+              mtCreds.mt_connected ? "text-emerald-400" : "text-foreground"
+            )}>
+              {mtCreds.mt_connected ? "Connected" : mtCreds.metaapi_account_id ? "Connecting..." : "Not Connected"}
+            </p>
+            {mtCreds.mt_connected ? (
+              <p className="text-xs text-foreground-muted/70 mt-0.5">
+                <span className="font-mono">{mtCreds.mt_login}</span> on {mtCreds.mt_server}
+              </p>
+            ) : (
+              <p className="text-xs text-foreground-muted/70 mt-0.5">
+                Connect your MetaTrader account to start copying trades
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {mtCreds.mt_connected && (
+            <Badge variant="outline" className="text-[10px] uppercase">
+              {mtCreds.mt_platform}
+            </Badge>
+          )}
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+      </div>
 
       {/* Expanded Form */}
       {isExpanded && (
@@ -622,79 +619,76 @@ function TelegramSection({
     );
   }
 
-  // Collapsed view
-  const CollapsedView = () => (
-    <div className={cn(
-      "flex items-center justify-between p-4 rounded-md cursor-pointer",
-      "hover:bg-white/[0.02] transition-colors",
-      connectionStatus === "connected"
-        ? "bg-emerald-500/[0.04] border border-emerald-500/15"
-        : connectionStatus === "pending_code" || connectionStatus === "pending_password"
-        ? "bg-blue-500/[0.04] border border-blue-500/15"
-        : connectionStatus === "disconnected"
-        ? "bg-rose-500/[0.04] border border-rose-500/15"
-        : "bg-white/[0.02] border border-white/[0.06]"
-    )}
-    onClick={() => setIsExpanded(!isExpanded)}
-    >
-      <div className="flex items-center gap-3">
-        <div className={cn(
-          "w-2 h-2 rounded-full",
-          connectionStatus === "connected" ? "bg-emerald-500" :
-          connectionStatus === "pending_code" || connectionStatus === "pending_password" ? "bg-blue-500 animate-pulse" :
-          connectionStatus === "disconnected" ? "bg-rose-500" :
-          connectionStatus === "loading" ? "bg-amber-500 animate-pulse" :
-          "bg-white/30"
-        )} />
-        <div>
-          <p className={cn(
-            "text-sm font-medium",
-            connectionStatus === "connected" ? "text-emerald-400" :
-            connectionStatus === "pending_code" || connectionStatus === "pending_password" ? "text-blue-400" :
-            connectionStatus === "disconnected" ? "text-rose-400" :
-            "text-foreground"
-          )}>
-            {connectionStatus === "connected" ? "Connected" :
-             connectionStatus === "pending_code" ? "Awaiting Code" :
-             connectionStatus === "pending_password" ? "Awaiting Password" :
-             connectionStatus === "disconnected" ? "Disconnected" :
-             connectionStatus === "loading" ? "Checking..." :
-             "Not Configured"}
-          </p>
-          <p className="text-xs text-foreground-muted/70 mt-0.5">
-            {connectionStatus === "connected" && channelCount > 0
-              ? `Listening to ${channelCount} channel(s)`
-              : connectionStatus === "connected"
-              ? "Ready to receive signals"
-              : telegramCreds.telegram_phone
-              ? `Phone: ${telegramCreds.telegram_phone}`
-              : "Configure your Telegram credentials"}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {connectionStatus === "connected" && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleReconnect();
-            }}
-            disabled={isConnecting}
-            className="h-7 px-2 text-foreground-muted hover:text-foreground"
-          >
-            {isConnecting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-          </Button>
-        )}
-        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-3">
-      <CollapsedView />
+      {/* Collapsed/Expandable Header */}
+      <div
+        className={cn(
+          "flex items-center justify-between p-4 rounded-md cursor-pointer",
+          "hover:bg-white/[0.02] transition-colors",
+          connectionStatus === "connected"
+            ? "bg-emerald-500/[0.04] border border-emerald-500/15"
+            : connectionStatus === "pending_code" || connectionStatus === "pending_password"
+            ? "bg-blue-500/[0.04] border border-blue-500/15"
+            : connectionStatus === "disconnected"
+            ? "bg-rose-500/[0.04] border border-rose-500/15"
+            : "bg-white/[0.02] border border-white/[0.06]"
+        )}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "w-2 h-2 rounded-full",
+            connectionStatus === "connected" ? "bg-emerald-500" :
+            connectionStatus === "pending_code" || connectionStatus === "pending_password" ? "bg-blue-500 animate-pulse" :
+            connectionStatus === "disconnected" ? "bg-rose-500" :
+            connectionStatus === "loading" ? "bg-amber-500 animate-pulse" :
+            "bg-white/30"
+          )} />
+          <div>
+            <p className={cn(
+              "text-sm font-medium",
+              connectionStatus === "connected" ? "text-emerald-400" :
+              connectionStatus === "pending_code" || connectionStatus === "pending_password" ? "text-blue-400" :
+              connectionStatus === "disconnected" ? "text-rose-400" :
+              "text-foreground"
+            )}>
+              {connectionStatus === "connected" ? "Connected" :
+               connectionStatus === "pending_code" ? "Awaiting Code" :
+               connectionStatus === "pending_password" ? "Awaiting Password" :
+               connectionStatus === "disconnected" ? "Disconnected" :
+               connectionStatus === "loading" ? "Checking..." :
+               "Not Configured"}
+            </p>
+            <p className="text-xs text-foreground-muted/70 mt-0.5">
+              {connectionStatus === "connected" && channelCount > 0
+                ? `Listening to ${channelCount} channel(s)`
+                : connectionStatus === "connected"
+                ? "Ready to receive signals"
+                : telegramCreds.telegram_phone
+                ? `Phone: ${telegramCreds.telegram_phone}`
+                : "Configure your Telegram credentials"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {connectionStatus === "connected" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReconnect();
+              }}
+              disabled={isConnecting}
+              className="h-7 px-2 text-foreground-muted hover:text-foreground"
+            >
+              {isConnecting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+            </Button>
+          )}
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+      </div>
 
       {/* Expanded Form */}
       {isExpanded && (
