@@ -1,23 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap");
-
-/* ITC Garamond Std - Add your font files to /public/fonts/ */
-@font-face {
-  font-family: 'ITC Garamond Std';
-  src: url('/fonts/ITCGaramondStd-Lt.woff2') format('woff2'),
-       url('/fonts/ITCGaramondStd-Lt.woff') format('woff');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'ITC Garamond Std';
-  src: url('/fonts/ITCGaramondStd-Bd.woff2') format('woff2'),
-       url('/fonts/ITCGaramondStd-Bd.woff') format('woff');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -156,16 +137,16 @@
     letter-spacing: -0.02em;
   }
 
-  /* Premium Serif Font - Falls back to Cormorant Garamond if ITC Garamond not available */
+  /* Premium Serif Font - Cormorant Garamond from Google Fonts */
   .font-garamond {
-    font-family: 'ITC Garamond Std', 'Cormorant Garamond', Georgia, serif;
-    font-feature-settings: 'liga' 1, 'kern' 1;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-feature-settings: "liga" 1, "kern" 1;
   }
 
   .font-garamond-light {
-    font-family: 'ITC Garamond Std', 'Cormorant Garamond', Georgia, serif;
+    font-family: "Cormorant Garamond", Georgia, serif;
     font-weight: 300;
-    font-feature-settings: 'liga' 1, 'kern' 1;
+    font-feature-settings: "liga" 1, "kern" 1;
   }
 }
 
@@ -190,10 +171,15 @@
 @layer utilities {
   .topbar-premium {
     @apply h-16 sticky top-0 z-50 flex items-center justify-between px-6;
-    background: linear-gradient(180deg, rgba(15,15,20,0.92), rgba(10,10,15,0.88));
+    background: linear-gradient(
+      180deg,
+      rgba(15, 15, 20, 0.92),
+      rgba(10, 10, 15, 0.88)
+    );
     backdrop-filter: blur(20px) saturate(180%);
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 30px rgba(0,0,0,0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03),
+      0 4px 30px rgba(0, 0, 0, 0.3);
   }
 
   .nav-pill-active {
@@ -208,12 +194,13 @@
   }
 
   .premium-glow {
-    box-shadow: 0 0 30px rgba(255, 255, 255, 0.04), 0 0 60px rgba(255, 255, 255, 0.02);
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.04),
+      0 0 60px rgba(255, 255, 255, 0.02);
   }
 
   .premium-border {
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 }
 
@@ -271,8 +258,14 @@
 }
 
 @keyframes terminal-blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .terminal-cursor {
