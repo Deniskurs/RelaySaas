@@ -210,6 +210,7 @@ class TelegramListener:
         listener_self = self
         listener_user_tag = user_tag
         listener_id = id(self)
+        on_message_callback = on_message  # Capture the callback
 
         # For shared listener (user_id=None), listen to ALL channels and filter server-side
         # This allows dynamic channel additions without restart
@@ -218,22 +219,42 @@ class TelegramListener:
 
         @self.client.on(events.NewMessage(chats=chat_filter))
         async def handler(event):
-            # For shared listener, filter to only channels (not private chats/groups)
-            if listen_to_all:
-                chat = event.chat
-                # Only process Channel messages (not User, Chat, etc.)
-                if not isinstance(chat, Channel):
+            """Event handler for new messages - wrapped with error handling."""
+            try:
+                # For shared listener, filter to only channels (not private chats/groups)
+                if listen_to_all:
+                    chat = event.chat
+                    # Only process Channel messages (not User, Chat, etc.)
+                    if not isinstance(chat, Channel):
+                        return
+
+                # Log immediately when event handler fires - before any processing
+                log.info(
+                    f"{listener_user_tag}⚡ RAW EVENT RECEIVED",
+                    listener_id=listener_id,
+                    message_id=event.message.id,
+                    chat_id=event.chat_id,
+                    chat_title=getattr(event.chat, 'title', 'unknown'),
+                )
+                listener_self._last_activity = datetime.utcnow()
+
+                # Verify the callback is still set
+                if listener_self._on_message is None:
+                    log.error(f"{listener_user_tag}❌ MESSAGE HANDLER IS NONE - cannot process!")
                     return
 
-            # Log immediately when event handler fires - before any processing
-            log.info(
-                f"{listener_user_tag}⚡ RAW EVENT RECEIVED",
-                listener_id=listener_id,
-                message_id=event.message.id,
-                chat_id=event.chat_id,
-            )
-            listener_self._last_activity = datetime.utcnow()
-            await listener_self._handle_message(event)
+                # Process the message
+                await listener_self._handle_message(event)
+
+            except Exception as e:
+                # Catch ALL exceptions to prevent handler from dying silently
+                log.error(
+                    f"{listener_user_tag}💥 EVENT HANDLER ERROR",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    message_id=event.message.id if event and event.message else None,
+                    exc_info=True,
+                )
 
         channel_names = [
             getattr(c, "title", str(c)) for c in self._channels
@@ -275,30 +296,71 @@ class TelegramListener:
         channels = []
         channel_list = self._get_channel_list()
         user_tag = f"[user:{self.user_id[:8]}] " if self.user_id else ""
+        failed_channels = []
+
+        log.info(f"{user_tag}📋 Resolving {len(channel_list)} channels: {channel_list}")
 
         for channel_id in channel_list:
             try:
-                # Handle different formats
-                if channel_id.startswith("@"):
-                    # Username
-                    entity = await self.client.get_entity(channel_id)
-                elif channel_id.lstrip("-").isdigit():
-                    # Numeric ID
-                    entity = await self.client.get_entity(int(channel_id))
-                else:
-                    # Try as-is
-                    entity = await self.client.get_entity(channel_id)
+                channel_id_str = str(channel_id).strip()
+                entity = None
 
-                channels.append(entity)
-                name = getattr(entity, "title", channel_id)
-                log.info(f"{user_tag}Monitoring channel", channel=name, id=channel_id)
+                # Try multiple resolution strategies
+                if channel_id_str.startswith("@"):
+                    # Username format
+                    entity = await self.client.get_entity(channel_id_str)
+                elif channel_id_str.lstrip("-").isdigit():
+                    # Numeric ID - try as-is first
+                    numeric_id = int(channel_id_str)
+                    try:
+                        entity = await self.client.get_entity(numeric_id)
+                    except ValueError:
+                        # If that fails and it's positive, try with -100 prefix (channel format)
+                        if numeric_id > 0:
+                            try:
+                                entity = await self.client.get_entity(int(f"-100{numeric_id}"))
+                            except Exception:
+                                pass
+                        # If negative without -100, try adding -100
+                        elif not str(numeric_id).startswith("-100"):
+                            try:
+                                entity = await self.client.get_entity(int(f"-100{abs(numeric_id)}"))
+                            except Exception:
+                                pass
+                else:
+                    # Try as-is (might be an invite link or other format)
+                    entity = await self.client.get_entity(channel_id_str)
+
+                if entity:
+                    channels.append(entity)
+                    name = getattr(entity, "title", channel_id_str)
+                    entity_id = getattr(entity, "id", "unknown")
+                    log.info(
+                        f"{user_tag}✅ Channel resolved",
+                        channel=name,
+                        input_id=channel_id_str,
+                        resolved_id=entity_id,
+                    )
+                else:
+                    failed_channels.append(channel_id_str)
+                    log.error(f"{user_tag}❌ Could not resolve channel", channel=channel_id_str)
 
             except Exception as e:
+                failed_channels.append(str(channel_id))
                 log.error(
-                    f"{user_tag}Could not resolve channel",
+                    f"{user_tag}❌ Channel resolution error",
                     channel=channel_id,
                     error=str(e),
+                    error_type=type(e).__name__,
                 )
+
+        # Log summary
+        log.info(
+            f"{user_tag}📊 Channel resolution complete",
+            resolved=len(channels),
+            failed=len(failed_channels),
+            failed_list=failed_channels if failed_channels else None,
+        )
 
         return channels
 
@@ -335,7 +397,13 @@ class TelegramListener:
         # Call the message handler
         if self._on_message:
             try:
-                log.debug(f"{user_tag}Calling message handler...")
+                handler_name = getattr(self._on_message, '__name__', 'unknown')
+                log.info(
+                    f"{user_tag}📤 INVOKING MESSAGE HANDLER",
+                    handler=handler_name,
+                    message_id=message.id,
+                    channel=channel_name,
+                )
                 await self._on_message({
                     "text": text,
                     "channel_name": channel_name,
@@ -344,15 +412,21 @@ class TelegramListener:
                     "date": message.date,
                     "user_id": self.user_id,  # Include user context for multi-tenant
                 })
-                log.debug(f"{user_tag}Message handler completed")
+                log.info(
+                    f"{user_tag}✅ MESSAGE HANDLER COMPLETED",
+                    message_id=message.id,
+                )
             except Exception as e:
                 log.error(
-                    f"{user_tag}Message handler error",
+                    f"{user_tag}❌ MESSAGE HANDLER ERROR",
                     error=str(e),
+                    error_type=type(e).__name__,
                     channel=channel_name,
+                    message_id=message.id,
+                    exc_info=True,
                 )
         else:
-            log.warning(f"{user_tag}No message handler set - message dropped!")
+            log.error(f"{user_tag}❌ NO MESSAGE HANDLER SET - message dropped!")
 
     async def _health_check_loop(self, user_tag: str):
         """Background task to monitor connection health.
@@ -505,3 +579,89 @@ class TelegramListener:
                 "username": getattr(channel, "username", None),
             })
         return info
+
+    async def get_diagnostic_info(self) -> dict:
+        """Get comprehensive diagnostic information about this listener.
+
+        Returns:
+            Dict with detailed status for debugging.
+        """
+        now = datetime.utcnow()
+
+        # Basic connection status
+        client_connected = False
+        client_authorized = False
+        me_info = None
+
+        if self.client:
+            try:
+                client_connected = self.client.is_connected()
+                if client_connected:
+                    me = await asyncio.wait_for(self.client.get_me(), timeout=5.0)
+                    client_authorized = me is not None
+                    if me:
+                        me_info = {
+                            "id": me.id,
+                            "username": me.username,
+                            "phone": me.phone,
+                        }
+            except asyncio.TimeoutError:
+                client_connected = False
+            except Exception as e:
+                me_info = {"error": str(e)}
+
+        # Channel info
+        configured_channels = self._get_channel_list()
+        resolved_channels = await self.get_channel_info()
+
+        # Event handler check - try to verify handlers are registered
+        handlers_registered = False
+        handler_count = 0
+        if self.client and hasattr(self.client, '_event_builders'):
+            handler_count = len(self.client._event_builders) if self.client._event_builders else 0
+            handlers_registered = handler_count > 0
+
+        # Calculate time since last activity
+        time_since_activity = None
+        if self._last_activity:
+            time_since_activity = (now - self._last_activity).total_seconds()
+
+        time_since_health_check = None
+        if self._last_health_check:
+            time_since_health_check = (now - self._last_health_check).total_seconds()
+
+        return {
+            "user_id": self.user_id[:8] if self.user_id else None,
+            "listener_id": id(self),
+            "connection": {
+                "is_connected_flag": self._is_connected,
+                "client_connected": client_connected,
+                "client_authorized": client_authorized,
+                "is_reconnecting": self._is_reconnecting,
+                "reconnect_attempts": self._reconnect_attempts,
+                "should_stop": self._should_stop,
+            },
+            "account": me_info,
+            "channels": {
+                "configured_count": len(configured_channels),
+                "configured_ids": configured_channels,
+                "resolved_count": len(resolved_channels),
+                "resolved": resolved_channels,
+                "missing": len(configured_channels) - len(resolved_channels),
+            },
+            "event_handlers": {
+                "handlers_registered": handlers_registered,
+                "handler_count": handler_count,
+            },
+            "activity": {
+                "last_activity": self._last_activity.isoformat() if self._last_activity else None,
+                "seconds_since_activity": int(time_since_activity) if time_since_activity else None,
+                "last_health_check": self._last_health_check.isoformat() if self._last_health_check else None,
+                "seconds_since_health_check": int(time_since_health_check) if time_since_health_check else None,
+            },
+            "timing": {
+                "started_at": self._started_at.isoformat() if self._started_at else None,
+                "uptime_seconds": int((now - self._started_at).total_seconds()) if self._started_at else None,
+            },
+            "health_task_running": self._health_task is not None and not self._health_task.done() if self._health_task else False,
+        }

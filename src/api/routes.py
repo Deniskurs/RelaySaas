@@ -912,6 +912,68 @@ async def get_user_setup_status(
     )
 
 
+# Listener diagnostic endpoint
+@router.get("/user/listener-diagnostics")
+async def get_listener_diagnostics(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Get detailed diagnostic information about the user's Telegram listener.
+
+    Use this endpoint to debug signal reception issues. It shows:
+    - Connection status details
+    - Channel resolution status
+    - Event handler registration
+    - Activity timestamps
+    """
+    import os
+    from ..users.manager import user_manager
+
+    multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
+
+    if not multi_tenant:
+        return {"error": "Not in multi-tenant mode"}
+
+    conn = user_manager.get_connection(user.id)
+    if not conn:
+        return {
+            "error": "User not connected",
+            "hint": "Call /system/connect-me to establish connection",
+        }
+
+    if not conn.telegram_listener:
+        return {
+            "error": "No Telegram listener for user",
+            "telegram_connected_flag": conn.telegram_connected,
+            "hint": "User may be using shared listener or listener failed to start",
+        }
+
+    try:
+        diagnostics = await conn.telegram_listener.get_diagnostic_info()
+
+        # Add connection-level info
+        diagnostics["connection_manager"] = {
+            "is_active": conn.is_active,
+            "telegram_connected_flag": conn.telegram_connected,
+            "metaapi_connected_flag": conn.metaapi_connected,
+            "connected_at": conn.connected_at.isoformat() if conn.connected_at else None,
+            "last_activity": conn.last_activity.isoformat() if conn.last_activity else None,
+        }
+
+        # Add message handler info
+        diagnostics["message_handler"] = {
+            "handler_set": user_manager._message_handler is not None,
+            "handler_name": user_manager._message_handler.__name__ if user_manager._message_handler else None,
+        }
+
+        return diagnostics
+
+    except Exception as e:
+        return {
+            "error": f"Failed to get diagnostics: {str(e)}",
+            "telegram_connected_flag": conn.telegram_connected,
+        }
+
+
 # Lot size preset endpoints
 class LotPresetsResponse(BaseModel):
     """Lot size presets based on current account balance."""
