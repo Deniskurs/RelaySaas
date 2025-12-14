@@ -219,7 +219,12 @@ class TradeExecutor:
             error_str = str(e).lower()
             # Provide helpful error message for symbol not found
             if "symbol" in error_str and ("not found" in error_str or "price" in error_str):
-                # Check if market is likely closed (weekend)
+                # Check if this is a crypto symbol (trades 24/7, no weekend closure)
+                symbol_upper = signal.symbol.upper()
+                crypto_keywords = ["BTC", "ETH", "XRP", "LTC", "ADA", "DOT", "DOGE", "SOL", "MATIC", "AVAX", "LINK", "UNI", "SHIB", "CRYPTO"]
+                is_crypto = any(kw in symbol_upper for kw in crypto_keywords)
+                
+                # Check if market is likely closed (weekend) - only for forex/metals/indices
                 from datetime import datetime
                 now_utc = datetime.utcnow()
                 weekday = now_utc.weekday()  # 0=Monday, 5=Saturday, 6=Sunday
@@ -227,9 +232,9 @@ class TradeExecutor:
                 # Forex market is closed from Friday 22:00 UTC to Sunday 22:00 UTC
                 is_weekend = weekday == 5 or weekday == 6 or (weekday == 4 and now_utc.hour >= 22)
                 
-                if is_weekend:
+                if is_weekend and not is_crypto:
                     friendly_error = (
-                        f"Market is closed (weekend). Forex markets are closed from Friday 22:00 UTC "
+                        f"Market is closed (weekend). Forex/metals markets are closed from Friday 22:00 UTC "
                         f"until Sunday 22:00 UTC. Please try again when markets reopen."
                     )
                 else:
