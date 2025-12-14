@@ -456,7 +456,14 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="advanced" className="m-0">
-            <AdvancedTab settings={localSettings} />
+            <AdvancedTab
+              settings={localSettings}
+              onImportSettings={(imported) => {
+                setLocalSettings(prev => ({ ...prev, ...imported }));
+                setHasChanges(true);
+                setSaveSuccess(false);
+              }}
+            />
           </TabsContent>
         </div>
       </Tabs>
