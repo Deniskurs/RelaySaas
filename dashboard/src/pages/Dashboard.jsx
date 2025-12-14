@@ -3,6 +3,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMultiRefresh, useRefresh } from "@/hooks/useRefresh";
+import { useSignalSounds } from "@/hooks/useSound";
 import {
   transformPositions,
   transformSignals,
@@ -57,6 +58,22 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [telegramStatus, setTelegramStatus] = useState(null);
+
+  // Sound notifications (disabled by default, user can enable)
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem("signalSoundsEnabled") === "true";
+  });
+  const { handleSignalUpdate, play: playSound } = useSignalSounds(soundEnabled);
+
+  const handleSoundToggle = useCallback(() => {
+    const newValue = !soundEnabled;
+    setSoundEnabled(newValue);
+    localStorage.setItem("signalSoundsEnabled", newValue.toString());
+    // Play a test sound when enabling
+    if (newValue) {
+      playSound("received");
+    }
+  }, [soundEnabled, playSound]);
 
   // Track sidebar collapsed state for layout
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -151,6 +168,11 @@ export default function Dashboard() {
       case "signal.executed":
       case "signal.failed":
       case "signal.skipped":
+        // Trigger sound notification based on signal status
+        if (data) {
+          const statusFromType = type.replace("signal.", "");
+          handleSignalUpdate({ ...data, status: statusFromType });
+        }
         fetchData("/signals?limit=20").then(
           (d) => d && setSignals(transformSignals(d))
         );
@@ -165,7 +187,7 @@ export default function Dashboard() {
         fetchData("/stats").then((d) => d && setStats(transformStats(d)));
         break;
     }
-  }, [lastMessage, fetchData]);
+  }, [lastMessage, fetchData, handleSignalUpdate]);
 
   const handlePause = async () => {
     await postData("/control/pause");
@@ -325,6 +347,8 @@ export default function Dashboard() {
             onReconnect={handleTelegramReconnect}
             isReconnecting={isReconnecting}
             onNavigateSettings={() => setActiveTab("settings")}
+            soundEnabled={soundEnabled}
+            onSoundToggle={handleSoundToggle}
           />
         </div>
       </div>
@@ -398,6 +422,8 @@ export default function Dashboard() {
             onReconnect={handleTelegramReconnect}
             isReconnecting={isReconnecting}
             onNavigateSettings={() => setActiveTab("settings")}
+            soundEnabled={soundEnabled}
+            onSoundToggle={handleSoundToggle}
             fullPage
           />
         );
