@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Save,
@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useApi } from "@/hooks/useApi";
 import { useRefresh } from "@/hooks/useRefresh";
-import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useUnsavedChanges, useTabChangeWarning } from "@/hooks/useUnsavedChanges";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +53,10 @@ export default function SettingsPage() {
   const [localSettings, setLocalSettings] = useState(settings);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Unsaved changes dialog state
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [dialogContext, setDialogContext] = useState("route"); // "route", "tab", or "browser"
 
   // Tab state with URL sync
   const [activeTab, setActiveTab] = useState(() => {
@@ -268,8 +272,7 @@ export default function SettingsPage() {
   const anyChanges = hasChanges || hasTelegramChanges;
   const anySaving = isSaving || telegramSaving;
 
-  // Save and Reset handlers (defined first for use in hooks below)
-  const handleSaveAll = useCallback(async () => {
+  const handleSaveAll = async () => {
     let allSuccess = true;
 
     if (hasChanges) {
@@ -285,82 +288,97 @@ export default function SettingsPage() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     }
+
     return allSuccess;
-  }, [hasChanges, hasTelegramChanges]);
-
-  const handleResetAll = useCallback(() => {
-    handleReset();
-    handleResetTelegram();
-  }, []);
-
-  // Unsaved changes warning state
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-  const [pendingTab, setPendingTab] = useState(null);
-  const [dialogAction, setDialogAction] = useState(null); // 'tab' or 'route'
-
-  // Hook for route navigation blocking and browser close warning
-  const {
-    blocker,
-    proceedNavigation,
-    cancelNavigation,
-  } = useUnsavedChanges(anyChanges, handleSaveAll);
-
-  // Show dialog when route blocker activates
-  useEffect(() => {
-    if (blocker.state === "blocked") {
-      setDialogAction("route");
-      setShowUnsavedDialog(true);
-    }
-  }, [blocker.state]);
-
-  // Handle tab change with unsaved changes check
-  const handleTabChange = useCallback((newTab) => {
-    if (anyChanges && newTab !== activeTab) {
-      setPendingTab(newTab);
-      setDialogAction("tab");
-      setShowUnsavedDialog(true);
-    } else {
-      setActiveTab(newTab);
-    }
-  }, [anyChanges, activeTab]);
-
-  // Dialog action handlers
-  const handleDialogSave = async () => {
-    const success = await handleSaveAll();
-    if (!success) return; // Don't proceed if save failed
-
-    setShowUnsavedDialog(false);
-
-    if (dialogAction === "tab" && pendingTab) {
-      setActiveTab(pendingTab);
-      setPendingTab(null);
-    } else if (dialogAction === "route") {
-      proceedNavigation();
-    }
-    setDialogAction(null);
   };
 
+  const handleResetAll = () => {
+    handleReset();
+    handleResetTelegram();
+  };
+
+  // ==========================================
+  // UNSAVED CHANGES DIALOG HANDLERS
+  // ==========================================
+
+  // Handle save from dialog
+  const handleDialogSave = async () => {
+    const success = await handleSaveAll();
+    if (success) {
+      setShowUnsavedDialog(false);
+      // If this was triggered by route navigation, proceed
+      if (dialogContext === "route") {
+        unsavedChangesHook.proceedNavigation();
+      }
+      // If this was triggered by tab change, switch to pending tab
+      else if (dialogContext === "tab") {
+        const pendingTab = tabChangeHook.getPendingTab();
+        if (pendingTab) {
+          setActiveTab(pendingTab);
+          tabChangeHook.clearPendingTab();
+        }
+      }
+    }
+  };
+
+  // Handle discard from dialog
   const handleDialogDiscard = () => {
     handleResetAll();
     setShowUnsavedDialog(false);
 
-    if (dialogAction === "tab" && pendingTab) {
-      setActiveTab(pendingTab);
-      setPendingTab(null);
-    } else if (dialogAction === "route") {
-      proceedNavigation();
+    // If this was triggered by route navigation, proceed
+    if (dialogContext === "route") {
+      unsavedChangesHook.proceedNavigation();
     }
-    setDialogAction(null);
+    // If this was triggered by tab change, switch to pending tab
+    else if (dialogContext === "tab") {
+      const pendingTab = tabChangeHook.getPendingTab();
+      if (pendingTab) {
+        setActiveTab(pendingTab);
+        tabChangeHook.clearPendingTab();
+      }
+    }
   };
 
+  // Handle cancel from dialog
   const handleDialogCancel = () => {
     setShowUnsavedDialog(false);
-    setPendingTab(null);
 
-    if (dialogAction === "route") {
-      cancelNavigation();
+    // If this was triggered by route navigation, cancel it
+    if (dialogContext === "route") {
+      unsavedChangesHook.cancelNavigation();
     }
-    setDialogAction(null);
+    // If this was triggered by tab change, clear pending tab
+    else if (dialogContext === "tab") {
+      tabChangeHook.clearPendingTab();
+    }
+  };
+
+  // Hook for route navigation blocking
+  const unsavedChangesHook = useUnsavedChanges(anyChanges, handleSaveAll, {
+    enableBrowserPrompt: true,
+  });
+
+  // Hook for tab change warnings
+  const tabChangeHook = useTabChangeWarning(anyChanges, () => {
+    setDialogContext("tab");
+    setShowUnsavedDialog(true);
+  });
+
+  // Show dialog when route navigation is blocked
+  useEffect(() => {
+    if (unsavedChangesHook.blocker.state === "blocked") {
+      setDialogContext("route");
+      setShowUnsavedDialog(true);
+    }
+  }, [unsavedChangesHook.blocker.state]);
+
+  // Custom tab change handler
+  const handleTabChangeRequest = (newTab) => {
+    const shouldProceed = tabChangeHook.handleTabChange(newTab, activeTab);
+    if (shouldProceed) {
+      setActiveTab(newTab);
+    }
   };
 
   // Determine connection status for tab badges
@@ -375,174 +393,176 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between py-8 mb-2 shrink-0">
-        <div>
-          <h1 className="text-[28px] font-semibold text-foreground tracking-[-0.02em]">
-            Settings
-          </h1>
-          <p className="text-sm text-foreground-muted/80 italic mt-1">
-            Configure your trading parameters and integrations
-          </p>
-        </div>
-        <div className="flex items-center gap-2.5">
-          {(error || telegramError) && (
-            <span className="text-sm text-rose-400 flex items-center gap-1.5 bg-rose-500/10 px-3 py-1.5 rounded-none">
-              <AlertCircle size={14} />
-              <span className="italic">{error || telegramError}</span>
-            </span>
-          )}
-          {saveSuccess && (
-            <span className={cn(
-              "text-sm text-emerald-400 flex items-center gap-1.5",
-              "bg-emerald-500/10 px-3 py-2 rounded-sm",
-              "border-l-2 border-accent-gold",
-              "animate-in fade-in slide-in-from-right-2"
-            )}>
-              <Check size={14} />
-              <span className="italic">Saved</span>
-            </span>
-          )}
-          {anyChanges && (
+    <>
+      <div className="h-[calc(100vh-8rem)] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between py-8 mb-2 shrink-0">
+          <div>
+            <h1 className="text-[28px] font-semibold text-foreground tracking-[-0.02em]">
+              Settings
+            </h1>
+            <p className="text-sm text-foreground-muted/80 italic mt-1">
+              Configure your trading parameters and integrations
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5">
+            {(error || telegramError) && (
+              <span className="text-sm text-rose-400 flex items-center gap-1.5 bg-rose-500/10 px-3 py-1.5 rounded-none">
+                <AlertCircle size={14} />
+                <span className="italic">{error || telegramError}</span>
+              </span>
+            )}
+            {saveSuccess && (
+              <span className={cn(
+                "text-sm text-emerald-400 flex items-center gap-1.5",
+                "bg-emerald-500/10 px-3 py-2 rounded-sm",
+                "border-l-2 border-accent-gold",
+                "animate-in fade-in slide-in-from-right-2"
+              )}>
+                <Check size={14} />
+                <span className="italic">Saved</span>
+              </span>
+            )}
+            {anyChanges && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetAll}
+                className="text-foreground-muted hover:text-foreground hover:bg-white/[0.05] h-9 px-3"
+              >
+                <RotateCcw size={14} className="mr-1.5" />
+                Reset
+              </Button>
+            )}
             <Button
-              variant="ghost"
               size="sm"
-              onClick={handleResetAll}
-              className="text-foreground-muted hover:text-foreground hover:bg-white/[0.05] h-9 px-3"
+              onClick={handleSaveAll}
+              disabled={!anyChanges || anySaving}
+              className={cn(
+                "h-10 px-5 rounded-none font-medium",
+                "bg-foreground text-background",
+                "hover:shadow-[0_4px_12px_rgba(255,255,255,0.15)]",
+                "active:scale-[0.98]",
+                "disabled:opacity-40 disabled:bg-white/[0.08] disabled:text-foreground-muted disabled:shadow-none",
+                "transition-all duration-200"
+              )}
             >
-              <RotateCcw size={14} className="mr-1.5" />
-              Reset
+              {anySaving ? (
+                <Loader2 size={14} className="mr-1.5 animate-spin" />
+              ) : (
+                <Save size={14} className="mr-1.5" />
+              )}
+              Save Changes
             </Button>
-          )}
-          <Button
-            size="sm"
-            onClick={handleSaveAll}
-            disabled={!anyChanges || anySaving}
-            className={cn(
-              "h-10 px-5 rounded-none font-medium",
-              "bg-foreground text-background",
-              "hover:shadow-[0_4px_12px_rgba(255,255,255,0.15)]",
-              "active:scale-[0.98]",
-              "disabled:opacity-40 disabled:bg-white/[0.08] disabled:text-foreground-muted disabled:shadow-none",
-              "transition-all duration-200"
-            )}
-          >
-            {anySaving ? (
-              <Loader2 size={14} className="mr-1.5 animate-spin" />
-            ) : (
-              <Save size={14} className="mr-1.5" />
-            )}
-            Save Changes
-          </Button>
+          </div>
         </div>
+
+        {/* Tabs */}
+        <Tabs
+          value={activeTab}
+          onValueChange={handleTabChangeRequest}
+          className="flex-1 flex flex-col min-h-0"
+        >
+          {/* Tab List with horizontal scroll for mobile */}
+          <div className="shrink-0 -mx-4 px-4 overflow-x-auto scrollbar-hide">
+            <TabsList className={cn(
+              "inline-flex h-12 items-center gap-1 p-1",
+              "bg-white/[0.02] border border-white/[0.06] rounded-none",
+              "min-w-full sm:min-w-0"
+            )}>
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                const showBadge = tab.id === "connections" && connectionsNeedAttention;
+
+                return (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.id}
+                    className={cn(
+                      "relative flex items-center gap-2 px-4 py-2 rounded-none",
+                      "text-sm font-medium whitespace-nowrap",
+                      "text-foreground-muted/70",
+                      "hover:text-foreground hover:bg-white/[0.03]",
+                      "data-[state=active]:text-foreground data-[state=active]:bg-white/[0.06]",
+                      "data-[state=active]:shadow-[inset_0_-2px_0_rgba(255,255,255,0.3)]",
+                      "transition-all duration-200"
+                    )}
+                  >
+                    <Icon size={14} />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
+                    {showBadge && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center",
+                          "text-[9px] font-bold rounded-full",
+                          "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                        )}
+                      >
+                        !
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 overflow-y-auto mt-6 pb-8">
+            <TabsContent value="connections" className="m-0">
+              <ConnectionsTab
+                telegramCreds={telegramCreds}
+                onTelegramCredsChange={updateTelegramCred}
+                channels={localSettings.telegram_channel_ids || []}
+                onChannelsChange={(v) => updateLocal("telegram_channel_ids", v)}
+                mtCreds={mtCreds}
+                isLoading={telegramLoading}
+                configStatus={configStatus}
+                isRefreshing={isRefreshingAccount}
+                onRefresh={handleRefreshAccountData}
+              />
+            </TabsContent>
+
+            <TabsContent value="quick" className="m-0">
+              <QuickSettingsTab
+                settings={localSettings}
+                onSettingChange={updateLocal}
+              />
+            </TabsContent>
+
+            <TabsContent value="lot-sizing" className="m-0">
+              <LotSizingTab
+                settings={localSettings}
+                onSettingChange={updateLocal}
+                currencySymbol={currencyData.symbol}
+              />
+            </TabsContent>
+
+            <TabsContent value="execution" className="m-0">
+              <TradeExecutionTab
+                settings={localSettings}
+                onSettingChange={updateLocal}
+                currencySymbol={currencyData.symbol}
+              />
+            </TabsContent>
+
+            <TabsContent value="advanced" className="m-0">
+              <AdvancedTab
+                settings={localSettings}
+                onImportSettings={(imported) => {
+                  setLocalSettings(prev => ({ ...prev, ...imported }));
+                  setHasChanges(true);
+                  setSaveSuccess(false);
+                }}
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
       </div>
 
-      {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={handleTabChange}
-        className="flex-1 flex flex-col min-h-0"
-      >
-        {/* Tab List with horizontal scroll for mobile */}
-        <div className="shrink-0 -mx-4 px-4 overflow-x-auto scrollbar-hide">
-          <TabsList className={cn(
-            "inline-flex h-12 items-center gap-1 p-1",
-            "bg-white/[0.02] border border-white/[0.06] rounded-none",
-            "min-w-full sm:min-w-0"
-          )}>
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const showBadge = tab.id === "connections" && connectionsNeedAttention;
-
-              return (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.id}
-                  className={cn(
-                    "relative flex items-center gap-2 px-4 py-2 rounded-none",
-                    "text-sm font-medium whitespace-nowrap",
-                    "text-foreground-muted/70",
-                    "hover:text-foreground hover:bg-white/[0.03]",
-                    "data-[state=active]:text-foreground data-[state=active]:bg-white/[0.06]",
-                    "data-[state=active]:shadow-[inset_0_-2px_0_rgba(255,255,255,0.3)]",
-                    "transition-all duration-200"
-                  )}
-                >
-                  <Icon size={14} />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
-                  {showBadge && (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center",
-                        "text-[9px] font-bold rounded-full",
-                        "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                      )}
-                    >
-                      !
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </div>
-
-        {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto mt-6 pb-8">
-          <TabsContent value="connections" className="m-0">
-            <ConnectionsTab
-              telegramCreds={telegramCreds}
-              onTelegramCredsChange={updateTelegramCred}
-              channels={localSettings.telegram_channel_ids || []}
-              onChannelsChange={(v) => updateLocal("telegram_channel_ids", v)}
-              mtCreds={mtCreds}
-              isLoading={telegramLoading}
-              configStatus={configStatus}
-              isRefreshing={isRefreshingAccount}
-              onRefresh={handleRefreshAccountData}
-            />
-          </TabsContent>
-
-          <TabsContent value="quick" className="m-0">
-            <QuickSettingsTab
-              settings={localSettings}
-              onSettingChange={updateLocal}
-            />
-          </TabsContent>
-
-          <TabsContent value="lot-sizing" className="m-0">
-            <LotSizingTab
-              settings={localSettings}
-              onSettingChange={updateLocal}
-              currencySymbol={currencyData.symbol}
-            />
-          </TabsContent>
-
-          <TabsContent value="execution" className="m-0">
-            <TradeExecutionTab
-              settings={localSettings}
-              onSettingChange={updateLocal}
-              currencySymbol={currencyData.symbol}
-            />
-          </TabsContent>
-
-          <TabsContent value="advanced" className="m-0">
-            <AdvancedTab
-              settings={localSettings}
-              onImportSettings={(imported) => {
-                setLocalSettings(prev => ({ ...prev, ...imported }));
-                setHasChanges(true);
-                setSaveSuccess(false);
-              }}
-            />
-          </TabsContent>
-        </div>
-      </Tabs>
-
-      {/* Unsaved Changes Warning Dialog */}
+      {/* Unsaved Changes Dialog */}
       <UnsavedChangesDialog
         open={showUnsavedDialog}
         onSave={handleDialogSave}
@@ -550,6 +570,6 @@ export default function SettingsPage() {
         onCancel={handleDialogCancel}
         isSaving={anySaving}
       />
-    </div>
+    </>
   );
 }
