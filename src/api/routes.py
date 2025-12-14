@@ -757,10 +757,19 @@ async def connect_current_user(
     if not multi_tenant:
         return {"error": "Not in multi-tenant mode"}
 
+    # IMPORTANT: Ensure message handler is set (might not be if server restarted)
+    from ..signal_router import signal_router
+    if not user_manager._message_handler:
+        user_manager.set_message_handler(signal_router.route_message)
+        log.info("Message handler was not set - setting it now")
+
     # Disconnect first if already connected
     existing = user_manager.get_connection(user.id)
     if existing:
         await user_manager.disconnect_user(user.id)
+
+    # Small delay to ensure clean disconnect before reconnect
+    await asyncio.sleep(1)
 
     # Connect user with their OWN Telegram listener and MetaAPI
     # Each user uses their own Telegram credentials for their private channels

@@ -359,6 +359,9 @@ class TelegramListener:
 
         Periodically pings Telegram to verify the connection is actually working,
         not just appearing connected. Forces reconnection if connection is stale.
+
+        IMPORTANT: This checks CONNECTION health, not message reception.
+        A connection can be healthy but event handlers might not fire.
         """
         while self._is_connected:
             try:
@@ -367,13 +370,22 @@ class TelegramListener:
                 if not self._is_connected or not self.client:
                     break
 
-                # Check if connection has been idle too long
                 now = datetime.utcnow()
-                time_since_activity = (now - self._last_activity).total_seconds() if self._last_activity else STALE_CONNECTION_THRESHOLD + 1
 
-                # Always do a ping to verify connection is alive
+                # Track time since last MESSAGE (not health check)
+                time_since_message = (
+                    (now - self._last_activity).total_seconds()
+                    if self._last_activity else 999999
+                )
+
+                # Track time since last health check
+                time_since_health = (
+                    (now - self._last_health_check).total_seconds()
+                    if self._last_health_check else 999999
+                )
+
+                # Ping Telegram to verify connection
                 try:
-                    # Use get_me() as a lightweight ping - this actually talks to Telegram
                     await asyncio.wait_for(self.client.get_me(), timeout=10.0)
                     self._last_health_check = now
 
@@ -385,35 +397,29 @@ class TelegramListener:
                             await self._persist_session(user_tag)
                             log.info(f"{user_tag}Session updated and persisted")
 
-                    # Log health status periodically
-                    log.debug(
-                        f"{user_tag}Connection health check passed",
-                        idle_seconds=int(time_since_activity),
-                        channels=len(self._channels),
+                    # Log health status - distinguish between connection and message health
+                    log.info(
+                        f"{user_tag}💓 HEALTH: connection=OK, last_message={int(time_since_message)}s ago, channels={len(self._channels)}",
                     )
 
                 except asyncio.TimeoutError:
                     log.warning(f"{user_tag}Health check timed out - connection may be stale")
-                    # Force disconnect to trigger reconnection
                     if self.client:
                         await self.client.disconnect()
                     break
 
                 except Exception as e:
-                    log.warning(
-                        f"{user_tag}Health check failed",
-                        error=str(e),
-                    )
-                    # Force disconnect to trigger reconnection
+                    log.warning(f"{user_tag}Health check failed", error=str(e))
                     if self.client:
                         await self.client.disconnect()
                     break
 
-                # If we haven't received any messages in a while, log a warning
-                # (This doesn't force reconnect - channels might just be quiet)
-                if time_since_activity > STALE_CONNECTION_THRESHOLD:
+                # IMPORTANT: Don't use "no messages" as a reason to reconnect
+                # Channels might just be quiet. Only reconnect on actual connection failures.
+                # Log a notice if it's been a while since any message
+                if time_since_message > STALE_CONNECTION_THRESHOLD:
                     log.info(
-                        f"{user_tag}No messages received in {int(time_since_activity)}s - connection verified OK",
+                        f"{user_tag}⚠️ No messages in {int(time_since_message)}s (connection OK, channels may be quiet)",
                     )
 
             except asyncio.CancelledError:

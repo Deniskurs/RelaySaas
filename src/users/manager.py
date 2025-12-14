@@ -75,6 +75,9 @@ class UserConnectionManager:
         self._running = True
         log.info("User connection manager started")
 
+        # Start connection watchdog
+        asyncio.create_task(self._connection_watchdog())
+
     async def stop(self):
         """Stop all user connections."""
         self._running = False
@@ -227,21 +230,42 @@ class UserConnectionManager:
 
             log.info("Telegram listener created for user", user_id=user_id[:8])
 
-            # Start listening in background task
+            # Start listening in background task with auto-recovery
             # Messages will be routed through the global message handler
-            async def run_listener():
-                try:
-                    log.info(f"Starting Telegram listener for user {user_id[:8]}...")
-                    await listener.start(self._on_user_message)
-                except Exception as e:
-                    log.error(f"Telegram listener error for user {user_id[:8]}", error=str(e), exc_info=True)
-                    conn.telegram_connected = False
-                finally:
-                    # Update connection status based on listener state
-                    conn.telegram_connected = listener.is_connected() if listener else False
-                    log.info(f"Telegram listener ended for user {user_id[:8]}, connected={conn.telegram_connected}")
+            async def run_listener_with_recovery():
+                restart_count = 0
+                max_restarts = 5  # Max restarts before giving up completely
 
-            task = asyncio.create_task(run_listener())
+                while conn.is_active and restart_count < max_restarts:
+                    try:
+                        log.info(f"Starting Telegram listener for user {user_id[:8]} (attempt {restart_count + 1})...")
+                        await listener.start(self._on_user_message)
+                    except Exception as e:
+                        log.error(f"Telegram listener error for user {user_id[:8]}", error=str(e), exc_info=True)
+
+                    # If we get here, listener stopped for some reason
+                    conn.telegram_connected = False
+
+                    if not conn.is_active:
+                        log.info(f"User {user_id[:8]} disconnected, not restarting listener")
+                        break
+
+                    restart_count += 1
+                    if restart_count < max_restarts:
+                        wait_time = min(30 * restart_count, 120)  # Progressive backoff, max 2 min
+                        log.warning(f"Listener for {user_id[:8]} stopped, restarting in {wait_time}s...")
+                        await asyncio.sleep(wait_time)
+
+                        # Reset the listener's internal state for fresh start
+                        listener._reconnect_attempts = 0
+                        listener._should_stop = False
+                    else:
+                        log.error(f"Max restarts reached for user {user_id[:8]}, listener permanently stopped")
+
+                conn.telegram_connected = False
+                log.info(f"Telegram listener ended for user {user_id[:8]}")
+
+            task = asyncio.create_task(run_listener_with_recovery())
             conn._tasks.add(task)
 
             # Wait a moment for initial connection to establish
@@ -411,6 +435,78 @@ class UserConnectionManager:
             "connected_at": conn.connected_at.isoformat() if conn.connected_at else None,
             "last_activity": conn.last_activity.isoformat() if conn.last_activity else None,
         }
+
+    async def _connection_watchdog(self):
+        """Periodically monitor all connections and verify they're actually working.
+
+        This helps detect "zombie" connections that appear connected but aren't
+        actually receiving messages.
+        """
+        WATCHDOG_INTERVAL = 30  # Check every 30 seconds
+
+        while self._running:
+            try:
+                await asyncio.sleep(WATCHDOG_INTERVAL)
+
+                if not self._connections:
+                    continue
+
+                # Log status of all connections
+                healthy = 0
+                unhealthy = 0
+
+                for user_id, conn in list(self._connections.items()):
+                    if not conn.is_active:
+                        continue
+
+                    # Check Telegram listener health
+                    telegram_healthy = False
+                    if conn.telegram_listener:
+                        try:
+                            # Check if listener thinks it's connected
+                            listener_connected = conn.telegram_listener.is_connected()
+                            # Also check if client is actually connected
+                            client_connected = (
+                                conn.telegram_listener.client and
+                                conn.telegram_listener.client.is_connected()
+                            )
+                            telegram_healthy = listener_connected and client_connected
+
+                            # Update connection status if mismatched
+                            if conn.telegram_connected != telegram_healthy:
+                                log.warning(
+                                    f"🔄 Connection status mismatch for {user_id[:8]}",
+                                    stored=conn.telegram_connected,
+                                    actual=telegram_healthy,
+                                )
+                                conn.telegram_connected = telegram_healthy
+
+                        except Exception as e:
+                            log.error(f"Watchdog check failed for {user_id[:8]}", error=str(e))
+                            telegram_healthy = False
+
+                    if telegram_healthy:
+                        healthy += 1
+                    else:
+                        unhealthy += 1
+
+                # Log summary
+                if unhealthy > 0:
+                    log.warning(
+                        f"👀 WATCHDOG: {healthy} healthy, {unhealthy} unhealthy connections",
+                        total=len(self._connections),
+                    )
+                else:
+                    log.debug(
+                        f"👀 WATCHDOG: All {healthy} connections healthy",
+                    )
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.error("Watchdog error", error=str(e))
+
+        log.info("Connection watchdog stopped")
 
 
 # Global instance

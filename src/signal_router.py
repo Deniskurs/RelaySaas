@@ -195,7 +195,13 @@ class SignalRouter:
             return
 
         channel_name = message["channel_name"]
-        log.info(f"{user_tag}Processing message", channel=channel_name, preview=text[:50])
+        message_id = message.get("message_id")
+        log.info(
+            f"{user_tag}🔄 ROUTING MESSAGE",
+            channel=channel_name,
+            message_id=message_id,
+            preview=text[:50],
+        )
 
         # Create signal record in Supabase with user_id
         signal = await crud.create_signal(
@@ -205,7 +211,22 @@ class SignalRouter:
             message_id=message.get("message_id"),
             user_id=user_id,
         )
+
+        # Check if signal was created (None means duplicate for THIS user)
+        if not signal:
+            log.debug(
+                f"{user_tag}⏭️ Duplicate message skipped",
+                message_id=message_id,
+                channel=channel_name,
+            )
+            return
+
         signal_id = signal["id"]
+        log.info(
+            f"{user_tag}✅ SIGNAL CREATED",
+            signal_id=signal_id,
+            message_id=message_id,
+        )
 
         await event_bus.emit(
             Events.SIGNAL_RECEIVED,
