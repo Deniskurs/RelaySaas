@@ -5,13 +5,8 @@ import {
   Check,
   X,
   ChevronDown,
-  ChevronUp,
   Zap,
-  Shield,
   HelpCircle,
-  ExternalLink,
-  Star,
-  MessageSquare,
 } from "lucide-react";
 import { PricingCards, BillingToggle, PLANS } from "./PricingCards";
 
@@ -130,44 +125,33 @@ function ComparisonTable({ className }) {
   };
 
   return (
-    <div className={cn("w-full max-w-5xl mx-auto", className)}>
-      <div className="text-center mb-12">
-        <h3 className="text-3xl font-bold text-foreground mb-4">
-          Compare All Features
+    <div className={cn("w-full max-w-4xl mx-auto", className)}>
+      <div className="text-center mb-10">
+        <h3 className="text-2xl font-semibold text-foreground mb-2">
+          Compare Features
         </h3>
-        <p className="text-foreground-muted">
-          Detailed breakdown of what's included in each plan
+        <p className="text-sm text-foreground-muted/70">
+          What's included in each plan
         </p>
       </div>
 
-      {/* Mobile scroll wrapper - styled scrollbar */}
+      {/* Mobile scroll wrapper */}
       <div className="overflow-x-auto lg:overflow-visible pb-4 -mx-4 px-4 lg:mx-0 lg:px-0">
-        <div className="min-w-[700px] lg:min-w-0 bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden backdrop-blur-sm">
-          {/* Table header - sticky */}
-          <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/[0.06] py-6 px-6">
+        <div className="min-w-[600px] lg:min-w-0 bg-white/[0.015] border border-white/[0.06] overflow-hidden">
+          {/* Table header */}
+          <div className="bg-white/[0.02] border-b border-white/[0.06] py-4 px-5">
             <div className="grid grid-cols-4 gap-4 items-center">
-              <div className="text-base font-semibold text-foreground">
+              <div className="text-xs font-medium uppercase tracking-wider text-foreground-muted/60">
                 Feature
               </div>
               <div className="text-center">
-                <div className="text-base font-bold text-foreground mb-1">
-                  Free
-                </div>
-                <div className="text-xs text-foreground-muted">Entry Level</div>
-              </div>
-              <div className="text-center relative">
-                <div className="text-lg font-bold text-[hsl(var(--accent-teal))] mb-1">
-                  Pro
-                </div>
-                <div className="text-xs text-foreground-muted">
-                  Most Popular
-                </div>
+                <div className="text-sm font-medium text-foreground-muted">Free</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-bold text-[hsl(var(--accent-gold))] mb-1">
-                  Premium
-                </div>
-                <div className="text-xs text-foreground-muted">Power Users</div>
+                <div className="text-sm font-medium text-[hsl(var(--accent-teal))]">Pro</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-medium text-[hsl(var(--accent-gold))]">Premium</div>
               </div>
             </div>
           </div>
@@ -175,20 +159,22 @@ function ComparisonTable({ className }) {
           {/* Feature sections */}
           <div className="divide-y divide-white/[0.04]">
             {Object.entries(COMPARISON_FEATURES).map(([section, features]) => (
-              <div key={section} className="bg-transparent">
+              <div key={section}>
                 {/* Section header */}
                 <button
                   onClick={() => toggleSection(section)}
-                  className="w-full flex items-center justify-between py-4 px-6 bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+                  className="w-full flex items-center justify-between py-3 px-5 bg-white/[0.01] hover:bg-white/[0.03] transition-colors"
                 >
-                  <span className="text-sm font-bold uppercase tracking-wider text-foreground-muted">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground-muted/50">
                     {section}
                   </span>
-                  {expandedSections.includes(section) ? (
-                    <ChevronUp size={16} className="text-foreground-muted" />
-                  ) : (
-                    <ChevronDown size={16} className="text-foreground-muted" />
-                  )}
+                  <ChevronDown
+                    size={14}
+                    className={cn(
+                      "text-foreground-muted/40 transition-transform duration-200",
+                      expandedSections.includes(section) && "rotate-180"
+                    )}
+                  />
                 </button>
 
                 {/* Features */}
@@ -198,18 +184,18 @@ function ComparisonTable({ className }) {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
+                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                       className="overflow-hidden"
                     >
                       {features.map((feature, i) => (
                         <div
                           key={i}
-                          className="grid grid-cols-4 gap-4 py-4 px-6 border-t border-white/[0.02] hover:bg-white/[0.01] transition-colors"
+                          className="grid grid-cols-4 gap-4 py-3 px-5 border-t border-white/[0.03] hover:bg-white/[0.015] transition-colors"
                         >
-                          <div className="text-sm font-medium text-foreground-muted/90 flex items-center">
+                          <div className="text-sm text-foreground-muted/80 flex items-center gap-2">
                             {feature.name}
                             {feature.name.includes("Analytics") && (
-                              <span className="ml-2 text-[10px] bg-[hsl(var(--accent-teal))]/10 text-[hsl(var(--accent-teal))] px-1.5 py-0.5 rounded">
+                              <span className="text-[9px] font-semibold bg-[hsl(var(--accent-teal))]/15 text-[hsl(var(--accent-teal))] px-1.5 py-0.5">
                                 NEW
                               </span>
                             )}
@@ -217,9 +203,7 @@ function ComparisonTable({ className }) {
                           <div className="flex justify-center items-center">
                             <FeatureValue value={feature.free} />
                           </div>
-                          <div className="flex justify-center items-center relative">
-                            {/* Subtle column highlight for Pro */}
-                            <div className="absolute inset-y-[-16px] inset-x-[-16px] bg-[hsl(var(--accent-teal))]/[0.02] pointer-events-none" />
+                          <div className="flex justify-center items-center">
                             <FeatureValue value={feature.pro} />
                           </div>
                           <div className="flex justify-center items-center">
@@ -244,61 +228,50 @@ function FAQSection({ className }) {
   const [openIndex, setOpenIndex] = useState(null);
 
   return (
-    <div className={cn("w-full max-w-3xl mx-auto", className)}>
-      <div className="text-center mb-12">
-        <h3 className="text-3xl font-bold text-foreground mb-4">
-          Frequently Asked Questions
+    <div className={cn("w-full max-w-2xl mx-auto", className)}>
+      <div className="text-center mb-10">
+        <h3 className="text-2xl font-semibold text-foreground mb-2">
+          Questions & Answers
         </h3>
-        <p className="text-foreground-muted">
-          Everything you need to know about our pricing and plans
+        <p className="text-sm text-foreground-muted/70">
+          Common questions about pricing
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-2">
         {FAQ_ITEMS.map((item, i) => (
           <motion.div
             key={i}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: i * 0.1 }}
+            transition={{ delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-              "rounded-xl overflow-hidden transition-all duration-200 border",
+              "overflow-hidden transition-all duration-200 border",
               openIndex === i
-                ? "bg-white/[0.04] border-white/[0.1] shadow-lg"
-                : "bg-transparent border-white/[0.04] hover:bg-white/[0.02] hover:border-white/[0.08]"
+                ? "bg-white/[0.03] border-white/[0.08]"
+                : "bg-transparent border-white/[0.04] hover:border-white/[0.06]"
             )}
           >
             <button
               onClick={() => setOpenIndex(openIndex === i ? null : i)}
-              className="w-full flex items-center justify-between p-6 text-left"
+              className="w-full flex items-center justify-between py-4 px-5 text-left"
             >
               <span
                 className={cn(
-                  "text-base font-medium transition-colors",
-                  openIndex === i
-                    ? "text-[hsl(var(--accent-teal))]"
-                    : "text-foreground"
+                  "text-sm font-medium transition-colors pr-4",
+                  openIndex === i ? "text-foreground" : "text-foreground-muted"
                 )}
               >
                 {item.question}
               </span>
-              <div
+              <ChevronDown
+                size={14}
                 className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
-                  openIndex === i
-                    ? "bg-[hsl(var(--accent-teal))]/20 text-[hsl(var(--accent-teal))]"
-                    : "bg-white/[0.06] text-foreground-muted"
+                  "shrink-0 text-foreground-muted/40 transition-transform duration-200",
+                  openIndex === i && "rotate-180 text-foreground-muted"
                 )}
-              >
-                <ChevronDown
-                  size={14}
-                  className={cn(
-                    "transition-transform duration-300",
-                    openIndex === i && "rotate-180"
-                  )}
-                />
-              </div>
+              />
             </button>
 
             <AnimatePresence>
@@ -307,11 +280,11 @@ function FAQSection({ className }) {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: "circOut" }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                   className="overflow-hidden"
                 >
-                  <div className="px-6 pb-6 pt-0">
-                    <p className="text-base text-foreground-muted leading-relaxed border-t border-white/[0.06] pt-4">
+                  <div className="px-5 pb-4 pt-0">
+                    <p className="text-sm text-foreground-muted/70 leading-relaxed border-t border-white/[0.04] pt-3">
                       {item.answer}
                     </p>
                   </div>
@@ -325,57 +298,39 @@ function FAQSection({ className }) {
   );
 }
 
-// Testimonial component (placeholder - replace with real testimonials)
+// Testimonial component
 function Testimonials({ className }) {
   const testimonials = [
     {
-      quote:
-        "Upgraded after missing a 200-pip EUR/USD move. Never again. Pro is worth 10x the price.",
+      quote: "Upgraded after missing a 200-pip EUR/USD move. Pro is worth 10x the price.",
       author: "Marcus C.",
-      role: "Pro Trader, London",
-      rating: 5,
+      role: "London",
     },
     {
-      quote:
-        "The analytics alone save me hours of manual tracking. Premium pays for itself every week.",
+      quote: "The analytics save me hours of manual tracking. Premium pays for itself.",
       author: "Sarah M.",
-      role: "Fund Analyst, NYC",
-      rating: 5,
+      role: "NYC",
     },
   ];
 
   return (
-    <div className={cn("w-full", className)}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className={cn("w-full max-w-3xl mx-auto", className)}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {testimonials.map((t, i) => (
           <div
             key={i}
-            className="rounded-none border border-white/[0.06] bg-white/[0.02] p-6"
+            className="border border-white/[0.04] bg-white/[0.015] p-5"
           >
-            {/* Rating */}
-            <div className="flex gap-1 mb-3">
-              {Array.from({ length: t.rating }).map((_, j) => (
-                <Star
-                  key={j}
-                  size={14}
-                  className="text-[hsl(var(--accent-gold))] fill-[hsl(var(--accent-gold))]"
-                />
-              ))}
-            </div>
-
-            {/* Quote */}
-            <p className="text-sm text-foreground italic mb-4">"{t.quote}"</p>
-
-            {/* Author */}
+            <p className="text-sm text-foreground-muted/80 leading-relaxed mb-4">
+              "{t.quote}"
+            </p>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center">
-                <MessageSquare size={14} className="text-foreground-muted" />
+              <div className="w-7 h-7 bg-white/[0.04] flex items-center justify-center text-[10px] font-semibold text-foreground-muted/60">
+                {t.author.charAt(0)}
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground">
-                  {t.author}
-                </p>
-                <p className="text-xs text-foreground-muted">{t.role}</p>
+                <p className="text-xs font-medium text-foreground/80">{t.author}</p>
+                <p className="text-[10px] text-foreground-muted/50">{t.role}</p>
               </div>
             </div>
           </div>
@@ -395,33 +350,26 @@ export function PricingPage({
     <div className={cn("w-full", className)}>
       {/* Hero section (for standalone mode) */}
       {standalone && (
-        <div className="relative text-center mb-20 pt-10">
-          {/* Ambient background glow */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[hsl(var(--accent-teal))]/10 blur-[120px] rounded-full pointer-events-none" />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-[hsl(var(--accent-teal))]/5 to-transparent blur-[80px] pointer-events-none" />
+        <div className="relative text-center mb-16 pt-8">
+          {/* Subtle ambient glow */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[hsl(var(--accent-teal))]/[0.06] blur-[100px] rounded-full pointer-events-none" />
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="relative z-10"
           >
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
-              From Manual Trader
-              <br />
-              to{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[hsl(var(--accent-teal))] to-[hsl(var(--accent-teal))]/60">
-                Automated Pro
+            {/* Elegant serif headline */}
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif font-light text-foreground mb-4 tracking-tight leading-[1.1]">
+              Choose a{" "}
+              <span className="relative inline-block">
+                <span className="relative z-10 text-[hsl(var(--accent-teal))]">plan</span>
+                <span className="absolute inset-x-0 bottom-1 h-2 bg-[hsl(var(--accent-teal))]/10 -z-0" />
               </span>
             </h1>
-            <p className="text-xl text-foreground-muted max-w-2xl mx-auto leading-relaxed">
-              Choose the plan that matches your trading goals.
-              <br className="hidden md:block" />
-              All plans include a{" "}
-              <span className="text-foreground font-medium">
-                14-day money-back guarantee
-              </span>
-              .
+            <p className="text-base text-foreground-muted/70 max-w-md mx-auto">
+              Signal automation that scales with your trading
             </p>
           </motion.div>
         </div>
@@ -437,47 +385,43 @@ export function PricingPage({
 
       {/* Testimonials (for standalone mode) */}
       {standalone && (
-        <div className="border-t border-white/[0.06] pt-12 mb-16">
-          <h3 className="text-lg font-semibold text-foreground text-center mb-6">
-            Trusted by 10,000+ Traders
-          </h3>
+        <div className="border-t border-white/[0.04] pt-10 mb-12">
+          <p className="text-xs font-medium uppercase tracking-wider text-foreground-muted/40 text-center mb-6">
+            What traders say
+          </p>
           <Testimonials />
         </div>
       )}
 
       {/* FAQ */}
-      <div className="border-t border-white/[0.06] pt-12 mb-8">
+      <div className="border-t border-white/[0.04] pt-10 mb-10">
         <FAQSection />
       </div>
 
       {/* Final CTA (for standalone mode) */}
       {standalone && (
-        <div className="text-center py-12 border-t border-white/[0.06]">
-          <h3 className="text-xl font-semibold text-foreground mb-2">
+        <div className="text-center py-10 border-t border-white/[0.04]">
+          <p className="text-sm text-foreground-muted/70 mb-4">
             Ready to automate your trading?
-          </h3>
-          <p className="text-foreground-muted mb-6">
-            Start with our Free plan - no credit card required.
           </p>
           <button
             onClick={() => onSelectPlan?.("free")}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-none bg-[hsl(var(--accent-teal))] text-background font-medium hover:bg-[hsl(var(--accent-teal))]/90 transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/[0.06] border border-white/[0.08] text-sm font-medium text-foreground hover:bg-white/[0.1] hover:border-white/[0.12] transition-all"
           >
-            <Zap size={18} />
             Get Started Free
+            <Zap size={14} className="text-[hsl(var(--accent-teal))]" />
           </button>
         </div>
       )}
 
       {/* Help link */}
-      <div className="text-center text-sm text-foreground-muted">
+      <div className="text-center py-4">
         <a
           href="#"
-          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-foreground-muted/50 hover:text-foreground-muted transition-colors"
         >
-          <HelpCircle size={14} />
-          Need help choosing? Contact our team
-          <ExternalLink size={12} />
+          <HelpCircle size={12} />
+          Need help? Contact our team
         </a>
       </div>
     </div>

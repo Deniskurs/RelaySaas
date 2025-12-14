@@ -90,26 +90,35 @@ export const PLANS = {
 // Billing toggle component
 export function BillingToggle({ isAnnual, onChange, className }) {
   return (
-    <div className={cn("flex flex-col items-center gap-4", className)}>
+    <div className={cn("flex flex-col items-center gap-3", className)}>
       <div
-        className="relative inline-flex items-center p-1 rounded-full bg-black/40 border border-white/[0.08] backdrop-blur-xl cursor-pointer select-none"
+        className={cn(
+          "relative inline-flex items-center p-1 cursor-pointer select-none",
+          "bg-white/[0.03] border border-white/[0.08]",
+          "transition-all duration-300",
+          isAnnual && "border-[hsl(var(--accent-teal))]/20 shadow-[0_0_20px_-5px_hsl(var(--accent-teal))/15]"
+        )}
         onClick={() => onChange(!isAnnual)}
       >
         {/* Sliding background */}
         <motion.div
-          className="absolute inset-y-1 w-1/2 rounded-full bg-[hsl(var(--accent-teal))]/10 border border-[hsl(var(--accent-teal))]/20 shadow-[0_0_15px_-3px_hsl(var(--accent-teal))/20]"
+          className={cn(
+            "absolute inset-y-1 w-1/2",
+            "bg-white/[0.08] border border-white/[0.1]",
+            isAnnual && "bg-[hsl(var(--accent-teal))]/10 border-[hsl(var(--accent-teal))]/20"
+          )}
           animate={{ x: isAnnual ? "100%" : "0%" }}
           initial={false}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          transition={{ type: "spring", stiffness: 500, damping: 35 }}
         />
 
         {/* Monthly Option */}
         <div
           className={cn(
-            "relative z-10 px-6 py-2 rounded-full transition-colors duration-200 text-sm font-medium",
+            "relative z-10 px-6 py-2.5 transition-colors duration-200 text-sm font-medium",
             !isAnnual
               ? "text-foreground"
-              : "text-foreground-muted hover:text-foreground-muted/80"
+              : "text-foreground-muted/60"
           )}
         >
           Monthly
@@ -118,29 +127,28 @@ export function BillingToggle({ isAnnual, onChange, className }) {
         {/* Annual Option */}
         <div
           className={cn(
-            "relative z-10 px-6 py-2 rounded-full transition-colors duration-200 text-sm font-medium flex items-center gap-2",
+            "relative z-10 px-6 py-2.5 transition-colors duration-200 text-sm font-medium flex items-center gap-2.5",
             isAnnual
               ? "text-foreground"
-              : "text-foreground-muted hover:text-foreground-muted/80"
+              : "text-foreground-muted/60"
           )}
         >
           Annual
-          {/* Badge */}
-          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[hsl(var(--accent-teal))] text-black tracking-wide">
+          <span className={cn(
+            "text-[10px] uppercase font-bold px-2 py-0.5 tracking-wider transition-all duration-300",
+            isAnnual
+              ? "bg-[hsl(var(--accent-teal))] text-black"
+              : "bg-white/[0.1] text-foreground-muted"
+          )}>
             -33%
           </span>
         </div>
       </div>
 
       {/* Helper text */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-xs text-foreground-muted font-medium"
-      >
-        Save up to <span className="text-[hsl(var(--accent-teal))]">33%</span>{" "}
-        with annual billing
-      </motion.p>
+      <p className="text-xs text-foreground-muted/70">
+        Save up to <span className="text-[hsl(var(--accent-teal))] font-medium">33%</span> with annual billing
+      </p>
     </div>
   );
 }
@@ -157,57 +165,55 @@ function PricingCard({ plan, isAnnual, isCurrent, onSelect, className }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5 }}
-      transition={{ duration: 0.4 }}
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className={cn(
-        "relative flex flex-col p-8 transition-all duration-300 rounded-2xl overflow-hidden h-full",
-        // Base Glass styling
-        "bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]",
+        "relative flex flex-col p-6 lg:p-8 transition-all duration-300 overflow-hidden h-full group",
+        // Base styling - square corners for brand consistency
+        "bg-white/[0.02] border border-white/[0.06]",
 
         // Hover effects
-        "hover:bg-white/[0.05] hover:border-white/[0.1]",
-        "hover:shadow-[0_0_40px_-10px_rgba(255,255,255,0.05)]",
+        "hover:bg-white/[0.04] hover:border-white/[0.1]",
 
-        // Pro card - subtle teal glow
+        // Pro card - teal accent
         isPro && [
-          "border-[hsl(var(--accent-teal))]/30",
-          "bg-gradient-to-b from-[hsl(var(--accent-teal))]/10 to-transparent",
-          "shadow-[0_0_40px_-15px_hsl(var(--accent-teal))/20]",
-          "hover:shadow-[0_0_60px_-15px_hsl(var(--accent-teal))/30]",
+          "border-[hsl(var(--accent-teal))]/25",
+          "bg-gradient-to-b from-[hsl(var(--accent-teal))]/[0.06] to-transparent",
+          "shadow-[0_0_60px_-20px_hsl(var(--accent-teal))/15]",
+          "hover:shadow-[0_0_80px_-20px_hsl(var(--accent-teal))/25]",
+          "hover:border-[hsl(var(--accent-teal))]/40",
         ],
         // Premium card - gold accent
         isPremium && [
-          "border-[hsl(var(--accent-gold))]/30",
-          "bg-gradient-to-b from-[hsl(var(--accent-gold))]/10 to-transparent",
-          "shadow-[0_0_40px_-15px_hsl(var(--accent-gold))/20]",
-          "hover:shadow-[0_0_60px_-15px_hsl(var(--accent-gold))/30]",
+          "border-[hsl(var(--accent-gold))]/25",
+          "bg-gradient-to-b from-[hsl(var(--accent-gold))]/[0.06] to-transparent",
+          "shadow-[0_0_60px_-20px_hsl(var(--accent-gold))/15]",
+          "hover:shadow-[0_0_80px_-20px_hsl(var(--accent-gold))/25]",
+          "hover:border-[hsl(var(--accent-gold))]/40",
         ],
         // Current plan indicator
-        isCurrent && "ring-1 ring-[hsl(var(--accent-teal))]",
+        isCurrent && "ring-1 ring-[hsl(var(--accent-teal))]/50",
         className
       )}
     >
-      {/* Background ambient glow/noise for premium feel */}
-      <div className="absolute inset-0 bg-noise opacity-[0.03] pointer-events-none" />
-
-      {/* Highlight glow at top */}
+      {/* Subtle top highlight line */}
       <div
         className={cn(
-          "absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-50",
-          isPro && "via-[hsl(var(--accent-teal))]/50",
-          isPremium && "via-[hsl(var(--accent-gold))]/50"
+          "absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent",
+          isPro && "via-[hsl(var(--accent-teal))]/40",
+          isPremium && "via-[hsl(var(--accent-gold))]/40"
         )}
       />
 
-      {/* Badge */}
+      {/* Badge - positioned at top right corner */}
       {plan.badge && !isCurrent && (
-        <div className="absolute top-0 right-0">
+        <div className="absolute -top-px -right-px">
           <div
             className={cn(
-              "px-4 py-1 rounded-bl-xl text-xs font-bold tracking-wide uppercase",
+              "px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase",
               isPro
-                ? "bg-[hsl(var(--accent-teal))] text-background"
-                : "bg-[hsl(var(--accent-gold))] text-background"
+                ? "bg-[hsl(var(--accent-teal))] text-black"
+                : "bg-[hsl(var(--accent-gold))] text-black"
             )}
           >
             {plan.badge}
@@ -218,92 +224,105 @@ function PricingCard({ plan, isAnnual, isCurrent, onSelect, className }) {
       {/* Current plan badge */}
       {isCurrent && (
         <div className="absolute top-4 right-4">
-          <span className="px-3 py-1 rounded-full text-[10px] font-semibold bg-white/[0.1] text-foreground border border-white/[0.1]">
-            Current Plan
+          <span className="px-2.5 py-1 text-[10px] font-semibold bg-white/[0.08] text-foreground-muted border border-white/[0.08]">
+            Current
           </span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-6 mb-8 relative z-10">
+      <div className="flex flex-col gap-4 mb-6 relative z-10">
+        {/* Icon */}
         <div
           className={cn(
-            "w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 duration-300",
-            isPro &&
-              "bg-[hsl(var(--accent-teal))]/10 text-[hsl(var(--accent-teal))]",
-            isPremium &&
-              "bg-[hsl(var(--accent-gold))]/10 text-[hsl(var(--accent-gold))]",
-            isFree && "bg-white/[0.06] text-foreground-muted"
+            "w-10 h-10 flex items-center justify-center transition-all duration-300",
+            isPro && "bg-[hsl(var(--accent-teal))]/10 text-[hsl(var(--accent-teal))]",
+            isPremium && "bg-[hsl(var(--accent-gold))]/10 text-[hsl(var(--accent-gold))]",
+            isFree && "bg-white/[0.05] text-foreground-muted"
           )}
         >
-          <Icon size={24} strokeWidth={1.5} />
+          <Icon size={20} strokeWidth={1.5} />
         </div>
 
+        {/* Plan name & tagline */}
         <div>
-          <h3 className="text-xl font-bold text-foreground mb-1 tracking-tight">
+          <h3 className={cn(
+            "text-lg font-semibold tracking-tight mb-0.5",
+            isPro && "text-[hsl(var(--accent-teal))]",
+            isPremium && "text-[hsl(var(--accent-gold))]",
+            isFree && "text-foreground"
+          )}>
             {plan.name}
           </h3>
-          <p className="text-sm text-foreground-muted/80 font-medium">
+          <p className="text-sm text-foreground-muted/70">
             {plan.tagline}
           </p>
         </div>
 
-        {/* Price */}
-        <div className="flex items-baseline gap-1">
-          <span className="text-5xl font-bold tracking-tighter text-foreground">
-            {plan.currency || "£"}
-            {price}
-          </span>
-          <span className="text-base text-foreground-muted/60 font-medium">
-            /mo
-          </span>
-        </div>
-
-        {isAnnual && price > 0 && plan.annualTotal && (
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 w-fit">
-            <span className="text-xs font-semibold text-green-400">
-              Billed {plan.currency || "£"}
-              {plan.annualTotal} yearly
+        {/* Price - dramatic monospace typography */}
+        <div className="pt-2">
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-medium text-foreground-muted/60 -mr-0.5">
+              {plan.currency || "£"}
+            </span>
+            <span className="text-5xl font-mono font-bold tracking-tight text-foreground">
+              {price}
+            </span>
+            <span className="text-sm text-foreground-muted/50 font-medium ml-1">
+              /mo
             </span>
           </div>
-        )}
-        {!isAnnual && plan.monthlyPrice > 0 && (
-          <p className="text-xs text-[hsl(var(--accent-teal))] font-medium">
-            Save {plan.currency || "£"}
-            {((plan.monthlyPrice - plan.annualPrice) * 12).toFixed(0)}/year with
-            annual
-          </p>
-        )}
+
+          {/* Annual billing info */}
+          {isAnnual && price > 0 && plan.annualTotal && (
+            <p className="text-xs text-foreground-muted/60 mt-2 font-medium">
+              Billed {plan.currency || "£"}{plan.annualTotal}/year
+            </p>
+          )}
+          {!isAnnual && plan.monthlyPrice > 0 && (
+            <p className="text-xs text-[hsl(var(--accent-teal))]/80 mt-2 font-medium">
+              Save {plan.currency || "£"}{((plan.monthlyPrice - plan.annualPrice) * 12).toFixed(0)}/yr with annual
+            </p>
+          )}
+          {isFree && (
+            <p className="text-xs text-foreground-muted/50 mt-2">
+              No credit card required
+            </p>
+          )}
+        </div>
       </div>
 
+      {/* Divider */}
+      <div className={cn(
+        "h-px w-full mb-6",
+        isPro ? "bg-[hsl(var(--accent-teal))]/15" :
+        isPremium ? "bg-[hsl(var(--accent-gold))]/15" :
+        "bg-white/[0.06]"
+      )} />
+
       {/* Features */}
-      <div className="flex-grow mb-8 relative z-10">
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-white/[0.08] to-transparent mb-6" />
-        <ul className="space-y-4">
+      <div className="flex-grow mb-6 relative z-10">
+        <ul className="space-y-3">
           {plan.features.map((feature, i) => (
-            <li key={i} className="flex items-start gap-3 group/item">
+            <li key={i} className="flex items-start gap-2.5 group/item">
               <div
                 className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center mt-0.5 shrink-0 transition-colors",
-                  feature.highlight || isPro || isPremium
-                    ? "bg-[hsl(var(--accent-teal))]/20 text-[hsl(var(--accent-teal))]"
-                    : "bg-white/[0.06] text-foreground-muted group-hover/item:text-foreground",
-                  isPremium &&
-                    "bg-[hsl(var(--accent-gold))]/20 text-[hsl(var(--accent-gold))]"
+                  "w-4 h-4 flex items-center justify-center mt-0.5 shrink-0",
+                  isPro && "text-[hsl(var(--accent-teal))]",
+                  isPremium && "text-[hsl(var(--accent-gold))]",
+                  isFree && (feature.highlight ? "text-foreground" : "text-foreground-muted/50")
                 )}
               >
                 {feature.text.toLowerCase().includes("unlimited") ? (
-                  <Infinity size={10} strokeWidth={2.5} />
+                  <Infinity size={12} strokeWidth={2} />
                 ) : (
-                  <Check size={10} strokeWidth={3} />
+                  <Check size={12} strokeWidth={2.5} />
                 )}
               </div>
               <span
                 className={cn(
-                  "text-sm font-medium transition-colors",
-                  feature.highlight
-                    ? "text-foreground"
-                    : "text-foreground-muted group-hover/item:text-foreground"
+                  "text-sm leading-tight",
+                  feature.highlight ? "text-foreground" : "text-foreground-muted/80"
                 )}
               >
                 {feature.text}
@@ -319,33 +338,32 @@ function PricingCard({ plan, isAnnual, isCurrent, onSelect, className }) {
           onClick={() => !isCurrent && onSelect?.(plan.id)}
           disabled={isCurrent}
           className={cn(
-            "w-full h-12 rounded-xl text-sm font-semibold tracking-wide transition-all duration-300",
-            isCurrent && "opacity-50 cursor-not-allowed",
+            "w-full h-11 text-sm font-semibold tracking-wide transition-all duration-200",
+            isCurrent && "opacity-40 cursor-not-allowed",
 
-            // Pro Button
-            isPro &&
-              !isCurrent && [
-                "bg-[hsl(var(--accent-teal))] hover:bg-[hsl(var(--accent-teal))]/90 text-white",
-                "shadow-[0_0_20px_-5px_hsl(var(--accent-teal))/40]",
-                "hover:shadow-[0_0_30px_-5px_hsl(var(--accent-teal))/60] hover:scale-[1.02]",
-              ],
+            // Pro Button - solid teal
+            isPro && !isCurrent && [
+              "bg-[hsl(var(--accent-teal))] hover:bg-[hsl(var(--accent-teal))]/90 text-black",
+              "shadow-[0_4px_20px_-4px_hsl(var(--accent-teal))/30]",
+              "hover:shadow-[0_4px_25px_-4px_hsl(var(--accent-teal))/50]",
+            ],
 
-            // Premium Button
-            isPremium &&
-              !isCurrent && [
-                "bg-[hsl(var(--accent-gold))] hover:bg-[hsl(var(--accent-gold))]/90 text-black",
-                "shadow-[0_0_20px_-5px_hsl(var(--accent-gold))/40]",
-                "hover:shadow-[0_0_30px_-5px_hsl(var(--accent-gold))/60] hover:scale-[1.02]",
-              ],
+            // Premium Button - solid gold
+            isPremium && !isCurrent && [
+              "bg-[hsl(var(--accent-gold))] hover:bg-[hsl(var(--accent-gold))]/90 text-black",
+              "shadow-[0_4px_20px_-4px_hsl(var(--accent-gold))/30]",
+              "hover:shadow-[0_4px_25px_-4px_hsl(var(--accent-gold))/50]",
+            ],
 
-            // Free Button
-            isFree &&
-              !isCurrent &&
-              "bg-white/[0.08] text-foreground hover:bg-white/[0.15] border border-white/[0.05]"
+            // Free Button - ghost style
+            isFree && !isCurrent && [
+              "bg-transparent text-foreground border border-white/[0.1]",
+              "hover:bg-white/[0.05] hover:border-white/[0.15]",
+            ]
           )}
         >
           {isCurrent ? "Current Plan" : plan.cta}
-          {!isCurrent && <ChevronRight size={16} className="ml-1 opacity-70" />}
+          {!isCurrent && <ChevronRight size={14} className="ml-1.5 opacity-60" />}
         </Button>
       </div>
     </motion.div>
@@ -408,17 +426,17 @@ export function PricingCards({
       </div>
 
       {/* Trust signals */}
-      <div className="mt-8 flex items-center justify-center gap-6 text-xs text-foreground-muted">
-        <div className="flex items-center gap-1.5">
-          <Zap size={12} className="text-[hsl(var(--accent-teal))]" />
-          <span>14-day money-back guarantee</span>
+      <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-foreground-muted/60">
+        <div className="flex items-center gap-2">
+          <Shield size={14} className="text-foreground-muted/40" />
+          <span>Secure payment</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Shield size={12} className="text-[hsl(var(--accent-teal))]" />
-          <span>Secure payment via Stripe</span>
+        <div className="flex items-center gap-2">
+          <Zap size={14} className="text-foreground-muted/40" />
+          <span>14-day guarantee</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Check size={12} className="text-[hsl(var(--accent-teal))]" />
+        <div className="flex items-center gap-2">
+          <Check size={14} className="text-foreground-muted/40" />
           <span>Cancel anytime</span>
         </div>
       </div>
