@@ -365,6 +365,7 @@ export default function Sidebar({
             mtAccountsConnected={usage.accounts}
             telegramChannelsActive={usage.channels}
             variant="compact"
+            onUpgrade={() => onTabChange("pricing")}
           />
         </div>
       )}
@@ -500,10 +501,7 @@ export default function Sidebar({
                 <p className="text-sm font-medium text-foreground truncate">
                   {profile?.full_name || user?.email?.split("@")[0] || "User"}
                 </p>
-                <PlanBadge
-                  size="sm"
-                  showDropdown={false}
-                />
+                <PlanBadge size="sm" showDropdown={false} />
               </div>
               <p className="text-xs text-foreground-muted truncate">
                 {user?.email}
