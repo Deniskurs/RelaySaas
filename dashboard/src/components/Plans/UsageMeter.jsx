@@ -13,23 +13,22 @@ import { useAuth } from "@/contexts/AuthContext";
 // Plan limits configuration
 export const PLAN_LIMITS = {
   free: {
-    signalsPerDay: 5,
+    signalsPerMonth: 5,
     mtAccounts: 1,
     telegramChannels: 2,
   },
   pro: {
-    signalsPerDay: null, // unlimited
+    signalsPerMonth: null, // unlimited
     mtAccounts: 3,
     telegramChannels: 5,
   },
   premium: {
-    signalsPerDay: null, // unlimited
+    signalsPerMonth: null, // unlimited
     mtAccounts: 10,
     telegramChannels: null, // unlimited
   },
-  // Add enterprise or other tiers if needed
   enterprise: {
-    signalsPerDay: null,
+    signalsPerMonth: null,
     mtAccounts: 50,
     telegramChannels: null,
   },
@@ -100,7 +99,7 @@ function UsageItem({ icon: Icon, label, used, limit, status }) {
 }
 
 export function UsageMeter({
-  signalsUsedToday = 0,
+  signalsUsedThisMonth = 0,
   mtAccountsConnected = 0,
   telegramChannelsActive = 0,
   className,
@@ -114,7 +113,7 @@ export function UsageMeter({
   const tier = profile?.subscription_tier?.toLowerCase() || "free";
   const limits = PLAN_LIMITS[tier] || PLAN_LIMITS.free;
 
-  const signalStatus = getUsageStatus(signalsUsedToday, limits.signalsPerDay);
+  const signalStatus = getUsageStatus(signalsUsedThisMonth, limits.signalsPerMonth);
   const accountStatus = getUsageStatus(mtAccountsConnected, limits.mtAccounts);
   const channelStatus = getUsageStatus(
     telegramChannelsActive,
@@ -125,9 +124,9 @@ export function UsageMeter({
 
   // --- COMPACT VARIANT (SIDEBAR) ---
   if (variant === "compact") {
-    const percentage = limits.signalsPerDay === null
+    const percentage = limits.signalsPerMonth === null
       ? 100
-      : Math.min((signalsUsedToday / limits.signalsPerDay) * 100, 100);
+      : Math.min((signalsUsedThisMonth / limits.signalsPerMonth) * 100, 100);
 
     return (
       <div className={cn("relative", className)}>
@@ -145,7 +144,7 @@ export function UsageMeter({
               <span className="text-[10px] font-medium uppercase tracking-wider text-foreground-muted/50">
                 Usage
               </span>
-              {limits.signalsPerDay === null ? (
+              {limits.signalsPerMonth === null ? (
                 <span className="text-[10px] font-mono text-[hsl(var(--accent-teal))]/70">
                   PRO
                 </span>
@@ -170,11 +169,11 @@ export function UsageMeter({
           </button>
 
           {/* Progress bar when collapsed */}
-          {!isExpanded && limits.signalsPerDay !== null && (
+          {!isExpanded && limits.signalsPerMonth !== null && (
             <div className="px-3 pb-2">
               <ProgressBar
-                value={signalsUsedToday}
-                max={limits.signalsPerDay}
+                value={signalsUsedThisMonth}
+                max={limits.signalsPerMonth}
                 status={signalStatus}
               />
             </div>
@@ -194,8 +193,8 @@ export function UsageMeter({
                     <UsageItem
                       icon={Zap}
                       label="Signals"
-                      used={signalsUsedToday}
-                      limit={limits.signalsPerDay}
+                      used={signalsUsedThisMonth}
+                      limit={limits.signalsPerMonth}
                       status={signalStatus}
                     />
                     <UsageItem
@@ -266,8 +265,8 @@ export function UsageMeter({
         <UsageItem
           icon={Zap}
           label="Signals"
-          used={signalsUsedToday}
-          limit={limits.signalsPerDay}
+          used={signalsUsedThisMonth}
+          limit={limits.signalsPerMonth}
           status={signalStatus}
         />
         <UsageItem
@@ -291,10 +290,13 @@ export function UsageMeter({
 
 function getTimeUntilReset() {
   const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setUTCHours(24, 0, 0, 0);
-  const diff = tomorrow - now;
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  return `${hours}h ${minutes}m`;
+  // Calculate days until end of month
+  const endOfMonth = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth() + 1,
+    1, 0, 0, 0
+  ));
+  const diff = endOfMonth - now;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  return `${days} day${days !== 1 ? 's' : ''}`;
 }

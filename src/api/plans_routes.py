@@ -20,17 +20,17 @@ router = APIRouter(prefix="/plans", tags=["plans"])
 
 PLAN_LIMITS = {
     "free": {
-        "signals_per_day": 5,
+        "signals_per_month": 5,
         "mt_accounts": 1,
         "telegram_channels": 2,
     },
     "pro": {
-        "signals_per_day": None,  # Unlimited
+        "signals_per_month": None,  # Unlimited
         "mt_accounts": 3,
         "telegram_channels": 5,
     },
     "premium": {
-        "signals_per_day": None,  # Unlimited
+        "signals_per_month": None,  # Unlimited
         "mt_accounts": 10,
         "telegram_channels": None,  # Unlimited
     },
@@ -43,7 +43,7 @@ PLAN_LIMITS = {
 
 class UsageResponse(BaseModel):
     """Current usage data for the user."""
-    signals_today: int
+    signals_this_month: int
     signals_limit: Optional[int]  # None = unlimited
     accounts_connected: int
     accounts_limit: Optional[int]
@@ -110,6 +110,7 @@ async def get_user_usage(user_id: str) -> dict:
     supabase = get_supabase_admin()
 
     # Get profile with usage data
+    # Note: signals_used_today column is reused for monthly tracking
     result = supabase.table("profiles").select(
         "signals_used_today, subscription_tier, "
         "pro_day_eligible, pro_day_activated_at, pro_day_expires_at, "
@@ -118,7 +119,7 @@ async def get_user_usage(user_id: str) -> dict:
 
     if not result.data:
         return {
-            "signals_today": 0,
+            "signals_this_month": 0,
             "accounts_connected": 0,
             "channels_active": 0,
             "tier": "free",
@@ -144,7 +145,7 @@ async def get_user_usage(user_id: str) -> dict:
             channels_count = len(channels)
 
     return {
-        "signals_today": profile.get("signals_used_today") or 0,
+        "signals_this_month": profile.get("signals_used_today") or 0,  # Column reused for monthly
         "accounts_connected": accounts_result.count or 0,
         "channels_active": channels_count,
         "tier": (profile.get("subscription_tier") or "free").lower(),
@@ -153,7 +154,7 @@ async def get_user_usage(user_id: str) -> dict:
 
 
 async def increment_signal_count(user_id: str) -> bool:
-    """Increment the daily signal count for a user.
+    """Increment the monthly signal count for a user.
 
     Returns True if successful, False if limit reached.
     """
@@ -161,6 +162,7 @@ async def increment_signal_count(user_id: str) -> bool:
 
     try:
         # Get current profile
+        # Note: signals_used_today column is reused for monthly tracking
         result = supabase.table("profiles").select(
             "signals_used_today, subscription_tier, pro_day_expires_at"
         ).eq("id", user_id).single().execute()
@@ -174,11 +176,11 @@ async def increment_signal_count(user_id: str) -> bool:
         limits = get_limits_for_tier(effective_tier)
 
         current_count = profile.get("signals_used_today") or 0
-        signal_limit = limits.get("signals_per_day")
+        signal_limit = limits.get("signals_per_month")
 
         # Check if limit would be exceeded (for non-unlimited tiers)
         if signal_limit is not None and current_count >= signal_limit:
-            log.info(f"Signal limit reached for user {user_id}: {current_count}/{signal_limit}")
+            log.info(f"Monthly signal limit reached for user {user_id}: {current_count}/{signal_limit}")
             return False
 
         # Increment the count
@@ -202,6 +204,7 @@ async def check_signal_limit(user_id: str) -> dict:
     supabase = get_supabase_admin()
 
     try:
+        # Note: signals_used_today column is reused for monthly tracking
         result = supabase.table("profiles").select(
             "signals_used_today, subscription_tier, pro_day_expires_at"
         ).eq("id", user_id).single().execute()
@@ -214,7 +217,7 @@ async def check_signal_limit(user_id: str) -> dict:
         limits = get_limits_for_tier(effective_tier)
 
         current_count = profile.get("signals_used_today") or 0
-        signal_limit = limits.get("signals_per_day")
+        signal_limit = limits.get("signals_per_month")
 
         if signal_limit is None:
             return {
@@ -229,7 +232,7 @@ async def check_signal_limit(user_id: str) -> dict:
                 "allowed": False,
                 "current": current_count,
                 "limit": signal_limit,
-                "message": f"Daily signal limit reached ({current_count}/{signal_limit}). Upgrade to Pro for unlimited signals.",
+                "message": f"Monthly signal limit reached ({current_count}/{signal_limit}). Upgrade to Pro for unlimited signals.",
             }
 
         return {
@@ -268,8 +271,8 @@ async def get_usage(user: AuthUser = Depends(get_current_user)):
             pass
 
     return UsageResponse(
-        signals_today=usage["signals_today"],
-        signals_limit=limits.get("signals_per_day"),
+        signals_this_month=usage["signals_this_month"],
+        signals_limit=limits.get("signals_per_month"),
         accounts_connected=usage["accounts_connected"],
         accounts_limit=limits.get("mt_accounts"),
         channels_active=usage["channels_active"],

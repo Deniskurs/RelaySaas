@@ -1,9 +1,9 @@
-// Supabase Edge Function: Reset Daily Signals
-// Runs at midnight UTC to reset the daily signal counter for all users
+// Supabase Edge Function: Reset Monthly Signals
+// Runs on the 1st of each month at midnight UTC to reset the monthly signal counter for all users
 //
 // Deploy: supabase functions deploy reset-daily-signals
 // Schedule: Use Supabase Dashboard > Database > Extensions > pg_cron
-//           Or use an external scheduler like GitHub Actions
+//           Cron: '0 0 1 * *' (1st of every month at 00:00 UTC)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -30,23 +30,23 @@ Deno.serve(async (req) => {
     // Create admin client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get current date at midnight UTC
+    // Get the start of current month at midnight UTC
     const now = new Date();
-    const todayMidnight = new Date(Date.UTC(
+    const startOfMonth = new Date(Date.UTC(
       now.getUTCFullYear(),
       now.getUTCMonth(),
-      now.getUTCDate(),
-      0, 0, 0, 0
+      1, 0, 0, 0
     ));
 
-    // Reset signal counts for users whose reset time is before today
+    // Reset signal counts for users whose reset time is before this month
+    // Note: signals_used_today column is repurposed for monthly tracking
     const { data, error, count } = await supabase
       .from("profiles")
       .update({
         signals_used_today: 0,
         signals_reset_at: now.toISOString(),
       })
-      .lt("signals_reset_at", todayMidnight.toISOString())
+      .lt("signals_reset_at", startOfMonth.toISOString())
       .select("id");
 
     if (error) {
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     }
 
     const usersReset = data?.length || 0;
-    console.log(`Reset daily signals for ${usersReset} users`);
+    console.log(`Reset monthly signals for ${usersReset} users`);
 
     // Also check for expired Pro Days and update tier if needed
     const { data: expiredProDays, error: proError } = await supabase
@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         users_reset: usersReset,
+        reset_type: "monthly",
         timestamp: now.toISOString(),
       }),
       {

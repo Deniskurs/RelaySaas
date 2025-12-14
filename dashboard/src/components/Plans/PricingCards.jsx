@@ -26,7 +26,7 @@ export const PLANS = {
     icon: Sparkles,
     popular: false,
     features: [
-      { text: "5 signals per day", highlight: false },
+      { text: "5 signals per month", highlight: false },
       { text: "1 MT5 account", highlight: false },
       { text: "2 Telegram channels", highlight: false },
       { text: "7-day signal history", highlight: false },

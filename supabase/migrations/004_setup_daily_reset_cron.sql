@@ -1,4 +1,4 @@
--- Migration: Set up daily signal reset cron job
+-- Migration: Set up monthly signal reset cron job
 --
 -- PREREQUISITES (do these in Dashboard FIRST):
 --   1. Dashboard > Database > Extensions > Enable "pg_cron"
@@ -7,12 +7,12 @@
 -- Then run this SQL in Dashboard > SQL Editor
 
 -- =============================================================================
--- Schedule the Edge Function to run at midnight UTC daily
+-- Schedule the Edge Function to run at midnight UTC on the 1st of each month
 -- =============================================================================
 
 SELECT cron.schedule(
-  'reset-daily-signals',           -- Job name (unique identifier)
-  '0 0 * * *',                     -- Cron: Every day at 00:00 UTC
+  'reset-monthly-signals',         -- Job name (unique identifier)
+  '0 0 1 * *',                     -- Cron: 1st of every month at 00:00 UTC
   $$
     SELECT net.http_post(
       url := 'https://jvgeyxoiekgvfwiixvql.supabase.co/functions/v1/reset-daily-signals',
@@ -43,9 +43,14 @@ SELECT cron.schedule(
 -- );
 
 -- =============================================================================
--- To remove the job if needed:
+-- To remove the old daily job (if it exists):
 -- =============================================================================
 -- SELECT cron.unschedule('reset-daily-signals');
+
+-- =============================================================================
+-- To remove the monthly job if needed:
+-- =============================================================================
+-- SELECT cron.unschedule('reset-monthly-signals');
 
 -- =============================================================================
 -- To check job execution history:

@@ -14,8 +14,8 @@ import { PricingCards, BillingToggle, PLANS } from "./PricingCards";
 const COMPARISON_FEATURES = {
   "Signal Management": [
     {
-      name: "Daily Signals",
-      free: "5/day",
+      name: "Monthly Signals",
+      free: "5/mo",
       pro: "Unlimited",
       premium: "Unlimited",
     },

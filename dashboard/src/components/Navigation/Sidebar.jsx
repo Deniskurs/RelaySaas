@@ -361,7 +361,7 @@ export default function Sidebar({
       {!isCollapsed && !isPaid && (
         <div className="px-3 py-3 border-t border-white/[0.04] overflow-hidden">
           <UsageMeter
-            signalsUsedToday={usage.signalsToday}
+            signalsUsedThisMonth={usage.signalsThisMonth}
             mtAccountsConnected={usage.accounts}
             telegramChannelsActive={usage.channels}
             variant="compact"

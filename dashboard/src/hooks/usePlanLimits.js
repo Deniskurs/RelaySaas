@@ -93,7 +93,7 @@ export function usePlanLimits() {
 
   // Usage data - from API or fallback to profile
   const usage = useMemo(() => ({
-    signalsToday: usageData?.signals_today ?? profile?.signals_used_today ?? 0,
+    signalsThisMonth: usageData?.signals_this_month ?? profile?.signals_used_today ?? 0,
     accounts: usageData?.accounts_connected ?? 1,
     channels: usageData?.channels_active ?? 1,
   }), [usageData, profile]);
@@ -102,7 +102,7 @@ export function usePlanLimits() {
   const isLimitReached = useCallback((type) => {
     switch (type) {
       case "signals":
-        return limits.signalsPerDay !== null && usage.signalsToday >= limits.signalsPerDay;
+        return limits.signalsPerMonth !== null && usage.signalsThisMonth >= limits.signalsPerMonth;
       case "accounts":
         return limits.mtAccounts !== null && usage.accounts >= limits.mtAccounts;
       case "channels":
@@ -140,8 +140,8 @@ export function usePlanLimits() {
 
   // Usage percentages
   const usagePercentage = useMemo(() => ({
-    signals: limits.signalsPerDay
-      ? Math.min((usage.signalsToday / limits.signalsPerDay) * 100, 100)
+    signals: limits.signalsPerMonth
+      ? Math.min((usage.signalsThisMonth / limits.signalsPerMonth) * 100, 100)
       : 0,
     accounts: limits.mtAccounts
       ? Math.min((usage.accounts / limits.mtAccounts) * 100, 100)
@@ -186,16 +186,15 @@ export function usePlanLimits() {
   // Is user on a paid plan?
   const isPaid = effectiveTier === "pro" || effectiveTier === "premium";
 
-  // Hours until signal reset (midnight UTC)
-  const hoursUntilReset = useMemo(() => {
+  // Days until signal reset (end of month)
+  const daysUntilReset = useMemo(() => {
     const now = new Date();
-    const midnight = new Date(Date.UTC(
+    const endOfMonth = new Date(Date.UTC(
       now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() + 1,
-      0, 0, 0, 0
+      now.getUTCMonth() + 1,
+      1, 0, 0, 0
     ));
-    return Math.ceil((midnight - now) / (1000 * 60 * 60));
+    return Math.ceil((endOfMonth - now) / (1000 * 60 * 60 * 24));
   }, []);
 
   return {
@@ -215,7 +214,7 @@ export function usePlanLimits() {
     checkLimit,
     checkLimitAsync,
     showWarning,
-    hoursUntilReset,
+    daysUntilReset,
 
     // Pro Day
     proDay,
