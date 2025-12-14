@@ -186,9 +186,13 @@ class TelegramListener:
         self._last_activity = datetime.utcnow()
         log.info(f"{user_tag}Telegram client connected")
 
-        # Save session string for reconnection (multi-tenant only)
-        if self._is_multi_tenant and not self._session_string:
-            self._session_string = self.client.session.save()
+        # Save session string for reconnection and persist to database
+        if self.client:
+            new_session = self.client.session.save()
+            if new_session != self._session_string:
+                self._session_string = new_session
+                # Persist to database so it survives restarts
+                await self._persist_session(user_tag)
 
         # Resolve channel IDs
         self._channels = await self._resolve_channels()
@@ -332,6 +336,14 @@ class TelegramListener:
                     await asyncio.wait_for(self.client.get_me(), timeout=10.0)
                     self._last_health_check = now
 
+                    # Check if session has changed (auth key updates) and persist if so
+                    if self.client and self.user_id:
+                        current_session = self.client.session.save()
+                        if current_session != self._session_string:
+                            self._session_string = current_session
+                            await self._persist_session(user_tag)
+                            log.info(f"{user_tag}Session updated and persisted")
+
                     # Log health status periodically
                     log.debug(
                         f"{user_tag}Connection health check passed",
@@ -401,6 +413,30 @@ class TelegramListener:
         if self.client and hasattr(self.client.session, 'save'):
             return self.client.session.save()
         return self._session_string
+
+    async def _persist_session(self, user_tag: str = ""):
+        """Persist the current session string to the database.
+
+        This ensures the session survives server restarts and auth key updates
+        are preserved, preventing unnecessary session expirations.
+        """
+        if not self.user_id or not self._session_string:
+            return
+
+        try:
+            from ..users.credentials import update_user_credentials
+
+            success = update_user_credentials(self.user_id, {
+                "telegram_session_encrypted": self._session_string,
+            })
+
+            if success:
+                log.debug(f"{user_tag}Session persisted to database")
+            else:
+                log.warning(f"{user_tag}Failed to persist session to database")
+
+        except Exception as e:
+            log.error(f"{user_tag}Error persisting session", error=str(e))
 
     async def get_channel_info(self) -> List[dict]:
         """Get information about monitored channels.
