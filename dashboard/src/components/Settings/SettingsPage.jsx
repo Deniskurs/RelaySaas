@@ -507,6 +507,7 @@ export default function SettingsPage() {
               configStatus={configStatus}
               isRefreshing={isRefreshingAccount}
               onRefresh={handleRefreshAccountData}
+              userId={user?.id}
             />
           </TabsContent>
 

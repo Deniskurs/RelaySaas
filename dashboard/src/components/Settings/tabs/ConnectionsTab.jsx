@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Loader2,
   AlertCircle,
+  AlertTriangle,
   Check,
   X,
   ExternalLink,
@@ -16,6 +17,7 @@ import {
   BarChart3,
   CheckCircle2,
   ChevronDown,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApi } from "@/hooks/useApi";
@@ -25,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import ConnectionStatusCard from "../ConnectionStatusCard";
 import { SettingRow, PasswordInput, ChannelTags, inputClass } from "../SettingsComponents";
+import { useTelegramReconnectCoordination } from "@/hooks/useTelegramReconnectCoordination";
 
 function MetaTraderSection({
   mtCreds,
@@ -472,6 +475,7 @@ function TelegramSection({
   isLoading: credsLoading,
   configStatus = {},
   defaultExpanded = false,
+  userId,
 }) {
   const { fetchData, postData } = useApi();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -480,6 +484,13 @@ function TelegramSection({
   const [channelCount, setChannelCount] = useState(0);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState("");
+
+  // Cross-tab coordination to prevent reconnection conflicts
+  const {
+    isOtherTabReconnecting,
+    notifyReconnectStarted,
+    notifyReconnectCompleted,
+  } = useTelegramReconnectCoordination(userId);
 
   // Verification state
   const [code, setCode] = useState("");
@@ -598,15 +609,46 @@ function TelegramSection({
   };
 
   const handleReconnect = async () => {
+    // Prevent reconnection if another tab is already doing it
+    if (isOtherTabReconnecting) {
+      setConnectionError("Another browser tab is reconnecting. Please wait...");
+      return;
+    }
+
     setIsConnecting(true);
     setConnectionError("");
+
+    // Notify other tabs that we're starting a reconnection
+    notifyReconnectStarted();
+
     try {
+      let result;
       try {
-        await postData("/system/connect-me");
+        result = await postData("/system/connect-me");
       } catch (e) {
-        await postData("/admin/telegram/reconnect");
+        result = await postData("/admin/telegram/reconnect");
       }
 
+      // Handle rate_limited response from backend
+      if (result && result.status === "rate_limited") {
+        setConnectionError(
+          `Please wait ${result.retry_after || 10} seconds before reconnecting. Another tab may have just reconnected.`
+        );
+        setConnectionStatus("disconnected");
+        notifyReconnectCompleted();
+        return;
+      }
+
+      // Handle already_connected response - connection is healthy, no action needed
+      if (result && result.status === "already_connected") {
+        setConnectionStatus("connected");
+        setConnectionMessage("Already connected and healthy!");
+        setChannelCount(result.channels_count || channelCount);
+        notifyReconnectCompleted();
+        return;
+      }
+
+      // Check final connection status
       const status = await fetchData("/telegram/connection-status");
       if (status && status.connected) {
         setConnectionStatus("connected");
@@ -624,6 +666,7 @@ function TelegramSection({
       setConnectionError("Reconnect failed - check server logs for details.");
     } finally {
       setIsConnecting(false);
+      notifyReconnectCompleted();
     }
   };
 
@@ -749,7 +792,22 @@ function TelegramSection({
                 <ExternalLink size={10} />
               </a>
             </p>
+            {/* Best practices tip */}
+            <div className="flex items-start gap-2 mt-3 pt-3 border-t border-white/[0.04]">
+              <Info size={12} className="text-blue-400 mt-0.5 flex-shrink-0" />
+              <p className="text-[11px] text-foreground-muted/60 leading-relaxed">
+                <span className="font-medium text-foreground-muted/70">Tip:</span> For best stability, use only one browser tab at a time. Multiple tabs can cause connection conflicts.
+              </p>
+            </div>
           </div>
+
+          {/* Multi-tab warning - show when another tab is reconnecting */}
+          {isOtherTabReconnecting && (
+            <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-400 text-sm animate-in fade-in duration-200">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>Another browser tab is reconnecting. Please wait...</span>
+            </div>
+          )}
 
           {/* Credentials Section */}
           <SettingRow label="API ID" description="Your Telegram application ID">
@@ -1006,6 +1064,7 @@ export default function ConnectionsTab({
   configStatus,
   isRefreshing,
   onRefresh,
+  userId,
 }) {
   // Determine connection status for the status card
   const telegramConnected = telegramCreds.telegram_connected;
@@ -1044,6 +1103,7 @@ export default function ConnectionsTab({
             isLoading={isLoading}
             configStatus={configStatus}
             defaultExpanded={!telegramConnected}
+            userId={userId}
           />
         </CardContent>
       </Card>

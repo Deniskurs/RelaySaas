@@ -65,6 +65,7 @@ class TelegramListener:
         self._started_at: Optional[datetime] = None
         self._health_task: Optional[asyncio.Task] = None
         self._should_stop = False  # Flag to stop the reconnect loop
+        self._session_lock = asyncio.Lock()  # Prevent concurrent session writes
 
     def _create_client(self) -> TelegramClient:
         """Create Telegram client based on mode."""
@@ -497,7 +498,13 @@ class TelegramListener:
         log.debug(f"{user_tag}Health check loop ended")
 
     async def stop(self):
-        """Stop the Telegram listener."""
+        """Stop the Telegram listener with proper cleanup.
+
+        Ensures graceful shutdown by:
+        1. Signaling all loops to stop
+        2. Canceling background tasks with timeout
+        3. Disconnecting the Telethon client with timeout
+        """
         user_tag = f"[user:{self.user_id[:8]}] " if self.user_id else ""
 
         log.info(
@@ -506,22 +513,35 @@ class TelegramListener:
             was_connected=self._is_connected,
         )
 
-        # Signal the reconnect loop to stop
+        # 1. Signal all loops to stop first
         self._should_stop = True
+        self._is_connected = False
 
-        # Cancel health check task first
+        # 2. Cancel health check task gracefully with timeout
         if self._health_task and not self._health_task.done():
             self._health_task.cancel()
             try:
-                await self._health_task
-            except asyncio.CancelledError:
+                await asyncio.wait_for(self._health_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
+            except Exception as e:
+                log.warning(f"{user_tag}Error canceling health task: {e}")
 
+        # 3. Disconnect Telethon client with timeout
         if self.client:
-            log.info(f"{user_tag}Stopping Telegram listener...")
-            await self.client.disconnect()
-            self.client = None
-            self._is_connected = False
+            log.info(f"{user_tag}Disconnecting Telegram client...")
+            try:
+                # Give pending operations up to 3 seconds to complete
+                await asyncio.wait_for(self.client.disconnect(), timeout=3.0)
+                log.info(f"{user_tag}Telegram client disconnected cleanly")
+            except asyncio.TimeoutError:
+                log.warning(f"{user_tag}Client disconnect timed out, forcing close")
+            except Exception as e:
+                log.warning(f"{user_tag}Error during client disconnect: {e}")
+            finally:
+                self.client = None
+
+        log.info(f"{user_tag}Listener stopped")
 
     def get_session_string(self) -> Optional[str]:
         """Get the current session string for persistence.
@@ -538,24 +558,29 @@ class TelegramListener:
 
         This ensures the session survives server restarts and auth key updates
         are preserved, preventing unnecessary session expirations.
+
+        Uses a lock to prevent race conditions when multiple operations
+        try to persist the session concurrently.
         """
         if not self.user_id or not self._session_string:
             return
 
-        try:
-            from ..users.credentials import update_user_credentials
+        # Acquire lock to prevent concurrent session writes
+        async with self._session_lock:
+            try:
+                from ..users.credentials import update_user_credentials
 
-            success = update_user_credentials(self.user_id, {
-                "telegram_session_encrypted": self._session_string,
-            })
+                success = update_user_credentials(self.user_id, {
+                    "telegram_session_encrypted": self._session_string,
+                })
 
-            if success:
-                log.debug(f"{user_tag}Session persisted to database")
-            else:
-                log.warning(f"{user_tag}Failed to persist session to database")
+                if success:
+                    log.debug(f"{user_tag}Session persisted to database")
+                else:
+                    log.warning(f"{user_tag}Failed to persist session to database")
 
-        except Exception as e:
-            log.error(f"{user_tag}Error persisting session", error=str(e))
+            except Exception as e:
+                log.error(f"{user_tag}Error persisting session", error=str(e))
 
     async def get_channel_info(self) -> List[dict]:
         """Get information about monitored channels.
