@@ -147,6 +147,7 @@ export default function Dashboard() {
       case "signal.received":
       case "signal.parsed":
       case "signal.validated":
+      case "signal.pending_confirmation":
       case "signal.executed":
       case "signal.failed":
       case "signal.skipped":

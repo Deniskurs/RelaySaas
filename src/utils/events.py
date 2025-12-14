@@ -66,6 +66,7 @@ class Events:
     SIGNAL_PARSED = "signal.parsed"
     SIGNAL_VALIDATED = "signal.validated"
     SIGNAL_PENDING_CONFIRMATION = "signal.pending_confirmation"
+    SIGNAL_EXECUTED = "signal.executed"
     SIGNAL_SKIPPED = "signal.skipped"
     SIGNAL_FAILED = "signal.failed"
 

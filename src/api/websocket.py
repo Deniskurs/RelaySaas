@@ -81,6 +81,8 @@ def setup_websocket_events():
         Events.SIGNAL_RECEIVED,
         Events.SIGNAL_PARSED,
         Events.SIGNAL_VALIDATED,
+        Events.SIGNAL_PENDING_CONFIRMATION,
+        Events.SIGNAL_EXECUTED,
         Events.SIGNAL_SKIPPED,
         Events.SIGNAL_FAILED,
         Events.TRADE_OPENED,
