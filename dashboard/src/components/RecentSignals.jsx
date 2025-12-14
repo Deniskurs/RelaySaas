@@ -511,20 +511,34 @@ const SignalCard = ({
             </p>
           </div>
 
-          {/* Warnings */}
-          {signal.warnings?.length > 0 && (
-            <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-none p-2.5">
-              {signal.warnings.map((w, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 text-[11px] text-yellow-500/90"
-                >
-                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                  <span>{w}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Warnings - filter out "Awaiting confirmation" when signal is no longer pending */}
+          {signal.warnings?.length > 0 && (() => {
+            const filteredWarnings = signal.warnings.filter(w => {
+              // Hide "Awaiting confirmation" warnings when status is not pending_confirmation
+              if (displayStatus !== "pending_confirmation" &&
+                  (w.toLowerCase().includes("awaiting confirmation") ||
+                   w.toLowerCase().includes("pending confirmation"))) {
+                return false;
+              }
+              return true;
+            });
+
+            if (filteredWarnings.length === 0) return null;
+
+            return (
+              <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-none p-2.5">
+                {filteredWarnings.map((w, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2 text-[11px] text-yellow-500/90"
+                  >
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Failure Reason - Show for failed/skipped signals */}
           {signal.failureReason &&
