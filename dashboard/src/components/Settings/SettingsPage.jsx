@@ -800,12 +800,9 @@ function TelegramSection({
   const [password, setPassword] = useState("");
 
   useEffect(() => {
-    // Check if user has connected Telegram (from credentials)
-    if (telegramCreds.telegram_connected) {
-      // Already connected from onboarding
-      setConnectionStatus("connected");
-    } else if (telegramCreds.telegram_api_id && telegramCreds.telegram_api_hash && telegramCreds.telegram_phone) {
-      // Has credentials but not connected - check via connection status endpoint
+    // ALWAYS check live connection status - don't trust the database flag alone
+    if (telegramCreds.telegram_api_id && telegramCreds.telegram_api_hash && telegramCreds.telegram_phone) {
+      // Has credentials - check LIVE connection status from the server
       checkConnectionStatus();
     } else {
       setConnectionStatus("not_configured");
@@ -813,14 +810,24 @@ function TelegramSection({
   }, [telegramCreds]);
 
   const checkConnectionStatus = async () => {
-    // For multi-tenant, check the general connection status
-    const result = await fetchData("/telegram/connection-status");
-    if (result && result.connected) {
-      setConnectionStatus("connected");
-      setConnectionMessage("Telegram is connected and receiving signals.");
-    } else {
-      setConnectionStatus("not_configured");
-      setConnectionMessage("Telegram is not connected. Click below to connect.");
+    setConnectionStatus("loading");
+    try {
+      // Check LIVE connection status from the server
+      const result = await fetchData("/telegram/connection-status");
+      if (result && result.connected) {
+        setConnectionStatus("connected");
+        setConnectionMessage(result.channels_count
+          ? `Listening to ${result.channels_count} channel(s)`
+          : "Telegram is connected and receiving signals.");
+      } else {
+        // Not connected - but credentials exist, so show as disconnected (not not_configured)
+        setConnectionStatus("disconnected");
+        setConnectionMessage(result?.message || "Telegram listener is not running. Click Reconnect to start.");
+      }
+    } catch (e) {
+      console.error("Error checking connection status:", e);
+      setConnectionStatus("disconnected");
+      setConnectionMessage("Could not check connection status.");
     }
   };
 
@@ -913,18 +920,29 @@ function TelegramSection({
     setIsConnecting(true);
     setConnectionError("");
     try {
-      const result = await postData("/admin/telegram/reconnect");
-      if (result && result.status === "connected") {
+      // First try multi-tenant reconnect
+      try {
+        await postData("/system/connect-me");
+      } catch (e) {
+        // Fall back to admin reconnect for single-user mode
+        await postData("/admin/telegram/reconnect");
+      }
+
+      // Check live status after reconnect attempt
+      const status = await fetchData("/telegram/connection-status");
+      if (status && status.connected) {
         setConnectionStatus("connected");
-        setConnectionMessage("Telegram reconnected successfully.");
+        setConnectionMessage(status.channels_count
+          ? `Listening to ${status.channels_count} channel(s)`
+          : "Telegram reconnected successfully.");
       } else {
-        // If reconnect fails, check status
-        await checkConnectionStatus();
+        setConnectionStatus("disconnected");
+        setConnectionError("Reconnect failed - your Telegram session may have expired. Try 'New Session'.");
       }
     } catch (e) {
       console.error("Reconnect error:", e);
-      // On error, just refresh the status
-      await checkConnectionStatus();
+      setConnectionStatus("disconnected");
+      setConnectionError("Reconnect failed - check server logs for details.");
     } finally {
       setIsConnecting(false);
     }
@@ -1165,7 +1183,55 @@ function TelegramSection({
           </div>
         )}
 
-        {(connectionStatus === "not_configured" || connectionStatus === "disconnected") && (
+        {connectionStatus === "disconnected" && (
+          <div className="space-y-4">
+            <div className={cn(
+              "flex items-center justify-between p-5 rounded-md",
+              "bg-rose-500/[0.06] border border-rose-500/20",
+              "shadow-[inset_0_1px_0_rgba(244,63,94,0.1)]"
+            )}>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-rose-500" />
+                <div>
+                  <p className="text-sm font-medium text-rose-400">Disconnected</p>
+                  <p className="text-xs text-foreground-muted/70 italic mt-0.5">{connectionMessage}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleReconnect}
+                disabled={isConnecting}
+                className={cn(
+                  "flex-1 h-11 rounded-none font-medium",
+                  "bg-foreground text-background",
+                  "hover:shadow-[0_4px_20px_rgba(255,255,255,0.2)]",
+                  "active:scale-[0.99]",
+                  "disabled:opacity-40 disabled:shadow-none",
+                  "transition-all duration-200"
+                )}
+              >
+                {isConnecting ? (
+                  <Loader2 size={14} className="mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw size={14} className="mr-2" />
+                )}
+                Reconnect
+              </Button>
+              <Button
+                onClick={handleSendCode}
+                disabled={isConnecting}
+                variant="ghost"
+                className="h-11 px-4 text-foreground-muted hover:text-foreground"
+              >
+                <Send size={14} className="mr-2" />
+                New Session
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {connectionStatus === "not_configured" && (
           <Button
             onClick={handleSendCode}
             disabled={isConnecting || !telegramCreds.telegram_api_id || !telegramCreds.telegram_api_hash || !telegramCreds.telegram_phone}
@@ -1306,31 +1372,37 @@ export default function SettingsPage() {
   // Handle account data refresh - attempts to reconnect if disconnected
   const handleRefreshAccountData = async () => {
     await refreshAccount(async () => {
-      // First, try to reconnect the user's connections
+      // Try to reconnect the user's connections
+      let connectResult = null;
       try {
-        const connectResult = await postData("/system/connect-me");
+        connectResult = await postData("/system/connect-me");
         console.log("Connect result:", connectResult);
       } catch (e) {
-        // Connection might fail if not in multi-tenant mode, that's ok
-        console.log("Connect-me result:", e);
+        console.log("Connect-me error:", e);
+        throw new Error("Failed to reconnect - check server logs");
       }
 
-      // Then fetch updated credentials to show current status
-      const creds = await loadUserCredentials();
+      // Check if connect-me succeeded
+      if (connectResult?.status === "failed") {
+        throw new Error(connectResult.error || "Connection failed - check credentials");
+      }
 
-      // Return connection status for the toast message
-      const telegramOk = creds?.telegram_connected;
-      const mtOk = creds?.mt_connected;
+      // Use the LIVE status from connect-me result
+      const telegramOk = connectResult?.telegram_connected;
+      const mtOk = connectResult?.metaapi_connected;
+
+      // Fetch updated credentials for display
+      await loadUserCredentials();
 
       if (!telegramOk && !mtOk) {
-        throw new Error("Connections still disconnected - check your credentials");
+        throw new Error("Both connections failed - check your credentials");
       } else if (!telegramOk) {
-        throw new Error("Telegram still disconnected - verify your session");
+        throw new Error("Telegram listener failed to start");
       } else if (!mtOk) {
-        throw new Error("MetaTrader still disconnected - check account credentials");
+        throw new Error("MetaTrader connection failed - check MetaAPI token in Admin");
       }
 
-      return creds;
+      return { telegram_connected: telegramOk, metaapi_connected: mtOk };
     });
   };
 

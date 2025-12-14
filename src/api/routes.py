@@ -895,6 +895,7 @@ class TelegramConnectionStatus(BaseModel):
     started_at: Optional[str] = None
     reconnect_attempts: int = 0
     channels_count: int = 0
+    message: Optional[str] = None  # Additional context for the user
 
 
 @router.get("/telegram/connection-status", response_model=TelegramConnectionStatus)
@@ -931,7 +932,21 @@ async def get_telegram_connection_status(
                 pass
 
         # User not connected yet or no listener
-        return TelegramConnectionStatus(connected=conn.telegram_connected if conn else False)
+        if not conn:
+            return TelegramConnectionStatus(
+                connected=False,
+                message="No connection found. Click Reconnect to start the Telegram listener."
+            )
+        elif not conn.telegram_listener:
+            return TelegramConnectionStatus(
+                connected=False,
+                message="Telegram listener not started. Click Reconnect to start receiving signals."
+            )
+        else:
+            return TelegramConnectionStatus(
+                connected=False,
+                message="Listener exists but not connected. Click Reconnect to retry."
+            )
 
     # Single-user mode or no auth - check global copier
     if not _copier or not hasattr(_copier, 'telegram'):
