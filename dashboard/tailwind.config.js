@@ -69,6 +69,22 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      // Premium transition timing functions
+      transitionTimingFunction: {
+        apple: "cubic-bezier(0.16, 1, 0.3, 1)", // Apple easeOutExpo
+        tesla: "cubic-bezier(0.25, 0.46, 0.45, 0.94)", // Tesla easeOutQuad
+      },
+      // Login-specific shadows
+      boxShadow: {
+        glass: "0 0 30px rgba(255, 255, 255, 0.03)",
+        "inner-glow": "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+        "button-hover": "0 2px 8px rgba(255, 255, 255, 0.15)",
+      },
+      // Backdrop blur presets
+      backdropBlur: {
+        xs: "2px",
+        glass: "20px",
+      },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
