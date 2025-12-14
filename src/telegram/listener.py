@@ -4,10 +4,9 @@ from datetime import datetime
 from typing import Callable, List, Optional
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
-from telethon.tl.types import Channel, Chat
-from telethon.errors import RPCError
+from telethon.tl.types import Channel
 
-from .client import create_telegram_client, get_telegram_config, TelegramConfigError
+from .client import create_telegram_client, get_telegram_config
 from ..utils.logger import log
 
 # Connection stability constants
@@ -210,7 +209,6 @@ class TelegramListener:
         listener_self = self
         listener_user_tag = user_tag
         listener_id = id(self)
-        on_message_callback = on_message  # Capture the callback
 
         # For shared listener (user_id=None), listen to ALL channels and filter server-side
         # This allows dynamic channel additions without restart
@@ -450,12 +448,6 @@ class TelegramListener:
                 time_since_message = (
                     (now - self._last_activity).total_seconds()
                     if self._last_activity else 999999
-                )
-
-                # Track time since last health check
-                time_since_health = (
-                    (now - self._last_health_check).total_seconds()
-                    if self._last_health_check else 999999
                 )
 
                 # Ping Telegram to verify connection
