@@ -105,12 +105,23 @@ async def websocket_endpoint(websocket: WebSocket):
     Args:
         websocket: Incoming WebSocket connection.
     """
+    import json
+
     await manager.connect(websocket)
     try:
         while True:
-            # Keep connection alive and handle any client messages
+            # Keep connection alive and handle client messages
             data = await websocket.receive_text()
-            # Could handle commands here if needed (e.g., subscribe to specific events)
+
+            # Handle ping/pong for keep-alive
+            try:
+                message = json.loads(data)
+                if message.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
+                    continue
+            except json.JSONDecodeError:
+                pass
+
             log.debug("WebSocket message received", data=data[:100])
     except WebSocketDisconnect:
         manager.disconnect(websocket)
