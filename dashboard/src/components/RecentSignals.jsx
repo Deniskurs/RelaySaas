@@ -546,8 +546,8 @@ const SignalCard = ({
               </div>
             )}
 
-          {/* Pending Confirmation Actions - ONLY show when signal status is actually pending_confirmation */}
-          {status === "pending_confirmation" && !isConfirmationDismissed && (
+          {/* Pending Confirmation Actions - ONLY show when displayStatus is pending_confirmation */}
+          {displayStatus === "pending_confirmation" && !isConfirmationDismissed && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
