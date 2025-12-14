@@ -290,7 +290,7 @@ function MetaTraderSection({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState("");
-  const [provisioningStatus, setProvisioningStatus] = useState(null);
+  const [provisioningStatus, setProvisioningStatus] = useState("idle");
   const [provisioningMessage, setProvisioningMessage] = useState("");
   const [accountId, setAccountId] = useState(null);
   const [suggestedServers, setSuggestedServers] = useState([]);
