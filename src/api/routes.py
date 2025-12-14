@@ -888,7 +888,10 @@ class LotPresetsResponse(BaseModel):
 
 
 @router.get("/account/lot-presets", response_model=LotPresetsResponse)
-async def get_lot_presets(symbol: Optional[str] = None):
+async def get_lot_presets(
+    symbol: Optional[str] = None,
+    user: Optional[AuthUser] = Depends(get_optional_user),
+):
     """Get calculated lot size presets based on current account balance.
 
     Args:
@@ -897,7 +900,32 @@ async def get_lot_presets(symbol: Optional[str] = None):
     from ..trading.validator import calculate_lot_for_symbol, get_reference_lot_for_symbol
     from ..config import settings
 
-    balance = _account_info.get("balance", 0)
+    # In multi-tenant mode, fetch user's actual balance from MetaAPI
+    balance = 0
+    if user:
+        import httpx
+        from ..users.credentials import get_user_credentials
+
+        credentials = get_user_credentials(user.id)
+        if credentials and credentials.metaapi_account_id and credentials.mt_connected:
+            system_config = supabase_db.get_system_config()
+            metaapi_token = system_config.get("metaapi_token")
+            if metaapi_token:
+                account_id = credentials.metaapi_account_id
+                region = await _get_metaapi_region(account_id, metaapi_token)
+                api_url = f"https://mt-client-api-v1.{region}.agiliumtrade.ai/users/current/accounts/{account_id}/account-information"
+
+                try:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(api_url, headers={"auth-token": metaapi_token}, timeout=10)
+                        if response.status_code == 200:
+                            balance = response.json().get("balance", 0)
+                except Exception as e:
+                    print(f"[API] Error fetching balance for lot presets: {e}")
+
+    # Fallback to global cache for legacy single-user mode
+    if balance == 0:
+        balance = _account_info.get("balance", 0)
 
     # Use symbol-specific reference lot (GOLD=0.04, others=0.01 on £500)
     symbol_for_calc = symbol or "DEFAULT"
