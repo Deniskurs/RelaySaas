@@ -1219,11 +1219,11 @@ export default function SettingsPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Refresh hook for account data
+  // Refresh hook for account data - tries to reconnect
   const { isRefreshing: isRefreshingAccount, refresh: refreshAccount } = useRefresh({
-    loadingMessage: "Refreshing account data...",
-    successMessage: "Account data refreshed",
-    errorMessage: "Failed to refresh account data",
+    loadingMessage: "Reconnecting services...",
+    successMessage: "All services connected",
+    errorMessage: "Connection issue",
   });
 
   // Telegram credentials state
@@ -1303,9 +1303,35 @@ export default function SettingsPage() {
     loadUserCredentials();
   }, [fetchData]);
 
-  // Handle account data refresh
+  // Handle account data refresh - attempts to reconnect if disconnected
   const handleRefreshAccountData = async () => {
-    await refreshAccount(loadUserCredentials);
+    await refreshAccount(async () => {
+      // First, try to reconnect the user's connections
+      try {
+        const connectResult = await postData("/system/connect-me");
+        console.log("Connect result:", connectResult);
+      } catch (e) {
+        // Connection might fail if not in multi-tenant mode, that's ok
+        console.log("Connect-me result:", e);
+      }
+
+      // Then fetch updated credentials to show current status
+      const creds = await loadUserCredentials();
+
+      // Return connection status for the toast message
+      const telegramOk = creds?.telegram_connected;
+      const mtOk = creds?.mt_connected;
+
+      if (!telegramOk && !mtOk) {
+        throw new Error("Connections still disconnected - check your credentials");
+      } else if (!telegramOk) {
+        throw new Error("Telegram still disconnected - verify your session");
+      } else if (!mtOk) {
+        throw new Error("MetaTrader still disconnected - check account credentials");
+      }
+
+      return creds;
+    });
   };
 
   const updateLocal = (key, value) => {

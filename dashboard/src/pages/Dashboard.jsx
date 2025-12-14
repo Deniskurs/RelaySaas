@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMultiRefresh } from "@/hooks/useRefresh";
+import { useMultiRefresh, useRefresh } from "@/hooks/useRefresh";
 import {
   transformPositions,
   transformSignals,
@@ -176,8 +176,14 @@ export default function Dashboard() {
     setIsPaused(false);
   };
 
-  const [isReconnecting, setIsReconnecting] = useState(false);
   const [liveFeedExpanded, setLiveFeedExpanded] = useState(false);
+
+  // Reconnect hook with toast feedback
+  const { isRefreshing: isReconnecting, refresh: doReconnect } = useRefresh({
+    loadingMessage: "Reconnecting Telegram...",
+    successMessage: "Telegram connected",
+    errorMessage: "Connection failed",
+  });
 
   // Alert system for critical events
   const { alerts } = useAlertSystem({
@@ -198,19 +204,26 @@ export default function Dashboard() {
   );
 
   const handleTelegramReconnect = async () => {
-    if (isReconnecting) return; // Prevent multiple clicks
-    setIsReconnecting(true);
-    try {
-      await postData("/admin/telegram/reconnect");
-      // Refresh status after reconnect attempt
+    await doReconnect(async () => {
+      // Try multi-tenant reconnect first
+      try {
+        await postData("/system/connect-me");
+      } catch (e) {
+        // Fall back to admin reconnect for single-user mode
+        await postData("/admin/telegram/reconnect");
+      }
+
+      // Fetch updated status
       const status = await fetchData("/telegram/connection-status");
       if (status) setTelegramStatus(status);
-    } catch (e) {
-      console.error("Reconnect failed:", e);
-    } finally {
-      // Add delay before allowing another reconnect
-      setTimeout(() => setIsReconnecting(false), 3000);
-    }
+
+      // Check if actually connected
+      if (!status?.connected) {
+        throw new Error("Still disconnected - check your Telegram session");
+      }
+
+      return status;
+    });
   };
 
   // Refresh all data - used by command palette
