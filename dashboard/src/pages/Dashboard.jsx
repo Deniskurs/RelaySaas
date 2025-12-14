@@ -61,38 +61,35 @@ export default function Dashboard() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   // Unsaved changes context for blocking navigation
-  const { hasUnsavedChanges, onSave, onDiscard } = useUnsavedChangesContext();
+  const unsavedChangesContext = useUnsavedChangesContext();
+
+  // Use ref to always get fresh context values in event handlers
+  const unsavedChangesRef = useRef(unsavedChangesContext);
+  useEffect(() => {
+    unsavedChangesRef.current = unsavedChangesContext;
+  }, [unsavedChangesContext]);
 
   // State for unsaved changes dialog
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingTab, setPendingTab] = useState(null);
   const [isSavingFromDialog, setIsSavingFromDialog] = useState(false);
 
-  // Use ref to always have current value in callback (avoids stale closure)
-  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
-  const activeTabRef = useRef(activeTab);
-
-  useEffect(() => {
-    hasUnsavedChangesRef.current = hasUnsavedChanges;
-  }, [hasUnsavedChanges]);
-
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
-
   // Wrapped tab change that checks for unsaved changes
+  // Uses ref to ensure we always read the latest context value
   const setActiveTab = useCallback((newTab) => {
+    const { hasUnsavedChanges } = unsavedChangesRef.current;
     // If we're on settings and have unsaved changes, block navigation
-    if (activeTabRef.current === "settings" && hasUnsavedChangesRef.current && newTab !== "settings") {
+    if (activeTab === "settings" && hasUnsavedChanges && newTab !== "settings") {
       setPendingTab(newTab);
       setShowUnsavedDialog(true);
       return; // Don't change tab yet - show dialog
     }
     setActiveTabInternal(newTab);
-  }, []);
+  }, [activeTab]);
 
-  // Dialog handlers
+  // Dialog handlers - use ref to get fresh callback references
   const handleDialogSave = async () => {
+    const { onSave } = unsavedChangesRef.current;
     if (onSave) {
       setIsSavingFromDialog(true);
       try {
@@ -109,6 +106,7 @@ export default function Dashboard() {
   };
 
   const handleDialogDiscard = () => {
+    const { onDiscard } = unsavedChangesRef.current;
     if (onDiscard) {
       onDiscard();
     }

@@ -308,19 +308,26 @@ export default function SettingsPage() {
     setOnDiscard: setGlobalOnDiscard,
   } = useUnsavedChangesContext();
 
-  // Sync local unsaved state to global context
+  // Sync anyChanges to global context - separate from callback registration
   useEffect(() => {
     setGlobalUnsavedChanges(anyChanges);
+  }, [anyChanges, setGlobalUnsavedChanges]);
+
+  // Register save/discard callbacks once on mount
+  useEffect(() => {
     setGlobalOnSave(handleSaveAll);
     setGlobalOnDiscard(handleResetAll);
+  }, [handleSaveAll, handleResetAll, setGlobalOnSave, setGlobalOnDiscard]);
 
-    // Cleanup on unmount
+  // Cleanup ONLY on unmount - separate effect with empty deps
+  useEffect(() => {
     return () => {
       setGlobalUnsavedChanges(false);
       setGlobalOnSave(null);
       setGlobalOnDiscard(null);
     };
-  }, [anyChanges, handleSaveAll, handleResetAll, setGlobalUnsavedChanges, setGlobalOnSave, setGlobalOnDiscard]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run cleanup on unmount
 
   // Handle tab change with unsaved changes check
   const handleTabChange = useCallback((newTab) => {
