@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
@@ -87,67 +87,97 @@ export const PLANS = {
   },
 };
 
-// Billing toggle component
+// Billing toggle component with proper animations
 export function BillingToggle({ isAnnual, onChange, className }) {
+  const containerRef = useRef(null);
+  const monthlyRef = useRef(null);
+  const annualRef = useRef(null);
+  const [sliderStyle, setSliderStyle] = useState({ left: 0, width: 0 });
+
+  // Measure button positions and update slider
+  useEffect(() => {
+    const updateSlider = () => {
+      const container = containerRef.current;
+      const activeRef = isAnnual ? annualRef.current : monthlyRef.current;
+
+      if (container && activeRef) {
+        const containerRect = container.getBoundingClientRect();
+        const activeRect = activeRef.getBoundingClientRect();
+
+        setSliderStyle({
+          left: activeRect.left - containerRect.left,
+          width: activeRect.width,
+        });
+      }
+    };
+
+    updateSlider();
+    window.addEventListener("resize", updateSlider);
+    return () => window.removeEventListener("resize", updateSlider);
+  }, [isAnnual]);
+
   return (
     <div className={cn("flex flex-col items-center gap-3", className)}>
       <div
-        className={cn(
-          "relative inline-flex items-center p-1 cursor-pointer select-none",
-          "bg-white/[0.03] border border-white/[0.08]",
-          "transition-all duration-300",
-          isAnnual && "border-[hsl(var(--accent-teal))]/20 shadow-[0_0_20px_-5px_hsl(var(--accent-teal))/15]"
-        )}
-        onClick={() => onChange(!isAnnual)}
+        ref={containerRef}
+        className="relative inline-flex items-center p-1 bg-white/[0.03] border border-white/[0.06]"
       >
-        {/* Sliding background */}
+        {/* Animated sliding background */}
         <motion.div
           className={cn(
-            "absolute inset-y-1 w-1/2",
-            "bg-white/[0.08] border border-white/[0.1]",
-            isAnnual && "bg-[hsl(var(--accent-teal))]/10 border-[hsl(var(--accent-teal))]/20"
+            "absolute top-1 bottom-1 z-0",
+            isAnnual
+              ? "bg-[hsl(var(--accent-teal))]/10 border border-[hsl(var(--accent-teal))]/25 shadow-[0_0_20px_-5px_hsl(var(--accent-teal))/20]"
+              : "bg-white/[0.06] border border-white/[0.08]"
           )}
-          animate={{ x: isAnnual ? "100%" : "0%" }}
           initial={false}
-          transition={{ type: "spring", stiffness: 500, damping: 35 }}
+          animate={{
+            left: sliderStyle.left,
+            width: sliderStyle.width,
+          }}
+          transition={{
+            type: "spring",
+            stiffness: 400,
+            damping: 30,
+          }}
         />
 
         {/* Monthly Option */}
-        <div
+        <button
+          ref={monthlyRef}
+          onClick={() => onChange(false)}
           className={cn(
-            "relative z-10 px-6 py-2.5 transition-colors duration-200 text-sm font-medium",
-            !isAnnual
-              ? "text-foreground"
-              : "text-foreground-muted/60"
+            "relative z-10 px-5 py-2 text-sm font-medium transition-colors duration-200",
+            !isAnnual ? "text-foreground" : "text-foreground-muted/50 hover:text-foreground-muted/70"
           )}
         >
           Monthly
-        </div>
+        </button>
 
         {/* Annual Option */}
-        <div
+        <button
+          ref={annualRef}
+          onClick={() => onChange(true)}
           className={cn(
-            "relative z-10 px-6 py-2.5 transition-colors duration-200 text-sm font-medium flex items-center gap-2.5",
-            isAnnual
-              ? "text-foreground"
-              : "text-foreground-muted/60"
+            "relative z-10 px-5 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-2",
+            isAnnual ? "text-foreground" : "text-foreground-muted/50 hover:text-foreground-muted/70"
           )}
         >
           Annual
           <span className={cn(
-            "text-[10px] uppercase font-bold px-2 py-0.5 tracking-wider transition-all duration-300",
+            "text-[9px] uppercase font-bold px-1.5 py-0.5 tracking-wide transition-colors duration-200",
             isAnnual
               ? "bg-[hsl(var(--accent-teal))] text-black"
-              : "bg-white/[0.1] text-foreground-muted"
+              : "bg-white/[0.06] text-foreground-muted/50"
           )}>
             -33%
           </span>
-        </div>
+        </button>
       </div>
 
       {/* Helper text */}
-      <p className="text-xs text-foreground-muted/70">
-        Save up to <span className="text-[hsl(var(--accent-teal))] font-medium">33%</span> with annual billing
+      <p className="text-[11px] text-foreground-muted/50">
+        Save up to <span className="text-[hsl(var(--accent-teal))]">33%</span> with annual billing
       </p>
     </div>
   );
