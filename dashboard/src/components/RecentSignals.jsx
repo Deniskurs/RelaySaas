@@ -528,11 +528,11 @@ const SignalCard = ({
         </div>
       </div>
 
-      {/* Body Content */}
-      <div className="p-4 space-y-3">
+      {/* Body Content - no gaps between elements to prevent hover flickering */}
+      <div className="p-4 flex flex-col">
           {/* Raw Message - Clickable to expand/collapse */}
           <div
-            className="bg-black/20 rounded-none p-3 border border-white/5 cursor-pointer hover:border-white/10 transition-colors group/message"
+            className="bg-black/20 rounded-none p-3 border border-white/5 cursor-pointer hover:border-white/10 transition-colors mb-3"
             onClick={() => setIsMessageExpanded(!isMessageExpanded)}
             role="button"
             tabIndex={0}
@@ -554,7 +554,7 @@ const SignalCard = ({
               </p>
               <ChevronUp
                 className={cn(
-                  "w-3 h-3 text-foreground-muted transition-transform shrink-0 opacity-50 group-hover/message:opacity-100",
+                  "w-3 h-3 text-foreground-muted/60 transition-transform shrink-0",
                   !isMessageExpanded && "rotate-180"
                 )}
               />
@@ -612,12 +612,8 @@ const SignalCard = ({
 
           {/* Pending Confirmation Actions - ONLY show when displayStatus is pending_confirmation */}
           {displayStatus === "pending_confirmation" && !isConfirmationDismissed && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-blue-500/5 border border-blue-500/10 rounded-none p-3 space-y-3"
-            >
+            <div className="bg-blue-500/5 border border-blue-500/10 rounded-none p-3 space-y-3">
+
               <div className="flex items-center justify-between">
                 <p className="text-xs text-blue-400 font-medium flex items-center gap-2">
                   <Clock size={14} /> Awaiting Confirmation
@@ -699,7 +695,7 @@ const SignalCard = ({
                   Reject
                 </Button>
               </div>
-            </motion.div>
+            </div>
           )}
 
           {/* Correction Actions */}
