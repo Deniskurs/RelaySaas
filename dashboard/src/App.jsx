@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import { UnsavedChangesProvider } from "./contexts/UnsavedChangesContext";
 import { ToastProvider } from "./components/ui/toast";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 
@@ -20,8 +21,9 @@ export default function App() {
     <AuthProvider>
       <CurrencyProvider>
         <SettingsProvider>
-          <ToastProvider>
-            <Routes>
+          <UnsavedChangesProvider>
+            <ToastProvider>
+              <Routes>
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -57,8 +59,9 @@ export default function App() {
 
               {/* Catch all - redirect to dashboard */}
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </ToastProvider>
+              </Routes>
+            </ToastProvider>
+          </UnsavedChangesProvider>
         </SettingsProvider>
       </CurrencyProvider>
     </AuthProvider>

@@ -736,10 +736,16 @@ async def get_multi_tenant_status(
     return result
 
 
+# Reconnection cooldown: minimum seconds between reconnects per user
+_RECONNECT_COOLDOWN = 10
+_last_reconnect_times: dict = {}  # user_id -> datetime
+
+
 # Manual connection trigger for multi-tenant mode
 @router.post("/system/connect-me")
 async def connect_current_user(
     user: AuthUser = Depends(get_current_user),
+    force: bool = False,  # If True, disconnect and reconnect even if healthy
 ):
     """Manually connect/reconnect the current user in multi-tenant mode.
 
@@ -747,6 +753,10 @@ async def connect_current_user(
     - User completed onboarding after server started
     - Connection failed and needs to be retried
     - User wants to reconnect after settings change
+
+    Stability features:
+    - If already connected and healthy, returns immediately (use force=true to override)
+    - 10-second cooldown between reconnects to prevent tab conflicts
     """
     import os
     import asyncio
@@ -763,9 +773,50 @@ async def connect_current_user(
         user_manager.set_message_handler(signal_router.route_message)
         log.info("Message handler was not set - setting it now")
 
-    # Disconnect first if already connected
+    # Check if already connected and healthy (skip reconnect unless forced)
     existing = user_manager.get_connection(user.id)
+    if existing and not force:
+        # Check Telegram health
+        telegram_healthy = False
+        if existing.telegram_listener:
+            try:
+                telegram_healthy = existing.telegram_listener.is_connected()
+            except Exception:
+                pass
+
+        # Check MetaAPI health
+        metaapi_healthy = existing.metaapi_connected and existing.metaapi_executor is not None
+
+        # If either is healthy, return current status without disrupting
+        if telegram_healthy or metaapi_healthy:
+            log.info(f"User {user.id[:8]} already connected, skipping reconnect (use force=true to override)")
+            return {
+                "status": "already_connected",
+                "message": "Already connected. Connection stable.",
+                "telegram_connected": telegram_healthy,
+                "metaapi_connected": metaapi_healthy,
+            }
+
+    # Check cooldown (prevent rapid reconnects from multiple tabs)
+    if not force:
+        last_time = _last_reconnect_times.get(user.id)
+        if last_time:
+            seconds_since = (datetime.utcnow() - last_time).total_seconds()
+            if seconds_since < _RECONNECT_COOLDOWN:
+                remaining = int(_RECONNECT_COOLDOWN - seconds_since)
+                log.info(f"User {user.id[:8]} reconnect rate-limited, {remaining}s remaining")
+                return {
+                    "status": "rate_limited",
+                    "message": f"Please wait {remaining} seconds before reconnecting again.",
+                    "retry_after": remaining,
+                }
+
+    # Record this reconnect attempt
+    _last_reconnect_times[user.id] = datetime.utcnow()
+
+    # Disconnect first if already connected
     if existing:
+        log.info(f"User {user.id[:8]} disconnecting for fresh reconnect (force={force})")
         await user_manager.disconnect_user(user.id)
 
     # Small delay to ensure clean disconnect before reconnect

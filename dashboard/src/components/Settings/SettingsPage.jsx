@@ -19,6 +19,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { useApi } from "@/hooks/useApi";
 import { useRefresh } from "@/hooks/useRefresh";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useUnsavedChangesContext } from "@/contexts/UnsavedChangesContext";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -300,6 +301,36 @@ export default function SettingsPage() {
   // Hook for browser close/refresh warning
   useUnsavedChanges(anyChanges, handleSaveAll);
 
+  // Register unsaved changes state with global context (for Dashboard navigation blocking)
+  const {
+    setHasUnsavedChanges: setGlobalUnsavedChanges,
+    setOnSave: setGlobalOnSave,
+    setOnDiscard: setGlobalOnDiscard,
+    pendingNavigation,
+    setPendingNavigation,
+  } = useUnsavedChangesContext();
+
+  // Sync local unsaved state to global context
+  useEffect(() => {
+    setGlobalUnsavedChanges(anyChanges);
+    setGlobalOnSave(handleSaveAll);
+    setGlobalOnDiscard(handleResetAll);
+
+    // Cleanup on unmount
+    return () => {
+      setGlobalUnsavedChanges(false);
+      setGlobalOnSave(null);
+      setGlobalOnDiscard(null);
+    };
+  }, [anyChanges, handleSaveAll, handleResetAll, setGlobalUnsavedChanges, setGlobalOnSave, setGlobalOnDiscard]);
+
+  // Handle pending navigation from Dashboard (when user clicked another tab)
+  useEffect(() => {
+    if (pendingNavigation && anyChanges) {
+      setShowUnsavedDialog(true);
+    }
+  }, [pendingNavigation, anyChanges]);
+
   // Handle tab change with unsaved changes check
   const handleTabChange = useCallback((newTab) => {
     if (anyChanges && newTab !== activeTab) {
@@ -317,9 +348,17 @@ export default function SettingsPage() {
 
     setShowUnsavedDialog(false);
 
+    // Handle internal tab change
     if (pendingTab) {
       setActiveTab(pendingTab);
       setPendingTab(null);
+    }
+
+    // Handle Dashboard navigation (external tab change)
+    if (pendingNavigation) {
+      const callback = pendingNavigation;
+      setPendingNavigation(null);
+      callback();
     }
   };
 
@@ -327,15 +366,24 @@ export default function SettingsPage() {
     handleResetAll();
     setShowUnsavedDialog(false);
 
+    // Handle internal tab change
     if (pendingTab) {
       setActiveTab(pendingTab);
       setPendingTab(null);
+    }
+
+    // Handle Dashboard navigation (external tab change)
+    if (pendingNavigation) {
+      const callback = pendingNavigation;
+      setPendingNavigation(null);
+      callback();
     }
   };
 
   const handleDialogCancel = () => {
     setShowUnsavedDialog(false);
     setPendingTab(null);
+    setPendingNavigation(null); // Clear pending navigation
   };
 
   // Determine connection status for tab badges

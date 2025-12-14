@@ -1,0 +1,40 @@
+import { createContext, useContext, useState, useCallback } from "react";
+
+const UnsavedChangesContext = createContext({
+  hasUnsavedChanges: false,
+  setHasUnsavedChanges: () => {},
+  pendingNavigation: null,
+  setPendingNavigation: () => {},
+  onSave: null,
+  setOnSave: () => {},
+  onDiscard: null,
+  setOnDiscard: () => {},
+});
+
+export function UnsavedChangesProvider({ children }) {
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [onSave, setOnSave] = useState(null);
+  const [onDiscard, setOnDiscard] = useState(null);
+
+  return (
+    <UnsavedChangesContext.Provider
+      value={{
+        hasUnsavedChanges,
+        setHasUnsavedChanges,
+        pendingNavigation,
+        setPendingNavigation,
+        onSave,
+        setOnSave: (fn) => setOnSave(() => fn),
+        onDiscard,
+        setOnDiscard: (fn) => setOnDiscard(() => fn),
+      }}
+    >
+      {children}
+    </UnsavedChangesContext.Provider>
+  );
+}
+
+export function useUnsavedChangesContext() {
+  return useContext(UnsavedChangesContext);
+}
