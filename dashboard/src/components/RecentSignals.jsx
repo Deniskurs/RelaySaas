@@ -53,6 +53,22 @@ const StatusBadge = ({ status }) => {
       border: "border-success/20",
       label: "Executed",
     },
+    executing: {
+      icon: RefreshCw,
+      bg: "bg-blue-500/15",
+      text: "text-blue-400",
+      border: "border-blue-500/30",
+      label: "Executing",
+      spin: true,
+    },
+    rejecting: {
+      icon: RefreshCw,
+      bg: "bg-orange-500/15",
+      text: "text-orange-400",
+      border: "border-orange-500/30",
+      label: "Rejecting",
+      spin: true,
+    },
     validated: {
       icon: CheckCircle,
       bg: "bg-primary/10",
@@ -123,7 +139,7 @@ const StatusBadge = ({ status }) => {
         config.border
       )}
     >
-      <Icon size={12} className="shrink-0" />
+      <Icon size={12} className={cn("shrink-0", config.spin && "animate-spin")} />
       <span>{config.label}</span>
       <span className="sr-only">Signal status: {config.label}</span>
     </div>
@@ -336,13 +352,14 @@ const SignalCard = ({
   }, [status, localStatus]);
 
   const handleConfirm = async (signalId, lotSize) => {
-    // Immediately hide the confirmation UI
+    // Immediately hide the confirmation UI and show "executing" state
     setIsConfirmationDismissed(true);
     setIsLoading(true);
-    setLocalStatus("executed"); // Optimistic update
+    setLocalStatus("executing"); // Show intermediate "executing" state
     try {
       await onConfirm(signalId, lotSize);
-      // Play success sound immediately after successful execution
+      // Trade confirmed on MT - update to executed and play sound
+      setLocalStatus("executed");
       if (playSound) playSound("executed");
       // Clear lot selection state after successful confirm
       setLotPresets(null);
@@ -350,7 +367,7 @@ const SignalCard = ({
       setCustomLot("");
     } catch (e) {
       // Revert on error
-      setLocalStatus(null);
+      setLocalStatus("failed");
       setIsConfirmationDismissed(false);
       // Play error sound on failure
       if (playSound) playSound("rejected");
@@ -364,9 +381,10 @@ const SignalCard = ({
     // Immediately hide the confirmation UI
     setIsConfirmationDismissed(true);
     setIsLoading(true);
-    setLocalStatus("rejected"); // Optimistic update
+    setLocalStatus("rejecting"); // Show intermediate state
     try {
       await onReject(signalId);
+      setLocalStatus("rejected");
       // Play rejected sound
       if (playSound) playSound("rejected");
       // Clear lot selection state after reject
@@ -451,11 +469,15 @@ const SignalCard = ({
                   · <span className={cn(
                     displayStatus === "received" && "text-blue-400",
                     displayStatus === "parsed" && "text-amber-400",
-                    displayStatus === "validated" && "text-emerald-400"
+                    displayStatus === "validated" && "text-emerald-400",
+                    displayStatus === "executing" && "text-blue-400",
+                    displayStatus === "rejecting" && "text-orange-400"
                   )}>
                     {displayStatus === "received" && "Processing..."}
                     {displayStatus === "parsed" && "Parsing..."}
                     {displayStatus === "validated" && "Validating..."}
+                    {displayStatus === "executing" && "Placing trade on MT..."}
+                    {displayStatus === "rejecting" && "Rejecting..."}
                   </span>
                 </motion.span>
               )}

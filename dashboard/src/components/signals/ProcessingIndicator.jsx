@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Radio, Brain, ShieldCheck, Bell } from "lucide-react";
+import { Radio, Brain, ShieldCheck, Bell, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AnimatedEllipsis from "./AnimatedEllipsis";
 
@@ -42,6 +42,26 @@ const statusConfig = {
     borderColor: "border-blue-500/40",
     accentColor: "bg-blue-500",
   },
+  executing: {
+    icon: Loader2,
+    text: "Placing Trade",
+    color: "text-blue-400",
+    bgColor: "bg-blue-500/15",
+    borderColor: "border-blue-500/40",
+    accentColor: "bg-blue-500",
+    spin: true,
+    animated: true,
+  },
+  rejecting: {
+    icon: Loader2,
+    text: "Rejecting",
+    color: "text-orange-400",
+    bgColor: "bg-orange-500/15",
+    borderColor: "border-orange-500/40",
+    accentColor: "bg-orange-500",
+    spin: true,
+    animated: true,
+  },
 };
 
 export default function ProcessingIndicator({ status }) {
@@ -61,7 +81,7 @@ export default function ProcessingIndicator({ status }) {
       )}
     >
       <div className="flex items-center gap-1.5">
-        <Icon className={cn("w-3 h-3", config.color)} />
+        <Icon className={cn("w-3 h-3", config.color, config.spin && "animate-spin")} />
         <span className={cn("text-[10px] font-medium tracking-wide", config.color)}>
           {config.text}
           {config.animated && <AnimatedEllipsis />}
@@ -85,8 +105,12 @@ export function getStatusAccentColor(status) {
       return "border-l-emerald-500";
     case "pending_confirmation":
       return "border-l-blue-500";
+    case "executing":
+      return "border-l-blue-400";
     case "executed":
       return "border-l-success";
+    case "rejecting":
+      return "border-l-orange-500";
     case "rejected":
     case "failed":
       return "border-l-destructive";
@@ -110,7 +134,7 @@ export function getCardAnimationClass(status) {
  * Check if a status is a processing state (not completed)
  */
 export function isProcessingStatus(status) {
-  const processingStates = ["received", "parsed", "validated"];
+  const processingStates = ["received", "parsed", "validated", "executing", "rejecting"];
   return processingStates.includes(status?.toLowerCase());
 }
 
