@@ -333,3 +333,212 @@ async def get_checkout_session(
     except stripe.error.StripeError as e:
         log.error(f"Error retrieving checkout session: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# =============================================================================
+# Webhook Handler
+# =============================================================================
+
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+
+@router.post("/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events.
+
+    This endpoint receives events from Stripe when:
+    - checkout.session.completed: Payment successful, activate subscription
+    - customer.subscription.updated: Subscription plan changed
+    - customer.subscription.deleted: Subscription cancelled
+    - invoice.payment_failed: Payment failed
+
+    Configure webhook in Stripe Dashboard:
+    https://dashboard.stripe.com/webhooks
+    Endpoint URL: https://your-api-domain/api/stripe/webhook
+    Events to listen for:
+    - checkout.session.completed
+    - customer.subscription.updated
+    - customer.subscription.deleted
+    - invoice.payment_failed
+    """
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    if not sig_header:
+        raise HTTPException(status_code=400, detail="Missing stripe-signature header")
+
+    try:
+        # Verify webhook signature
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, STRIPE_WEBHOOK_SECRET
+            )
+        else:
+            # Development mode - skip signature verification
+            import json
+            event = stripe.Event.construct_from(
+                json.loads(payload), stripe.api_key
+            )
+    except ValueError as e:
+        log.error(f"Invalid webhook payload: {e}")
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError as e:
+        log.error(f"Invalid webhook signature: {e}")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    event_type = event["type"]
+    data = event["data"]["object"]
+
+    log.info(f"Received Stripe webhook: {event_type}")
+
+    supabase = get_supabase_admin()
+
+    try:
+        if event_type == "checkout.session.completed":
+            # Payment successful - activate subscription
+            await handle_checkout_completed(supabase, data)
+
+        elif event_type == "customer.subscription.updated":
+            # Subscription updated (plan change, renewal, etc.)
+            await handle_subscription_updated(supabase, data)
+
+        elif event_type == "customer.subscription.deleted":
+            # Subscription cancelled
+            await handle_subscription_deleted(supabase, data)
+
+        elif event_type == "invoice.payment_failed":
+            # Payment failed
+            await handle_payment_failed(supabase, data)
+
+        else:
+            log.debug(f"Unhandled webhook event: {event_type}")
+
+    except Exception as e:
+        log.error(f"Error processing webhook {event_type}: {e}")
+        # Return 200 anyway to prevent Stripe from retrying
+        # Log the error for debugging
+
+    return {"received": True}
+
+
+async def handle_checkout_completed(supabase, session):
+    """Handle successful checkout - activate subscription."""
+    user_id = session.get("metadata", {}).get("user_id")
+    plan = session.get("metadata", {}).get("plan")
+
+    if not user_id or not plan:
+        log.warning(f"Checkout completed but missing metadata: user_id={user_id}, plan={plan}")
+        return
+
+    # Get subscription details
+    subscription_id = session.get("subscription")
+    if subscription_id:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        current_period_end = subscription.current_period_end
+    else:
+        current_period_end = None
+
+    # Update user's subscription tier
+    update_data = {
+        "subscription_tier": plan,
+        "subscription_status": "active",
+    }
+
+    if current_period_end:
+        from datetime import datetime
+        update_data["subscription_expires_at"] = datetime.fromtimestamp(current_period_end).isoformat()
+
+    supabase.table("profiles").update(update_data).eq("id", user_id).execute()
+
+    log.info(f"Activated {plan} subscription for user {user_id}")
+
+
+async def handle_subscription_updated(supabase, subscription):
+    """Handle subscription updates (plan changes, renewals)."""
+    customer_id = subscription.get("customer")
+
+    # Find user by Stripe customer ID
+    result = supabase.table("profiles").select("id").eq(
+        "stripe_customer_id", customer_id
+    ).single().execute()
+
+    if not result.data:
+        log.warning(f"Subscription updated but no user found for customer {customer_id}")
+        return
+
+    user_id = result.data["id"]
+
+    # Determine tier from price
+    items = subscription.get("items", {}).get("data", [])
+    if items:
+        price_id = items[0].get("price", {}).get("id")
+        # Find tier from price ID
+        tier = None
+        for key, pid in PRICE_IDS.items():
+            if pid == price_id:
+                tier = PLAN_TIERS.get(key)
+                break
+
+        if tier:
+            from datetime import datetime
+            current_period_end = subscription.get("current_period_end")
+
+            update_data = {
+                "subscription_tier": tier,
+                "subscription_status": subscription.get("status"),
+            }
+
+            if current_period_end:
+                update_data["subscription_expires_at"] = datetime.fromtimestamp(current_period_end).isoformat()
+
+            supabase.table("profiles").update(update_data).eq("id", user_id).execute()
+
+            log.info(f"Updated subscription to {tier} for user {user_id}")
+
+
+async def handle_subscription_deleted(supabase, subscription):
+    """Handle subscription cancellation."""
+    customer_id = subscription.get("customer")
+
+    # Find user by Stripe customer ID
+    result = supabase.table("profiles").select("id").eq(
+        "stripe_customer_id", customer_id
+    ).single().execute()
+
+    if not result.data:
+        log.warning(f"Subscription deleted but no user found for customer {customer_id}")
+        return
+
+    user_id = result.data["id"]
+
+    # Downgrade to free tier
+    supabase.table("profiles").update({
+        "subscription_tier": "free",
+        "subscription_status": "cancelled",
+        "subscription_expires_at": None,
+    }).eq("id", user_id).execute()
+
+    log.info(f"Subscription cancelled for user {user_id}, downgraded to free")
+
+
+async def handle_payment_failed(supabase, invoice):
+    """Handle failed payment."""
+    customer_id = invoice.get("customer")
+
+    # Find user by Stripe customer ID
+    result = supabase.table("profiles").select("id, email").eq(
+        "stripe_customer_id", customer_id
+    ).single().execute()
+
+    if not result.data:
+        log.warning(f"Payment failed but no user found for customer {customer_id}")
+        return
+
+    user_id = result.data["id"]
+
+    # Update subscription status
+    supabase.table("profiles").update({
+        "subscription_status": "past_due",
+    }).eq("id", user_id).execute()
+
+    log.warning(f"Payment failed for user {user_id}")
