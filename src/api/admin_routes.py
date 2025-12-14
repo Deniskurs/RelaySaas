@@ -323,6 +323,84 @@ async def get_system_overview(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ConnectionDebugInfo(BaseModel):
+    """Debug info for a user connection."""
+    user_id: str
+    email: Optional[str] = None
+    is_active: bool = False
+    telegram_connected: bool = False
+    telegram_listener_exists: bool = False
+    telegram_listener_is_connected: bool = False
+    telegram_last_activity: Optional[str] = None
+    telegram_channels_count: int = 0
+    telegram_reconnect_attempts: int = 0
+    metaapi_connected: bool = False
+    metaapi_executor_exists: bool = False
+    connected_at: Optional[str] = None
+
+
+@router.get("/debug/connections", response_model=List[ConnectionDebugInfo])
+async def debug_all_connections(
+    admin: AuthUser = Depends(require_admin),
+):
+    """Debug endpoint: Show all active user connections and their listener status.
+
+    Use this to diagnose why only one user receives signals at a time.
+    """
+    connections = []
+
+    try:
+        supabase = get_supabase_admin()
+
+        for user_id, conn in user_manager._connections.items():
+            # Get user email
+            email = None
+            try:
+                result = supabase.table("profiles").select("email").eq("id", user_id).execute()
+                if result.data:
+                    email = result.data[0].get("email")
+            except:
+                pass
+
+            # Get telegram listener status
+            telegram_listener_exists = conn.telegram_listener is not None
+            telegram_listener_is_connected = False
+            telegram_last_activity = None
+            telegram_channels_count = 0
+            telegram_reconnect_attempts = 0
+
+            if conn.telegram_listener:
+                try:
+                    telegram_listener_is_connected = conn.telegram_listener.is_connected()
+                    status = conn.telegram_listener.get_connection_status()
+                    telegram_last_activity = status.get("last_activity")
+                    telegram_channels_count = status.get("channels_count", 0)
+                    telegram_reconnect_attempts = status.get("reconnect_attempts", 0)
+                except:
+                    pass
+
+            connections.append(ConnectionDebugInfo(
+                user_id=user_id,
+                email=email,
+                is_active=conn.is_active,
+                telegram_connected=conn.telegram_connected,
+                telegram_listener_exists=telegram_listener_exists,
+                telegram_listener_is_connected=telegram_listener_is_connected,
+                telegram_last_activity=telegram_last_activity,
+                telegram_channels_count=telegram_channels_count,
+                telegram_reconnect_attempts=telegram_reconnect_attempts,
+                metaapi_connected=conn.metaapi_connected,
+                metaapi_executor_exists=conn.metaapi_executor is not None,
+                connected_at=conn.connected_at.isoformat() if conn.connected_at else None,
+            ))
+
+        return connections
+
+    except Exception as e:
+        log.error("Error getting debug connections", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/activity", response_model=List[ActivityLogEntry])
 async def get_activity_logs(
     limit: int = Query(50, le=200),

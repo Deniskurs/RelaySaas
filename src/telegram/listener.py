@@ -202,15 +202,33 @@ class TelegramListener:
             return
 
         # Register message handler
+        # Capture self in closure for logging
+        listener_self = self
+        listener_user_tag = user_tag
+        listener_id = id(self)
+
         @self.client.on(events.NewMessage(chats=self._channels))
         async def handler(event):
-            self._last_activity = datetime.utcnow()
-            await self._handle_message(event)
+            # Log immediately when event handler fires - before any processing
+            log.info(
+                f"{listener_user_tag}⚡ RAW EVENT RECEIVED",
+                listener_id=listener_id,
+                message_id=event.message.id,
+                chat_id=event.chat_id,
+            )
+            listener_self._last_activity = datetime.utcnow()
+            await listener_self._handle_message(event)
 
         channel_names = [
             getattr(c, "title", str(c)) for c in self._channels
         ]
-        log.info(f"{user_tag}Listening for signals", channels=channel_names)
+        log.info(
+            f"{user_tag}🎧 LISTENER NOW ACTIVE",
+            channels=channel_names,
+            listener_id=id(self),
+            api_id=self._api_id,
+            phone=self._phone[-4:] if self._phone else None,  # Last 4 digits for privacy
+        )
 
         # Start health check background task
         self._health_task = asyncio.create_task(self._health_check_loop(user_tag))
@@ -289,15 +307,19 @@ class TelegramListener:
             return
 
         user_tag = f"[user:{self.user_id[:8]}] " if self.user_id else ""
-        log.debug(
-            f"{user_tag}New message received",
+        log.info(
+            f"{user_tag}📨 TELEGRAM MESSAGE RECEIVED",
             channel=channel_name,
-            preview=text[:50],
+            channel_id=channel_id,
+            message_id=message.id,
+            preview=text[:80],
+            listener_id=id(self),  # Unique ID to identify which listener instance
         )
 
         # Call the message handler
         if self._on_message:
             try:
+                log.debug(f"{user_tag}Calling message handler...")
                 await self._on_message({
                     "text": text,
                     "channel_name": channel_name,
@@ -306,12 +328,15 @@ class TelegramListener:
                     "date": message.date,
                     "user_id": self.user_id,  # Include user context for multi-tenant
                 })
+                log.debug(f"{user_tag}Message handler completed")
             except Exception as e:
                 log.error(
                     f"{user_tag}Message handler error",
                     error=str(e),
                     channel=channel_name,
                 )
+        else:
+            log.warning(f"{user_tag}No message handler set - message dropped!")
 
     async def _health_check_loop(self, user_tag: str):
         """Background task to monitor connection health.
@@ -386,6 +411,12 @@ class TelegramListener:
     async def stop(self):
         """Stop the Telegram listener."""
         user_tag = f"[user:{self.user_id[:8]}] " if self.user_id else ""
+
+        log.info(
+            f"{user_tag}🛑 LISTENER STOPPING",
+            listener_id=id(self),
+            was_connected=self._is_connected,
+        )
 
         # Signal the reconnect loop to stop
         self._should_stop = True

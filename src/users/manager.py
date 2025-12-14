@@ -153,6 +153,11 @@ class UserConnectionManager:
         if not conn:
             return True
 
+        log.info(
+            f"🔌 DISCONNECTING USER {user_id[:8]}",
+            other_active_connections=[uid[:8] for uid in self._connections.keys() if uid != user_id],
+        )
+
         conn.is_active = False
 
         # Cancel all tasks
@@ -246,6 +251,13 @@ class UserConnectionManager:
         Args:
             message: Dict with text, channel_name, channel_id, message_id, date, user_id.
         """
+        user_id = message.get("user_id", "unknown")
+        log.info(
+            f"[user:{user_id[:8] if len(user_id) > 8 else user_id}] 📬 MESSAGE HANDLER INVOKED",
+            channel=message.get("channel_name"),
+            message_id=message.get("message_id"),
+            total_connections=len(self._connections),
+        )
         if self._message_handler:
             await self._message_handler(message)
         else:
