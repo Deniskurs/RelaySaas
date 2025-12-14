@@ -316,7 +316,12 @@ async def get_checkout_session(
     session_id: str,
     user: AuthUser = Depends(get_current_user),
 ):
-    """Get checkout session status (for confirming successful payment)."""
+    """Get checkout session status and activate subscription if complete.
+
+    This endpoint serves as a fallback for webhook delivery - when the user
+    returns to the success page, we check the session status and activate
+    their subscription if payment was successful.
+    """
     try:
         session = stripe.checkout.Session.retrieve(session_id)
 
@@ -324,10 +329,45 @@ async def get_checkout_session(
         if session.metadata.get("user_id") != user.id:
             raise HTTPException(status_code=403, detail="Session not found")
 
+        # If payment completed, activate subscription (fallback for webhook)
+        if session.status == "complete" and session.payment_status == "paid":
+            plan = session.metadata.get("plan")
+            if plan:
+                supabase = get_supabase_admin()
+
+                # Check if already activated
+                profile = supabase.table("profiles").select(
+                    "subscription_tier"
+                ).eq("id", user.id).single().execute()
+
+                current_tier = profile.data.get("subscription_tier") if profile.data else "free"
+
+                # Only update if not already on this plan
+                if current_tier != plan:
+                    # Get subscription expiry from Stripe
+                    subscription_id = session.subscription
+                    expires_at = None
+                    if subscription_id:
+                        sub = stripe.Subscription.retrieve(subscription_id)
+                        if sub.current_period_end:
+                            from datetime import datetime
+                            expires_at = datetime.fromtimestamp(sub.current_period_end).isoformat()
+
+                    update_data = {
+                        "subscription_tier": plan,
+                        "subscription_status": "active",
+                    }
+                    if expires_at:
+                        update_data["subscription_expires_at"] = expires_at
+
+                    supabase.table("profiles").update(update_data).eq("id", user.id).execute()
+                    log.info(f"Activated {plan} subscription for user {user.id} via checkout session check")
+
         return {
             "status": session.status,
             "payment_status": session.payment_status,
             "customer_email": session.customer_details.email if session.customer_details else None,
+            "plan": session.metadata.get("plan"),
         }
 
     except stripe.error.StripeError as e:
