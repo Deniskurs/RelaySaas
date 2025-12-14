@@ -303,6 +303,9 @@ const SignalCard = ({
   const [isLoading, setIsLoading] = useState(false);
   const [localStatus, setLocalStatus] = useState(null); // For optimistic updates
 
+  // Raw message expansion state (for mobile and desktop)
+  const [isMessageExpanded, setIsMessageExpanded] = useState(false);
+
   // Lot size selection state
   const [lotPresets, setLotPresets] = useState(null);
   const [selectedLot, setSelectedLot] = useState(null);
@@ -426,13 +429,12 @@ const SignalCard = ({
   return (
     <div
       className={cn(
-        "group rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] overflow-visible",
+        "rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] overflow-visible",
         "border-l-4", // Thicker left border for status accent
-        "relative z-10",
+        "relative",
         getStatusAccentColor(displayStatus),
         getCardAnimationClass(displayStatus)
       )}
-      style={{ pointerEvents: "auto" }}
     >
       {/* Header Section */}
       <div className="p-4 border-b border-white/5 flex items-start justify-between gap-4">
@@ -528,11 +530,35 @@ const SignalCard = ({
 
       {/* Body Content */}
       <div className="p-4 space-y-3">
-          {/* Raw Message */}
-          <div className="bg-black/20 rounded-none p-3 border border-white/5">
-            <p className="text-[11px] font-mono text-foreground-muted leading-relaxed whitespace-pre-wrap line-clamp-3 group-hover:line-clamp-none transition-all">
-              {signal.rawMessage || "No message content"}
-            </p>
+          {/* Raw Message - Clickable to expand/collapse */}
+          <div
+            className="bg-black/20 rounded-none p-3 border border-white/5 cursor-pointer hover:border-white/10 transition-colors group/message"
+            onClick={() => setIsMessageExpanded(!isMessageExpanded)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setIsMessageExpanded(!isMessageExpanded);
+              }
+            }}
+            aria-expanded={isMessageExpanded}
+            aria-label={isMessageExpanded ? "Collapse message" : "Expand message"}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className={cn(
+                "text-[11px] font-mono text-foreground-muted leading-relaxed whitespace-pre-wrap transition-all flex-1",
+                !isMessageExpanded && "line-clamp-3"
+              )}>
+                {signal.rawMessage || "No message content"}
+              </p>
+              <ChevronUp
+                className={cn(
+                  "w-3 h-3 text-foreground-muted transition-transform shrink-0 opacity-50 group-hover/message:opacity-100",
+                  !isMessageExpanded && "rotate-180"
+                )}
+              />
+            </div>
           </div>
 
           {/* Warnings - filter out "Awaiting confirmation" when signal is no longer pending */}
@@ -590,8 +616,7 @@ const SignalCard = ({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-blue-500/5 border border-blue-500/10 rounded-none p-3 space-y-3 relative z-20"
-              style={{ pointerEvents: "auto" }}
+              className="bg-blue-500/5 border border-blue-500/10 rounded-none p-3 space-y-3"
             >
               <div className="flex items-center justify-between">
                 <p className="text-xs text-blue-400 font-medium flex items-center gap-2">
@@ -605,7 +630,7 @@ const SignalCard = ({
               </div>
 
               {lotPresets ? (
-                <div className="flex items-center gap-1.5 flex-wrap relative z-30" style={{ pointerEvents: "auto" }}>
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {[
                     { label: "Low", value: lotPresets.low_lot },
                     { label: "Med", value: lotPresets.medium_lot },
@@ -629,7 +654,6 @@ const SignalCard = ({
                         setSelectedLot(opt.value);
                         setCustomLot("");
                       }}
-                      style={{ pointerEvents: "auto" }}
                     >
                       {opt.label}{" "}
                       <span className="opacity-50 ml-1">({opt.value})</span>
@@ -638,11 +662,10 @@ const SignalCard = ({
                   <div className="w-[1px] h-4 bg-white/10 mx-1" />
                   <input
                     type="number"
-                    className="h-6 w-16 bg-black/20 border border-white/10 rounded-none px-2 text-[10px] text-foreground font-mono focus:outline-none focus:border-blue-500/50 transition-colors relative z-30"
+                    className="h-6 w-16 bg-black/20 border border-white/10 rounded-none px-2 text-[10px] text-foreground font-mono focus:outline-none focus:border-blue-500/50 transition-colors"
                     placeholder="Lot"
                     value={customLot}
                     onChange={(e) => setCustomLot(e.target.value)}
-                    style={{ pointerEvents: "auto" }}
                   />
                 </div>
               ) : (
@@ -651,10 +674,10 @@ const SignalCard = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 pt-1 relative z-30" style={{ pointerEvents: "auto" }}>
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 <Button
                   size="sm"
-                  className="h-8 text-xs bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 relative z-30"
+                  className="h-8 text-xs bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20"
                   onClick={() =>
                     handleConfirm(
                       signal.id,
@@ -662,17 +685,15 @@ const SignalCard = ({
                     )
                   }
                   disabled={isLoading}
-                  style={{ pointerEvents: "auto" }}
                 >
                   <CheckCircle size={14} className="mr-1.5" />
                   {isLoading ? "Processing..." : "Accept"}
                 </Button>
                 <Button
                   size="sm"
-                  className="h-8 text-xs bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20 relative z-30"
+                  className="h-8 text-xs bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20"
                   onClick={() => handleReject(signal.id)}
                   disabled={isLoading}
-                  style={{ pointerEvents: "auto" }}
                 >
                   <XCircle size={14} className="mr-1.5" />
                   Reject
@@ -913,7 +934,6 @@ export default function RecentSignals({
                       layout: { duration: 0.25 },
                       opacity: { duration: 0.2 },
                     }}
-                    style={{ position: "relative", zIndex: 1 }}
                   >
                     <SignalCard
                       signal={signal}
