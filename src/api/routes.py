@@ -692,6 +692,7 @@ async def connect_current_user(
     - User wants to reconnect after settings change
     """
     import os
+    import asyncio
     from ..users.manager import user_manager
 
     multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
@@ -704,20 +705,52 @@ async def connect_current_user(
     if existing:
         await user_manager.disconnect_user(user.id)
 
-    # Connect user
+    # Connect user (starts background tasks)
     success = await user_manager.connect_user(user.id)
 
-    if success:
-        conn = user_manager.get_connection(user.id)
+    if not success:
+        return {
+            "status": "failed",
+            "error": "Could not connect - check credentials and settings",
+        }
+
+    # Wait for connections to establish (up to 10 seconds)
+    conn = user_manager.get_connection(user.id)
+    if conn:
+        for _ in range(20):  # 20 * 0.5s = 10 seconds max
+            await asyncio.sleep(0.5)
+
+            # Check if connections are established
+            telegram_ok = conn.telegram_connected or not conn.credentials.has_telegram_credentials
+            metaapi_ok = conn.metaapi_connected or not conn.credentials.has_metatrader_credentials
+
+            if telegram_ok and metaapi_ok:
+                break
+
+            # Also check the listener directly for more accurate status
+            if conn.telegram_listener and conn.telegram_listener.is_connected():
+                conn.telegram_connected = True
+            if conn.metaapi_executor and conn.metaapi_executor.connection:
+                conn.metaapi_connected = True
+
+    # Return final status
+    conn = user_manager.get_connection(user.id)
+    telegram_connected = conn.telegram_connected if conn else False
+    metaapi_connected = conn.metaapi_connected if conn else False
+
+    # Determine overall status
+    if telegram_connected or metaapi_connected:
         return {
             "status": "connected",
-            "telegram_connected": conn.telegram_connected if conn else False,
-            "metaapi_connected": conn.metaapi_connected if conn else False,
+            "telegram_connected": telegram_connected,
+            "metaapi_connected": metaapi_connected,
         }
     else:
         return {
             "status": "failed",
-            "error": "Could not connect - check credentials and settings",
+            "error": "Connections failed to establish - check logs for details",
+            "telegram_connected": False,
+            "metaapi_connected": False,
         }
 
 

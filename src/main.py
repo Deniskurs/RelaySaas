@@ -1414,8 +1414,8 @@ async def run_multi_tenant():
 
     # Load and connect active users from Supabase
     try:
-        from .database.supabase import get_supabase
-        supabase = get_supabase()
+        from .database.supabase import get_supabase_admin
+        supabase = get_supabase_admin()  # Must use admin client to bypass RLS
 
         # Get all active users who have completed onboarding
         log.info("Querying for active users...")
