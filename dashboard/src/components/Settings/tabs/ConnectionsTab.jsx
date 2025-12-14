@@ -200,25 +200,31 @@ function MetaTraderSection({
       {/* Collapsed/Expandable Header */}
       <div
         className={cn(
-          "flex items-center justify-between p-4 rounded-md cursor-pointer",
-          "hover:bg-white/[0.02] transition-colors",
+          "group flex items-center justify-between p-4 rounded-md cursor-pointer",
+          "transition-all duration-200",
           mtCreds.mt_connected
-            ? "bg-emerald-500/[0.04] border border-emerald-500/15"
+            ? "bg-emerald-500/[0.04] border border-emerald-500/15 hover:bg-emerald-500/[0.06] hover:border-emerald-500/25"
             : mtCreds.metaapi_account_id
-            ? "bg-amber-500/[0.04] border border-amber-500/15"
-            : "bg-white/[0.02] border border-white/[0.06]"
+            ? "bg-amber-500/[0.04] border border-amber-500/15 hover:bg-amber-500/[0.06] hover:border-amber-500/25"
+            : "bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.10]"
         )}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-3">
-          <div className={cn(
-            "w-2 h-2 rounded-full",
-            mtCreds.mt_connected ? "bg-emerald-500" : mtCreds.metaapi_account_id ? "bg-amber-500 animate-pulse" : "bg-white/30"
-          )} />
+          {/* Status indicator with ring animation when connecting */}
+          <div className="relative">
+            <div className={cn(
+              "w-2.5 h-2.5 rounded-full transition-colors",
+              mtCreds.mt_connected ? "bg-emerald-500" : mtCreds.metaapi_account_id ? "bg-amber-500" : "bg-white/30"
+            )} />
+            {mtCreds.metaapi_account_id && !mtCreds.mt_connected && (
+              <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-amber-500/50 animate-ping" />
+            )}
+          </div>
           <div>
             <p className={cn(
-              "text-sm font-medium",
-              mtCreds.mt_connected ? "text-emerald-400" : "text-foreground"
+              "text-sm font-medium transition-colors",
+              mtCreds.mt_connected ? "text-emerald-400" : "text-foreground group-hover:text-foreground"
             )}>
               {mtCreds.mt_connected ? "Connected" : mtCreds.metaapi_account_id ? "Connecting..." : "Not Connected"}
             </p>
@@ -227,19 +233,30 @@ function MetaTraderSection({
                 <span className="font-mono">{mtCreds.mt_login}</span> on {mtCreds.mt_server}
               </p>
             ) : (
-              <p className="text-xs text-foreground-muted/70 mt-0.5">
-                Connect your MetaTrader account to start copying trades
+              <p className="text-xs text-foreground-muted/70 mt-0.5 group-hover:text-foreground-muted/90 transition-colors">
+                {isExpanded ? "Fill in your credentials below" : "Click to configure your trading account"}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {mtCreds.mt_connected && (
-            <Badge variant="outline" className="text-[10px] uppercase">
+            <Badge variant="outline" className="text-[10px] uppercase font-medium">
               {mtCreds.mt_platform}
             </Badge>
           )}
-          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {!mtCreds.mt_connected && !isExpanded && (
+            <span className="text-[10px] text-foreground-muted/50 uppercase tracking-wider hidden sm:block group-hover:text-foreground-muted/70 transition-colors">
+              Configure
+            </span>
+          )}
+          <ChevronDown
+            size={16}
+            className={cn(
+              "text-foreground-muted/50 group-hover:text-foreground-muted transition-all duration-200",
+              isExpanded && "rotate-180"
+            )}
+          />
         </div>
       </div>
 
