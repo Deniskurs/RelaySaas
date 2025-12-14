@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Logo, BrandName } from "@/components/Brand/Brand";
 import loginVisual from "@/assets/login-visual.png";
 
 export default function Login() {
@@ -53,49 +55,116 @@ export default function Login() {
 
   const displayError = localError || error;
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { type: "spring", stiffness: 300, damping: 24 },
+    },
+  };
+
   return (
-    <div className="min-h-screen w-full flex bg-background">
-      {/* Left Panel - Visual & Brandy */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-black p-12 flex-col justify-between">
+    <div className="min-h-screen w-full flex bg-background overflow-hidden">
+      {/* Left Panel - Visual & Branding (Magic Edition) */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-black p-12 flex-col justify-between"
+      >
+        {/* Background Layer */}
         <div className="absolute inset-0 z-0">
-          <img
+          <motion.img
             src={loginVisual}
             alt="Signal Copier Success"
             className="w-full h-full object-cover opacity-80"
+            initial={{ scale: 1.1 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+
+          {/* Subtle Magic Particles Overlay */}
+          <div className="absolute inset-0 opacity-30 pointer-events-none">
+            <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-accent-teal/20 rounded-full blur-[100px] animate-pulse-soft" />
+            <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-accent-gold/10 rounded-full blur-[120px] animate-pulse-urgent" />
+          </div>
         </div>
 
         {/* Brand Header */}
-        <div className="relative z-10 flex items-center gap-2">
-          <span className="text-accent-gold font-bold text-lg tracking-wider">
-            RELAY
-          </span>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="relative z-10 flex items-center gap-3"
+        >
+          <Logo size={42} />
+          <BrandName className="scale-110 origin-left" />
+        </motion.div>
 
         {/* Hero Text */}
         <div className="relative z-10 max-w-xl space-y-6">
-          <div className="h-px w-24 bg-accent-teal mb-6" />
-          <h1 className="text-5xl md:text-6xl font-serif text-white leading-tight">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: 96 }} // 24 * 4 = 96px
+            transition={{ delay: 0.8, duration: 0.8 }}
+            className="h-px bg-accent-teal mb-6"
+          />
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1, duration: 0.8, ease: "easeOut" }}
+            className="text-5xl md:text-6xl font-serif text-white leading-tight"
+          >
             Get <br />
             Everything <br />
             You Want
-          </h1>
-          <p className="text-gray-300 text-lg max-w-md font-light">
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.4, duration: 0.8 }}
+            className="text-gray-300 text-lg max-w-md font-light"
+          >
             You can get everything you want if you work hard, trust the process,
             and stick to the plan.
-          </p>
+          </motion.p>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-16">
-        <div className="w-full max-w-[440px] space-y-8">
-          <div className="space-y-2 text-center lg:text-left">
+      {/* Right Panel - Login Form (Magic Edition) */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-16 relative">
+        {/* Magic Aurora Background for Form Side */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-[20%] -right-[10%] w-[600px] h-[600px] bg-accent-teal/5 rounded-full blur-[120px] opacity-40 mix-blend-screen" />
+          <div className="absolute bottom-[10%] left-[10%] w-[500px] h-[500px] bg-accent-gold/5 rounded-full blur-[100px] opacity-30 mix-blend-screen" />
+        </div>
+
+        <motion.div
+          className="w-full max-w-[440px] space-y-8 relative z-10"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div
+            variants={itemVariants}
+            className="space-y-2 text-center lg:text-left"
+          >
             <div className="lg:hidden flex justify-center mb-6">
-              <span className="text-accent-gold font-bold text-lg tracking-wider">
-                RELAY
-              </span>
+              <Logo size={48} />
             </div>
             <h2 className="text-3xl font-serif text-foreground">
               Welcome Back
@@ -103,30 +172,39 @@ export default function Login() {
             <p className="text-foreground-muted">
               Enter your email and password to access your account
             </p>
-          </div>
+          </motion.div>
 
-          <div className="space-y-6">
-            {displayError && (
-              <div className="flex items-center gap-2 p-4 rounded-none bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                <AlertCircle size={16} />
-                {displayError}
-              </div>
-            )}
+          <motion.div variants={itemVariants} className="space-y-6">
+            <AnimatePresence mode="wait">
+              {displayError && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: -10 }}
+                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -10 }}
+                  className="flex items-center gap-2 p-4 rounded-none bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+                >
+                  <AlertCircle size={16} />
+                  {displayError}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
                   Email
                 </label>
-                <div className="relative">
+                <div className="relative group">
                   <Input
                     type="email"
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-surface/50 border-input focus-visible:ring-accent-teal rounded-none px-4"
+                    className="h-12 bg-surface/50 border-input focus-visible:ring-accent-teal rounded-none px-4 transition-all duration-300 group-hover:bg-surface/80"
                     disabled={isLoading}
                   />
+                  {/* Glow effect on hover/focus */}
+                  <div className="absolute inset-0 rounded-none ring-1 ring-accent-teal/0 group-hover:ring-accent-teal/20 pointer-events-none transition-all duration-300" />
                 </div>
               </div>
 
@@ -134,19 +212,22 @@ export default function Login() {
                 <label className="text-sm font-medium text-foreground">
                   Password
                 </label>
-                <div className="relative">
+                <div className="relative group">
                   <Input
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 bg-surface/50 border-input focus-visible:ring-accent-teal rounded-none px-4 pr-10"
+                    className="h-12 bg-surface/50 border-input focus-visible:ring-accent-teal rounded-none px-4 pr-10 transition-all duration-300 group-hover:bg-surface/80"
                     disabled={isLoading}
                   />
+                  {/* Glow effect on hover/focus */}
+                  <div className="absolute inset-0 rounded-none ring-1 ring-accent-teal/0 group-hover:ring-accent-teal/20 pointer-events-none transition-all duration-300" />
+
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground transition-colors"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -155,10 +236,7 @@ export default function Login() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  {/* Checkbox would go here if needed */}
-                  <label className="text-sm text-foreground-muted cursor-pointer select-none">
-                    {/* Remember me functionality would go here */}
-                  </label>
+                  <label className="text-sm text-foreground-muted cursor-pointer select-none"></label>
                 </div>
                 <Link
                   to="/forgot-password"
@@ -170,9 +248,10 @@ export default function Login() {
 
               <Button
                 type="submit"
-                className="w-full h-12 text-base font-medium rounded-none bg-black hover:bg-black/90 text-white border border-border"
+                className="w-full h-12 text-base font-medium rounded-none bg-black hover:bg-black/80 text-white border border-border relative overflow-hidden group"
                 disabled={isLoading}
               >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin mr-2" />
                 ) : null}
@@ -187,7 +266,7 @@ export default function Login() {
                 variant="outline"
                 onClick={handleGoogleLogin}
                 disabled={isLoading}
-                className="w-full h-12 gap-3 rounded-none border-border bg-surface/30 hover:bg-surface/50 text-foreground"
+                className="w-full h-12 gap-3 rounded-none border-border bg-surface/30 hover:bg-surface/50 text-foreground transition-all duration-300"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
@@ -222,8 +301,8 @@ export default function Login() {
                 Sign Up
               </Link>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
     </div>
   );
