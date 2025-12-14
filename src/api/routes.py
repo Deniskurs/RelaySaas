@@ -169,6 +169,33 @@ async def get_signal(signal_id: int):
     return signal
 
 
+@router.post("/signals/{signal_id}/dismiss")
+async def dismiss_signal(
+    signal_id: int,
+    user: AuthUser = Depends(get_current_user),
+):
+    """Dismiss a single signal (hide it from the list).
+
+    The signal will be marked as dismissed and won't appear in future queries.
+    """
+    result = await crud.dismiss_signal(signal_id, user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Signal not found or unauthorized")
+    return {"status": "dismissed", "signal_id": signal_id}
+
+
+@router.post("/signals/dismiss-completed")
+async def dismiss_completed_signals(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Dismiss all completed signals (executed, rejected, failed, skipped).
+
+    This is the "Clear all completed" action from the UI.
+    """
+    count = await crud.dismiss_signals_bulk(user_id=user.id, completed_only=True)
+    return {"status": "dismissed", "count": count}
+
+
 # Trade endpoints
 @router.get("/trades", response_model=List[TradeResponse])
 async def get_trades(

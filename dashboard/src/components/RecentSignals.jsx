@@ -681,13 +681,15 @@ export default function RecentSignals({
 }) {
   const { postData } = useApi();
 
-  // State for dismissed signals (hidden from view)
-  const [dismissedSignals, setDismissedSignals] = useState(new Set());
   // State for expanded signals (completed but showing full details)
   const [expandedSignals, setExpandedSignals] = useState(new Set());
+  // Track signals being dismissed (for optimistic UI)
+  const [dismissingSignals, setDismissingSignals] = useState(new Set());
+  // Track if clearing all is in progress
+  const [isClearingAll, setIsClearingAll] = useState(false);
 
-  // Filter out dismissed signals
-  const visibleSignals = signals.filter((s) => !dismissedSignals.has(s.id));
+  // Filter out signals that are being dismissed (optimistic UI)
+  const visibleSignals = signals.filter((s) => !dismissingSignals.has(s.id));
 
   // Count completed signals for "Clear all" button
   const completedCount = visibleSignals.filter((s) =>
@@ -717,8 +719,22 @@ export default function RecentSignals({
     if (onRefresh) onRefresh();
   };
 
-  const handleDismiss = (signalId) => {
-    setDismissedSignals((prev) => new Set([...prev, signalId]));
+  const handleDismiss = async (signalId) => {
+    // Optimistic UI: immediately hide the signal
+    setDismissingSignals((prev) => new Set([...prev, signalId]));
+    try {
+      await postData(`/signals/${signalId}/dismiss`, {});
+      // Refresh to get updated list from server
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      // Revert on error
+      setDismissingSignals((prev) => {
+        const next = new Set(prev);
+        next.delete(signalId);
+        return next;
+      });
+      console.error("Failed to dismiss signal:", e);
+    }
   };
 
   const handleToggleExpand = (signalId) => {
@@ -733,11 +749,31 @@ export default function RecentSignals({
     });
   };
 
-  const handleClearCompleted = () => {
+  const handleClearCompleted = async () => {
+    // Get all completed signal IDs for optimistic UI
     const completedIds = visibleSignals
       .filter((s) => isCompletedStatus(s.status?.toLowerCase()))
       .map((s) => s.id);
-    setDismissedSignals((prev) => new Set([...prev, ...completedIds]));
+
+    // Optimistic UI: immediately hide all completed signals
+    setIsClearingAll(true);
+    setDismissingSignals((prev) => new Set([...prev, ...completedIds]));
+
+    try {
+      await postData("/signals/dismiss-completed", {});
+      // Refresh to get updated list from server
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      // Revert on error
+      setDismissingSignals((prev) => {
+        const next = new Set(prev);
+        completedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      console.error("Failed to clear completed signals:", e);
+    } finally {
+      setIsClearingAll(false);
+    }
   };
 
   return (
@@ -778,11 +814,12 @@ export default function RecentSignals({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 text-[10px] px-2 text-foreground-muted hover:text-destructive border border-white/5 hover:border-destructive/30"
+              className="h-6 text-[10px] px-2 text-foreground-muted hover:text-destructive border border-white/5 hover:border-destructive/30 disabled:opacity-50"
               onClick={handleClearCompleted}
+              disabled={isClearingAll}
             >
-              <Trash2 size={10} className="mr-1" />
-              Clear {completedCount}
+              <Trash2 size={10} className={cn("mr-1", isClearingAll && "animate-spin")} />
+              {isClearingAll ? "Clearing..." : `Clear ${completedCount}`}
             </Button>
           )}
 

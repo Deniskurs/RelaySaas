@@ -83,8 +83,17 @@ async def get_signals(
     offset: int = 0,
     status: Optional[str] = None,
     user_id: Optional[str] = None,
+    include_dismissed: bool = False,
 ) -> List[dict]:
-    """Get signals with optional filtering."""
+    """Get signals with optional filtering.
+
+    Args:
+        limit: Maximum number of signals to return.
+        offset: Number of signals to skip.
+        status: Filter by status (e.g., 'executed', 'pending_confirmation').
+        user_id: Filter by user ID.
+        include_dismissed: If False (default), exclude dismissed signals.
+    """
     supabase = get_supabase_admin()
 
     query = supabase.table("signals_v2").select("*")
@@ -94,9 +103,75 @@ async def get_signals(
     if user_id:
         query = query.eq("user_id", user_id)
 
+    # By default, exclude dismissed signals
+    if not include_dismissed:
+        query = query.eq("dismissed", False)
+
     query = query.order("received_at", desc=True).range(offset, offset + limit - 1)
     result = query.execute()
     return result.data or []
+
+
+async def dismiss_signal(signal_id: int, user_id: str) -> Optional[dict]:
+    """Mark a signal as dismissed.
+
+    Args:
+        signal_id: The signal ID to dismiss.
+        user_id: The user ID (for authorization check).
+
+    Returns:
+        The updated signal record, or None if not found/unauthorized.
+    """
+    supabase = get_supabase_admin()
+
+    # Update only if the signal belongs to the user
+    result = supabase.table("signals_v2").update({
+        "dismissed": True,
+        "dismissed_at": datetime.utcnow().isoformat(),
+    }).eq("id", signal_id).eq("user_id", user_id).execute()
+
+    return result.data[0] if result.data else None
+
+
+async def dismiss_signals_bulk(
+    signal_ids: List[int] = None,
+    user_id: str = None,
+    completed_only: bool = False,
+) -> int:
+    """Dismiss multiple signals at once.
+
+    Args:
+        signal_ids: List of signal IDs to dismiss. If None and completed_only=True,
+                    dismisses all completed signals for the user.
+        user_id: The user ID (required for authorization).
+        completed_only: If True and signal_ids is None, dismiss all completed signals.
+
+    Returns:
+        Number of signals dismissed.
+    """
+    if not user_id:
+        raise ValueError("user_id is required")
+
+    supabase = get_supabase_admin()
+    dismissed_at = datetime.utcnow().isoformat()
+
+    if signal_ids:
+        # Dismiss specific signals
+        result = supabase.table("signals_v2").update({
+            "dismissed": True,
+            "dismissed_at": dismissed_at,
+        }).in_("id", signal_ids).eq("user_id", user_id).execute()
+        return len(result.data) if result.data else 0
+    elif completed_only:
+        # Dismiss all completed signals for this user
+        completed_statuses = ["executed", "rejected", "failed", "skipped"]
+        result = supabase.table("signals_v2").update({
+            "dismissed": True,
+            "dismissed_at": dismissed_at,
+        }).eq("user_id", user_id).eq("dismissed", False).in_("status", completed_statuses).execute()
+        return len(result.data) if result.data else 0
+
+    return 0
 
 
 async def create_trade(
