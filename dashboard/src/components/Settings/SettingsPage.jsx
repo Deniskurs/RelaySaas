@@ -306,8 +306,6 @@ export default function SettingsPage() {
     setHasUnsavedChanges: setGlobalUnsavedChanges,
     setOnSave: setGlobalOnSave,
     setOnDiscard: setGlobalOnDiscard,
-    pendingNavigation,
-    setPendingNavigation,
   } = useUnsavedChangesContext();
 
   // Sync local unsaved state to global context
@@ -324,13 +322,6 @@ export default function SettingsPage() {
     };
   }, [anyChanges, handleSaveAll, handleResetAll, setGlobalUnsavedChanges, setGlobalOnSave, setGlobalOnDiscard]);
 
-  // Handle pending navigation from Dashboard (when user clicked another tab)
-  useEffect(() => {
-    if (pendingNavigation && anyChanges) {
-      setShowUnsavedDialog(true);
-    }
-  }, [pendingNavigation, anyChanges]);
-
   // Handle tab change with unsaved changes check
   const handleTabChange = useCallback((newTab) => {
     if (anyChanges && newTab !== activeTab) {
@@ -341,24 +332,16 @@ export default function SettingsPage() {
     }
   }, [anyChanges, activeTab]);
 
-  // Dialog action handlers
+  // Dialog action handlers (for internal Settings tab changes)
   const handleDialogSave = async () => {
     const success = await handleSaveAll();
     if (!success) return; // Don't proceed if save failed
 
     setShowUnsavedDialog(false);
 
-    // Handle internal tab change
     if (pendingTab) {
       setActiveTab(pendingTab);
       setPendingTab(null);
-    }
-
-    // Handle Dashboard navigation (external tab change)
-    if (pendingNavigation) {
-      const callback = pendingNavigation;
-      setPendingNavigation(null);
-      callback();
     }
   };
 
@@ -366,24 +349,15 @@ export default function SettingsPage() {
     handleResetAll();
     setShowUnsavedDialog(false);
 
-    // Handle internal tab change
     if (pendingTab) {
       setActiveTab(pendingTab);
       setPendingTab(null);
-    }
-
-    // Handle Dashboard navigation (external tab change)
-    if (pendingNavigation) {
-      const callback = pendingNavigation;
-      setPendingNavigation(null);
-      callback();
     }
   };
 
   const handleDialogCancel = () => {
     setShowUnsavedDialog(false);
     setPendingTab(null);
-    setPendingNavigation(null); // Clear pending navigation
   };
 
   // Determine connection status for tab badges

@@ -11,6 +11,7 @@ import {
   transformStats,
 } from "@/lib/transformers";
 import Sidebar, { SIDEBAR_EXPANDED_WIDTH, SIDEBAR_COLLAPSED_WIDTH, STORAGE_KEY } from "@/components/Navigation/Sidebar";
+import UnsavedChangesDialog from "@/components/Settings/UnsavedChangesDialog";
 import MobileTopBar from "@/components/Navigation/MobileTopBar";
 import BottomTabBar from "@/components/Navigation/BottomTabBar";
 import CommandPalette from "@/components/Navigation/CommandPalette";
@@ -60,7 +61,12 @@ export default function Dashboard() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   // Unsaved changes context for blocking navigation
-  const { hasUnsavedChanges, setPendingNavigation } = useUnsavedChangesContext();
+  const { hasUnsavedChanges, onSave, onDiscard } = useUnsavedChangesContext();
+
+  // State for unsaved changes dialog
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingTab, setPendingTab] = useState(null);
+  const [isSavingFromDialog, setIsSavingFromDialog] = useState(false);
 
   // Use ref to always have current value in callback (avoids stale closure)
   const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
@@ -78,12 +84,45 @@ export default function Dashboard() {
   const setActiveTab = useCallback((newTab) => {
     // If we're on settings and have unsaved changes, block navigation
     if (activeTabRef.current === "settings" && hasUnsavedChangesRef.current && newTab !== "settings") {
-      // Set a callback that will be executed after save/discard
-      setPendingNavigation(() => () => setActiveTabInternal(newTab));
-      return; // Don't change tab yet - SettingsPage will show the dialog
+      setPendingTab(newTab);
+      setShowUnsavedDialog(true);
+      return; // Don't change tab yet - show dialog
     }
     setActiveTabInternal(newTab);
-  }, [setPendingNavigation]);
+  }, []);
+
+  // Dialog handlers
+  const handleDialogSave = async () => {
+    if (onSave) {
+      setIsSavingFromDialog(true);
+      try {
+        await onSave();
+        setShowUnsavedDialog(false);
+        if (pendingTab) {
+          setActiveTabInternal(pendingTab);
+          setPendingTab(null);
+        }
+      } finally {
+        setIsSavingFromDialog(false);
+      }
+    }
+  };
+
+  const handleDialogDiscard = () => {
+    if (onDiscard) {
+      onDiscard();
+    }
+    setShowUnsavedDialog(false);
+    if (pendingTab) {
+      setActiveTabInternal(pendingTab);
+      setPendingTab(null);
+    }
+  };
+
+  const handleDialogCancel = () => {
+    setShowUnsavedDialog(false);
+    setPendingTab(null);
+  };
   const [telegramStatus, setTelegramStatus] = useState(null);
 
   // Sound notifications (disabled by default, user can enable)
@@ -578,6 +617,15 @@ export default function Dashboard() {
       >
         {renderPage()}
       </motion.main>
+
+      {/* Unsaved Changes Dialog (for navigating away from Settings) */}
+      <UnsavedChangesDialog
+        open={showUnsavedDialog}
+        onSave={handleDialogSave}
+        onDiscard={handleDialogDiscard}
+        onCancel={handleDialogCancel}
+        isSaving={isSavingFromDialog}
+      />
     </div>
   );
 }
