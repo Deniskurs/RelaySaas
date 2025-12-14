@@ -426,11 +426,13 @@ const SignalCard = ({
   return (
     <div
       className={cn(
-        "group rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] overflow-hidden",
+        "group rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] overflow-visible",
         "border-l-4", // Thicker left border for status accent
+        "relative z-10",
         getStatusAccentColor(displayStatus),
         getCardAnimationClass(displayStatus)
       )}
+      style={{ pointerEvents: "auto" }}
     >
       {/* Header Section */}
       <div className="p-4 border-b border-white/5 flex items-start justify-between gap-4">
@@ -588,7 +590,8 @@ const SignalCard = ({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-blue-500/5 border border-blue-500/10 rounded-none p-3 space-y-3"
+              className="bg-blue-500/5 border border-blue-500/10 rounded-none p-3 space-y-3 relative z-20"
+              style={{ pointerEvents: "auto" }}
             >
               <div className="flex items-center justify-between">
                 <p className="text-xs text-blue-400 font-medium flex items-center gap-2">
@@ -602,7 +605,7 @@ const SignalCard = ({
               </div>
 
               {lotPresets ? (
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap relative z-30" style={{ pointerEvents: "auto" }}>
                   {[
                     { label: "Low", value: lotPresets.low_lot },
                     { label: "Med", value: lotPresets.medium_lot },
@@ -626,6 +629,7 @@ const SignalCard = ({
                         setSelectedLot(opt.value);
                         setCustomLot("");
                       }}
+                      style={{ pointerEvents: "auto" }}
                     >
                       {opt.label}{" "}
                       <span className="opacity-50 ml-1">({opt.value})</span>
@@ -634,10 +638,11 @@ const SignalCard = ({
                   <div className="w-[1px] h-4 bg-white/10 mx-1" />
                   <input
                     type="number"
-                    className="h-6 w-16 bg-black/20 border border-white/10 rounded-none px-2 text-[10px] text-foreground font-mono focus:outline-none focus:border-blue-500/50 transition-colors"
+                    className="h-6 w-16 bg-black/20 border border-white/10 rounded-none px-2 text-[10px] text-foreground font-mono focus:outline-none focus:border-blue-500/50 transition-colors relative z-30"
                     placeholder="Lot"
                     value={customLot}
                     onChange={(e) => setCustomLot(e.target.value)}
+                    style={{ pointerEvents: "auto" }}
                   />
                 </div>
               ) : (
@@ -646,10 +651,10 @@ const SignalCard = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-2 gap-2 pt-1 relative z-30" style={{ pointerEvents: "auto" }}>
                 <Button
                   size="sm"
-                  className="h-8 text-xs bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20"
+                  className="h-8 text-xs bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 relative z-30"
                   onClick={() =>
                     handleConfirm(
                       signal.id,
@@ -657,15 +662,17 @@ const SignalCard = ({
                     )
                   }
                   disabled={isLoading}
+                  style={{ pointerEvents: "auto" }}
                 >
                   <CheckCircle size={14} className="mr-1.5" />
                   {isLoading ? "Processing..." : "Accept"}
                 </Button>
                 <Button
                   size="sm"
-                  className="h-8 text-xs bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20"
+                  className="h-8 text-xs bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20 relative z-30"
                   onClick={() => handleReject(signal.id)}
                   disabled={isLoading}
+                  style={{ pointerEvents: "auto" }}
                 >
                   <XCircle size={14} className="mr-1.5" />
                   Reject
@@ -894,7 +901,7 @@ export default function RecentSignals({
                 {visibleSignals.map((signal) => (
                   <motion.div
                     key={signal.id}
-                    layout
+                    layout="position"
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{
@@ -906,6 +913,7 @@ export default function RecentSignals({
                       layout: { duration: 0.25 },
                       opacity: { duration: 0.2 },
                     }}
+                    style={{ position: "relative", zIndex: 1 }}
                   >
                     <SignalCard
                       signal={signal}
