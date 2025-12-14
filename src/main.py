@@ -1399,25 +1399,28 @@ async def run_copier():
 
 
 async def run_multi_tenant():
-    """Run the multi-tenant signal copier."""
-    log.info("Starting multi-tenant signal copier")
+    """Run the multi-tenant signal copier with PER-USER LISTENERS.
+
+    Each user has their own Telegram listener using their own credentials.
+    This allows users to receive signals from their own private VIP channels.
+    """
+    log.info("Starting multi-tenant signal copier (PER-USER LISTENER MODE)")
 
     # Set the global copier reference so admin endpoints work
-    # (Even in multi-tenant mode, admin needs to manage Telegram via the copier)
     set_copier(copier)
-
-    # Set up signal router as the message handler
-    user_manager.set_message_handler(signal_router.route_message)
 
     # Start the user connection manager
     await user_manager.start()
 
-    # Load and connect active users from Supabase
+    # Set up the message handler for all user listeners
+    user_manager.set_message_handler(signal_router.route_message)
+
     try:
         from .database.supabase import get_supabase_admin
-        supabase = get_supabase_admin()  # Must use admin client to bypass RLS
 
-        # Get all active users who have completed onboarding
+        supabase = get_supabase_admin()
+
+        # Get all active users
         log.info("Querying for active users...")
         result = supabase.table("profiles").select("id,email").eq("status", "active").execute()
 
@@ -1430,9 +1433,10 @@ async def run_multi_tenant():
                 log.info(f"Connecting user {user_id[:8]} ({email})...")
 
                 try:
-                    success = await user_manager.connect_user(user_id)
+                    # Each user gets their OWN Telegram listener + MetaAPI
+                    success = await user_manager.connect_user(user_id, skip_telegram=False)
                     if success:
-                        log.info(f"Started connection tasks for user {user_id[:8]}")
+                        log.info(f"User {user_id[:8]} connection started")
                     else:
                         log.warning(f"Failed to start connection for user {user_id[:8]}")
                 except Exception as connect_err:
@@ -1448,8 +1452,7 @@ async def run_multi_tenant():
                     f"User {conn_id[:8]} connection status",
                     telegram_connected=conn.telegram_connected,
                     metaapi_connected=conn.metaapi_connected,
-                    telegram_listener_exists=conn.telegram_listener is not None,
-                    metaapi_executor_exists=conn.metaapi_executor is not None,
+                    has_own_listener=conn.telegram_listener is not None,
                 )
 
             log.info(
@@ -1461,7 +1464,7 @@ async def run_multi_tenant():
             log.info("No active users found - waiting for users to onboard")
 
     except Exception as e:
-        log.error("Error loading users from Supabase", error=str(e), exc_info=True)
+        log.error("Error in multi-tenant startup", error=str(e), exc_info=True)
 
     # Keep running
     while True:

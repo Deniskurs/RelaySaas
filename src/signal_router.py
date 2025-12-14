@@ -1,10 +1,11 @@
 """Signal router for multi-tenant signal processing."""
 import asyncio
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from .config import settings
 from .database import supabase_crud as crud
+from .database.supabase import get_supabase_admin
 from .parser.llm_parser import SignalParser
 from .trading.validator import TradeValidator
 from .trading.executor import TradeExecutor, ExecutorSettings
@@ -16,11 +17,133 @@ from .api.plans_routes import check_signal_limit, increment_signal_count
 
 
 class SignalRouter:
-    """Routes signals to the correct user's executor in multi-tenant mode."""
+    """Routes signals to the correct user's executor in multi-tenant mode.
+
+    Supports two modes:
+    1. Per-user listeners: Each user has their own Telegram listener (legacy)
+    2. Shared listener: One system listener fans out to all subscribed users (recommended)
+    """
 
     def __init__(self):
         self.parser = SignalParser()
         self._validators: Dict[str, TradeValidator] = {}
+        self._channel_subscribers_cache: Dict[str, List[str]] = {}  # channel_id -> [user_ids]
+        self._cache_timestamp: Optional[datetime] = None
+        self._cache_ttl_seconds = 60  # Refresh cache every 60 seconds
+
+    def _get_subscribers_for_channel(self, channel_id: str) -> List[str]:
+        """Get list of user IDs subscribed to a channel.
+
+        Uses cached data with TTL to avoid hitting database on every message.
+        """
+        now = datetime.utcnow()
+
+        # Refresh cache if stale or empty
+        if (self._cache_timestamp is None or
+            (now - self._cache_timestamp).total_seconds() > self._cache_ttl_seconds):
+            self._refresh_channel_subscribers_cache()
+
+        # Normalize channel_id (remove leading # if present)
+        normalized_id = channel_id.lstrip('#')
+
+        return self._channel_subscribers_cache.get(normalized_id, [])
+
+    def _refresh_channel_subscribers_cache(self):
+        """Refresh the channel subscribers cache from database."""
+        try:
+            supabase = get_supabase_admin()
+
+            # Get all user settings with channel subscriptions
+            result = supabase.table("user_settings_v2").select(
+                "user_id, telegram_channel_ids"
+            ).execute()
+
+            # Build reverse index: channel_id -> [user_ids]
+            new_cache: Dict[str, List[str]] = {}
+
+            for row in (result.data or []):
+                user_id = row.get("user_id")
+                channels = row.get("telegram_channel_ids") or []
+
+                for channel in channels:
+                    # Normalize channel_id
+                    normalized = str(channel).lstrip('#')
+                    if normalized not in new_cache:
+                        new_cache[normalized] = []
+                    if user_id not in new_cache[normalized]:
+                        new_cache[normalized].append(user_id)
+
+            self._channel_subscribers_cache = new_cache
+            self._cache_timestamp = datetime.utcnow()
+
+            log.debug(
+                "Channel subscribers cache refreshed",
+                channels=len(new_cache),
+                total_subscriptions=sum(len(v) for v in new_cache.values()),
+            )
+
+        except Exception as e:
+            log.error("Failed to refresh channel subscribers cache", error=str(e))
+
+    async def route_message_to_subscribers(self, message: dict):
+        """Route a message from SHARED LISTENER to all subscribed users.
+
+        This is the recommended approach for multi-tenant:
+        - One system Telegram listener receives signals
+        - Signals are fanned out to ALL users subscribed to that channel
+
+        Args:
+            message: Dict with text, channel_name, channel_id, message_id, date
+                     (NO user_id - that's determined by subscription)
+        """
+        channel_id = message.get("channel_id", "")
+        channel_name = message.get("channel_name", "Unknown")
+        text = message.get("text", "")
+
+        if not text or len(text) < 10:
+            return
+
+        # Get all users subscribed to this channel
+        subscribers = self._get_subscribers_for_channel(channel_id)
+
+        if not subscribers:
+            # Log at info level so admin can see unsubscribed channels
+            log.info(
+                f"📭 No subscribers for channel '{channel_name}' - message ignored",
+                channel_id=channel_id,
+                hint="Users can subscribe to this channel in Settings",
+            )
+            return
+
+        log.info(
+            f"📡 SHARED LISTENER: Routing to {len(subscribers)} subscribers",
+            channel=channel_name,
+            channel_id=channel_id,
+            subscribers=[s[:8] for s in subscribers],
+            preview=text[:50],
+        )
+
+        # Process for each subscriber concurrently
+        tasks = []
+        for user_id in subscribers:
+            # Create user-specific message
+            user_message = {
+                **message,
+                "user_id": user_id,
+            }
+            tasks.append(self.route_message(user_message))
+
+        # Run all in parallel
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Log any errors
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    log.error(
+                        f"Error routing to subscriber {subscribers[i][:8]}",
+                        error=str(result),
+                    )
 
     def _get_user_tag(self, user_id: Optional[str]) -> str:
         """Get user tag for logging."""

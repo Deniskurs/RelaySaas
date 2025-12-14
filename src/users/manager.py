@@ -85,11 +85,13 @@ class UserConnectionManager:
 
         log.info("User connection manager stopped")
 
-    async def connect_user(self, user_id: str) -> bool:
+    async def connect_user(self, user_id: str, skip_telegram: bool = False) -> bool:
         """Start connections for a user.
 
         Args:
             user_id: User UUID.
+            skip_telegram: If True, don't start individual Telegram listener.
+                          Use this when running in shared listener mode.
 
         Returns:
             True if connections started successfully.
@@ -122,12 +124,17 @@ class UserConnectionManager:
 
             self._connections[user_id] = conn
 
-            log.info("User connection created", user_id=user_id)
+            log.info("User connection created", user_id=user_id, skip_telegram=skip_telegram)
 
             # Start connections in background tasks
-            if credentials.has_telegram_credentials:
+            # In shared listener mode, we skip individual Telegram listeners
+            if credentials.has_telegram_credentials and not skip_telegram:
                 task = asyncio.create_task(self._connect_telegram(user_id))
                 conn._tasks.add(task)
+            elif skip_telegram:
+                # Mark telegram as "connected" since shared listener handles it
+                conn.telegram_connected = True
+                log.info(f"User {user_id[:8]} using shared Telegram listener")
 
             if credentials.has_metatrader_credentials:
                 task = asyncio.create_task(self._connect_metaapi(user_id))

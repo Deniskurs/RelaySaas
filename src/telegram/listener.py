@@ -197,9 +197,13 @@ class TelegramListener:
         # Resolve channel IDs
         self._channels = await self._resolve_channels()
 
-        if not self._channels:
+        # For shared listener (user_id=None), we listen to ALL channels dynamically
+        # so empty channel list is OK - filtering happens server-side via subscriber cache
+        if not self._channels and self.user_id is not None:
             log.error(f"{user_tag}No valid channels to monitor")
             return
+        elif not self._channels:
+            log.info(f"{user_tag}Shared listener: will listen to ALL channels dynamically")
 
         # Register message handler
         # Capture self in closure for logging
@@ -207,8 +211,20 @@ class TelegramListener:
         listener_user_tag = user_tag
         listener_id = id(self)
 
-        @self.client.on(events.NewMessage(chats=self._channels))
+        # For shared listener (user_id=None), listen to ALL channels and filter server-side
+        # This allows dynamic channel additions without restart
+        listen_to_all = self.user_id is None
+        chat_filter = None if listen_to_all else self._channels
+
+        @self.client.on(events.NewMessage(chats=chat_filter))
         async def handler(event):
+            # For shared listener, filter to only channels (not private chats/groups)
+            if listen_to_all:
+                chat = event.chat
+                # Only process Channel messages (not User, Chat, etc.)
+                if not isinstance(chat, Channel):
+                    return
+
             # Log immediately when event handler fires - before any processing
             log.info(
                 f"{listener_user_tag}⚡ RAW EVENT RECEIVED",

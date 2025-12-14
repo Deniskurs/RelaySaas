@@ -762,8 +762,9 @@ async def connect_current_user(
     if existing:
         await user_manager.disconnect_user(user.id)
 
-    # Connect user (starts background tasks)
-    success = await user_manager.connect_user(user.id)
+    # Connect user with their OWN Telegram listener and MetaAPI
+    # Each user uses their own Telegram credentials for their private channels
+    success = await user_manager.connect_user(user.id, skip_telegram=False)
 
     if not success:
         return {

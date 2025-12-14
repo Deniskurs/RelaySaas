@@ -32,14 +32,16 @@ async def create_signal(
     supabase = get_supabase_admin()
 
     # Check for duplicate message to prevent double-processing
+    # IMPORTANT: Include user_id so each user can receive the same signal independently
     if message_id and channel_id:
         existing = supabase.table("signals_v2") \
             .select("id") \
             .eq("channel_id", channel_id) \
             .eq("message_id", message_id) \
+            .eq("user_id", user_id) \
             .execute()
         if existing.data and len(existing.data) > 0:
-            # Already processed this message
+            # This user already processed this message
             return None
 
     data = {
