@@ -664,6 +664,186 @@ class SignalRouter:
             modifier_type=modifier_type,
         )
 
+    async def confirm_signal(self, user_id: str, signal_id: int, lot_size_override: Optional[float] = None) -> bool:
+        """Confirm and execute a pending signal for a user.
+
+        Args:
+            user_id: User UUID.
+            signal_id: Database signal ID.
+            lot_size_override: Optional lot size override from user selection.
+
+        Returns:
+            True if execution succeeded, False otherwise.
+        """
+        user_tag = self._get_user_tag(user_id)
+        log.info(f"{user_tag}Confirming signal", signal_id=signal_id, lot_size_override=lot_size_override)
+
+        # Get user connection
+        conn = user_manager.get_connection(user_id)
+        if not conn or not conn.is_active:
+            log.error(f"{user_tag}No active connection for confirm_signal")
+            return False
+
+        executor = conn.metaapi_executor
+        if not executor or not executor.connection:
+            log.error(f"{user_tag}No MetaAPI executor for confirm_signal")
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="MetaAPI executor not connected",
+            )
+            return False
+
+        # Get signal from database
+        signal = await crud.get_signal(signal_id)
+        if not signal:
+            log.error(f"{user_tag}Signal not found for confirmation", signal_id=signal_id)
+            return False
+
+        if signal.get("status") != "pending_confirmation":
+            log.error(f"{user_tag}Signal not pending confirmation", signal_id=signal_id, status=signal.get("status"))
+            return False
+
+        # Verify ownership
+        if signal.get("user_id") != user_id:
+            log.error(f"{user_tag}Signal does not belong to user", signal_id=signal_id)
+            return False
+
+        # Check we have the required fields
+        if not signal.get("symbol") or not signal.get("entry_price") or not signal.get("stop_loss") or not signal.get("direction"):
+            log.error(f"{user_tag}Signal missing required fields", signal_id=signal_id)
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="Missing required fields",
+            )
+            return False
+
+        take_profits = signal.get("take_profits") or []
+        if not take_profits:
+            log.error(f"{user_tag}Signal has no take profits", signal_id=signal_id)
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="No take profit levels defined",
+            )
+            return False
+
+        # Create a ParsedSignal-like object
+        class ConfirmedSignal:
+            pass
+
+        parsed = ConfirmedSignal()
+        parsed.direction = signal.get("direction")
+        parsed.symbol = signal.get("symbol")
+        parsed.entry_price = signal.get("entry_price")
+        parsed.stop_loss = signal.get("stop_loss")
+        parsed.take_profits = take_profits
+        parsed.confidence = signal.get("confidence") or 0.8
+        parsed.warnings = ["Manually confirmed"]
+
+        # Get user settings
+        user_settings = conn.settings
+        default_lot_size = user_settings.lot_reference_size_default if user_settings else 0.01
+        max_lot_size = user_settings.max_lot_size if user_settings else 0.1
+
+        # Get lot size: use override if provided, otherwise extract from warnings or use default
+        if lot_size_override is not None and lot_size_override > 0:
+            lot_size = lot_size_override
+        else:
+            lot_size = default_lot_size
+            for warning in (signal.get("warnings") or []):
+                if "lot size:" in warning.lower():
+                    try:
+                        lot_size = float(warning.split("lot size:")[1].strip().rstrip(")"))
+                    except:
+                        pass
+
+        # Ensure lot size is within bounds
+        lot_size = max(0.01, min(lot_size, max_lot_size))
+
+        # Check plan limits before executing
+        limit_check = await check_signal_limit(user_id)
+        if not limit_check.get("allowed", True):
+            log.warning(f"{user_tag}Signal blocked by plan limit", signal_id=signal_id)
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=limit_check.get("message", "Daily signal limit reached"),
+            )
+            return False
+
+        # Execute
+        try:
+            executions = await executor.execute(parsed, lot_size)
+        except Exception as e:
+            log.error(f"{user_tag}Confirmed signal execution error", error=str(e))
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=f"Execution error: {str(e)}",
+            )
+            return False
+
+        if not executions:
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason=executor.last_error or "Order execution failed",
+            )
+            return False
+
+        # Update signal status
+        await crud.update_signal(
+            signal_id,
+            status="executed",
+            executed_at=datetime.utcnow().isoformat(),
+        )
+
+        # Save trades
+        for exec_data in executions:
+            await crud.create_trade(
+                signal_id=signal_id,
+                user_id=user_id,
+                position_id=exec_data.get("position_id"),
+                order_id=exec_data.get("order_id"),
+                symbol=exec_data.get("symbol"),
+                direction=exec_data.get("direction"),
+                lot_size=exec_data.get("lot_size"),
+                entry_price=exec_data.get("entry_price"),
+                stop_loss=exec_data.get("stop_loss"),
+                take_profit=exec_data.get("take_profit"),
+                tp_index=exec_data.get("tp_index", 0),
+            )
+
+        # Increment signal count for plan tracking
+        await increment_signal_count(user_id)
+
+        # Emit event
+        await event_bus.emit(
+            Events.SIGNAL_EXECUTED,
+            {
+                "signal_id": signal_id,
+                "user_id": user_id,
+                "symbol": parsed.symbol,
+                "direction": parsed.direction,
+                "trades": len(executions),
+                "lot_size": lot_size,
+                "manual_confirm": True,
+            },
+        )
+
+        log.info(
+            f"{user_tag}Signal confirmed and executed",
+            signal_id=signal_id,
+            symbol=parsed.symbol,
+            direction=parsed.direction,
+            lot_size=lot_size,
+            trades=len(executions),
+        )
+
+        return True
+
 
 # Global instance
 signal_router = SignalRouter()

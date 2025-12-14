@@ -531,6 +531,9 @@ async def confirm_signal(
     user: AuthUser = Depends(get_current_user),
 ):
     """Confirm and execute a pending signal with optional lot size override."""
+    import os
+    from ..users.manager import user_manager
+
     signal = await crud.get_signal(signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -543,12 +546,6 @@ async def confirm_signal(
         raise HTTPException(
             status_code=400,
             detail=f"Signal not pending confirmation, current status: {signal.get('status')}"
-        )
-
-    if not _copier:
-        raise HTTPException(
-            status_code=503,
-            detail="Signal copier not initialized"
         )
 
     # Validate lot size if provided
@@ -565,7 +562,40 @@ async def confirm_signal(
                 detail=f"Lot size cannot exceed {settings.max_lot_size}"
             )
 
-    success = await _copier.confirm_signal(signal_id, lot_size_override=confirm_request.lot_size)
+    # Check if multi-tenant mode
+    multi_tenant = os.getenv("MULTI_TENANT_MODE", "false").lower() == "true"
+
+    if multi_tenant:
+        # Use user's executor from user_manager
+        conn = user_manager.get_connection(user.id)
+        if not conn:
+            raise HTTPException(
+                status_code=503,
+                detail="Not connected. Go to Settings and click Refresh to reconnect."
+            )
+
+        executor = conn.metaapi_executor
+        if not executor or not executor.connection:
+            raise HTTPException(
+                status_code=503,
+                detail="MetaTrader not connected. Go to Settings and click Refresh to reconnect."
+            )
+
+        # Execute using signal_router's confirm logic
+        from ..signal_router import signal_router
+        success = await signal_router.confirm_signal(
+            user_id=user.id,
+            signal_id=signal_id,
+            lot_size_override=confirm_request.lot_size
+        )
+    else:
+        # Legacy single-user mode
+        if not _copier:
+            raise HTTPException(
+                status_code=503,
+                detail="Signal copier not initialized"
+            )
+        success = await _copier.confirm_signal(signal_id, lot_size_override=confirm_request.lot_size)
 
     if success:
         return SignalCorrectionResponse(
