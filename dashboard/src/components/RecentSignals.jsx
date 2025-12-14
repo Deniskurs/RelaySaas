@@ -29,6 +29,7 @@ import { useRefresh } from "@/hooks/useRefresh";
 import {
   ProcessingIndicator,
   getCardAnimationClass,
+  getStatusAccentColor,
   isProcessingStatus,
   isCompletedStatus,
 } from "@/components/signals";
@@ -68,11 +69,10 @@ const StatusBadge = ({ status }) => {
     },
     pending_confirmation: {
       icon: AlertTriangle,
-      bg: "bg-primary/10",
+      bg: "bg-primary/15",
       text: "text-primary",
-      border: "border-primary/20",
+      border: "border-primary/30",
       label: "Awaiting",
-      pulse: true,
     },
     rejected: {
       icon: XCircle,
@@ -120,8 +120,7 @@ const StatusBadge = ({ status }) => {
         "inline-flex items-center gap-1.5 px-2 py-1 rounded-none border text-[10px] font-medium uppercase tracking-wider",
         config.bg,
         config.text,
-        config.border,
-        config.pulse && "animate-pulse"
+        config.border
       )}
     >
       <Icon size={12} className="shrink-0" />
@@ -291,12 +290,15 @@ const SignalCard = ({
   const [lotPresets, setLotPresets] = useState(null);
   const [selectedLot, setSelectedLot] = useState(null);
   const [customLot, setCustomLot] = useState("");
+  // Explicit flag to immediately hide confirmation UI when action is taken
+  const [isConfirmationDismissed, setIsConfirmationDismissed] = useState(false);
   const { fetchData } = useApi();
   const { format: formatCurrency } = useCurrency();
 
   // Use localStatus for optimistic UI, fall back to actual status
   const displayStatus = localStatus || status;
-  const isPendingConfirmation = displayStatus === "pending_confirmation";
+  // Only show confirmation if status is pending AND we haven't dismissed it
+  const isPendingConfirmation = displayStatus === "pending_confirmation" && !isConfirmationDismissed;
   const isProcessing = isProcessingStatus(displayStatus);
   const isCompleted = isCompletedStatus(displayStatus);
 
@@ -328,10 +330,13 @@ const SignalCard = ({
       setLotPresets(null);
       setSelectedLot(null);
       setCustomLot("");
+      setIsConfirmationDismissed(false); // Reset for next signal
     }
   }, [status, localStatus]);
 
   const handleConfirm = async (signalId, lotSize) => {
+    // Immediately hide the confirmation UI
+    setIsConfirmationDismissed(true);
     setIsLoading(true);
     setLocalStatus("executed"); // Optimistic update
     try {
@@ -341,7 +346,9 @@ const SignalCard = ({
       setSelectedLot(null);
       setCustomLot("");
     } catch (e) {
-      setLocalStatus(null); // Revert on error
+      // Revert on error
+      setLocalStatus(null);
+      setIsConfirmationDismissed(false);
       console.error(e);
     } finally {
       setIsLoading(false);
@@ -349,6 +356,8 @@ const SignalCard = ({
   };
 
   const handleReject = async (signalId) => {
+    // Immediately hide the confirmation UI
+    setIsConfirmationDismissed(true);
     setIsLoading(true);
     setLocalStatus("rejected"); // Optimistic update
     try {
@@ -358,7 +367,9 @@ const SignalCard = ({
       setSelectedLot(null);
       setCustomLot("");
     } catch (e) {
-      setLocalStatus(null); // Revert on error
+      // Revert on error
+      setLocalStatus(null);
+      setIsConfirmationDismissed(false);
       console.error(e);
     } finally {
       setIsLoading(false);
@@ -388,89 +399,104 @@ const SignalCard = ({
   }
 
   return (
-    <div className="relative">
-      {/* Processing indicator overlay */}
-      <AnimatePresence>
-        {isProcessing && <ProcessingIndicator status={displayStatus} />}
-      </AnimatePresence>
-
-      <div
-        className={cn(
-          "group rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all duration-200 overflow-hidden",
-          getCardAnimationClass(displayStatus)
-        )}
-      >
-        {/* Header Section */}
-        <div className="p-4 border-b border-white/5 flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <StatusBadge status={displayStatus} />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-foreground">
-                  {signal.symbol || "--"}
-                </span>
-                <span
-                  className={cn(
-                    "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-none bg-white/5",
-                    signal.type === "BUY" ? "text-success" : "text-destructive"
-                  )}
-                >
-                  {signal.type}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] text-foreground-muted font-mono">
-                  {formatTime(signal.timestamp)}
-                </span>
-                <span className="text-[10px] text-foreground-subtle">·</span>
-                <span className="text-[10px] text-foreground-muted truncate max-w-[120px]">
-                  {signal.channelName || "Unknown"}
-                </span>
-              </div>
+    <div
+      className={cn(
+        "group rounded-none border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] overflow-hidden",
+        "border-l-4", // Thicker left border for status accent
+        getStatusAccentColor(displayStatus),
+        getCardAnimationClass(displayStatus)
+      )}
+    >
+      {/* Header Section */}
+      <div className="p-4 border-b border-white/5 flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Symbol and Direction */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-foreground">
+                {signal.symbol || "--"}
+              </span>
+              <span
+                className={cn(
+                  "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-none bg-white/5",
+                  signal.type === "BUY" ? "text-success" : "text-destructive"
+                )}
+              >
+                {signal.type}
+              </span>
+              <StatusBadge status={displayStatus} />
             </div>
-          </div>
-
-          <div className="text-right flex items-start gap-2">
-            <div>
-              <div className="font-mono text-sm font-medium text-foreground">
-                {price}
-              </div>
-              {signal.confidence && (
-                <div className="flex items-center justify-end gap-1 mt-1">
-                  <span className="text-[10px] text-foreground-muted">
-                    Confidence:
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] text-foreground-muted font-mono">
+                {formatTime(signal.timestamp)}
+              </span>
+              <span className="text-[10px] text-foreground-subtle">·</span>
+              <span className="text-[10px] text-foreground-muted truncate max-w-[120px]">
+                {signal.channelName || "Unknown"}
+              </span>
+              {/* Inline processing status text */}
+              {isProcessing && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-[10px] text-foreground-muted"
+                >
+                  · <span className={cn(
+                    displayStatus === "received" && "text-blue-400",
+                    displayStatus === "parsed" && "text-amber-400",
+                    displayStatus === "validated" && "text-emerald-400"
+                  )}>
+                    {displayStatus === "received" && "Processing..."}
+                    {displayStatus === "parsed" && "Parsing..."}
+                    {displayStatus === "validated" && "Validating..."}
                   </span>
-                  <span
-                    className={cn(
-                      "text-[10px] font-mono",
-                      signal.confidence >= 0.8
-                        ? "text-success"
-                        : "text-warning"
-                    )}
-                  >
-                    {(signal.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
+                </motion.span>
               )}
             </div>
-
-            {/* Collapse button for expanded completed cards */}
-            {isCompleted && isExpanded && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 opacity-50 hover:opacity-100"
-                onClick={() => onExpand?.(signal.id)}
-                title="Collapse"
-              >
-                <ChevronUp className="w-4 h-4 text-foreground-muted" />
-              </Button>
-            )}
           </div>
         </div>
 
-        {/* Body Content */}
-        <div className="p-4 space-y-3">
+        <div className="text-right flex items-start gap-2 flex-shrink-0">
+          <div>
+            <div className="font-mono text-sm font-medium text-foreground">
+              {price}
+            </div>
+            {signal.confidence && (
+              <div className="flex items-center justify-end gap-1 mt-1">
+                <span className="text-[10px] text-foreground-muted">
+                  Confidence:
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] font-mono",
+                    signal.confidence >= 0.8
+                      ? "text-success"
+                      : "text-warning"
+                  )}
+                >
+                  {(signal.confidence * 100).toFixed(0)}%
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Collapse button for expanded completed cards */}
+          {isCompleted && isExpanded && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 opacity-50 hover:opacity-100"
+              onClick={() => onExpand?.(signal.id)}
+              title="Collapse"
+            >
+              <ChevronUp className="w-4 h-4 text-foreground-muted" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Body Content */}
+      <div className="p-4 space-y-3">
           {/* Raw Message */}
           <div className="bg-black/20 rounded-none p-3 border border-white/5">
             <p className="text-[11px] font-mono text-foreground-muted leading-relaxed whitespace-pre-wrap line-clamp-3 group-hover:line-clamp-none transition-all">
@@ -634,7 +660,6 @@ const SignalCard = ({
                 </div>
               </div>
             )}
-        </div>
       </div>
     </div>
   );

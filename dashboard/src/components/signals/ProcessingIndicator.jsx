@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 import AnimatedEllipsis from "./AnimatedEllipsis";
 
 /**
- * ProcessingIndicator - Animated status indicator for signal processing stages
+ * ProcessingIndicator - SUBTLE status indicator for signal processing stages
  *
- * Shows a floating badge with status-specific animation and text
+ * Shows a small floating badge with status text - no aggressive animations
  */
 const statusConfig = {
   received: {
@@ -15,14 +15,15 @@ const statusConfig = {
     color: "text-blue-400",
     bgColor: "bg-blue-500/10",
     borderColor: "border-blue-500/30",
-    animated: false,
+    accentColor: "bg-blue-500",
   },
   parsed: {
     icon: Brain,
-    text: "Parsing Signal",
+    text: "Parsing",
     color: "text-amber-400",
     bgColor: "bg-amber-500/10",
     borderColor: "border-amber-500/30",
+    accentColor: "bg-amber-500",
     animated: true,
   },
   validated: {
@@ -31,7 +32,7 @@ const statusConfig = {
     color: "text-emerald-400",
     bgColor: "bg-emerald-500/10",
     borderColor: "border-emerald-500/30",
-    animated: false,
+    accentColor: "bg-emerald-500",
   },
   pending_confirmation: {
     icon: Bell,
@@ -39,8 +40,7 @@ const statusConfig = {
     color: "text-blue-400",
     bgColor: "bg-blue-500/15",
     borderColor: "border-blue-500/40",
-    animated: false,
-    urgent: true,
+    accentColor: "bg-blue-500",
   },
 };
 
@@ -61,13 +61,7 @@ export default function ProcessingIndicator({ status }) {
       )}
     >
       <div className="flex items-center gap-1.5">
-        <Icon
-          className={cn(
-            "w-3 h-3",
-            config.color,
-            config.urgent && "animate-pulse"
-          )}
-        />
+        <Icon className={cn("w-3 h-3", config.color)} />
         <span className={cn("text-[10px] font-medium tracking-wide", config.color)}>
           {config.text}
           {config.animated && <AnimatedEllipsis />}
@@ -78,21 +72,38 @@ export default function ProcessingIndicator({ status }) {
 }
 
 /**
- * Get the animation class for the card border based on status
+ * Get the accent bar color class based on status
+ * Returns a left border color - NO animations, just color
  */
-export function getCardAnimationClass(status) {
+export function getStatusAccentColor(status) {
   switch (status?.toLowerCase()) {
     case "received":
-      return "animate-pulse-soft border-2";
+      return "border-l-blue-500";
     case "parsed":
-      return "border-2 border-amber-500/30 bg-gradient-to-r from-transparent via-amber-500/5 to-transparent bg-[length:200%_100%] animate-shimmer";
+      return "border-l-amber-500";
     case "validated":
-      return "animate-flash-success border-2";
+      return "border-l-emerald-500";
     case "pending_confirmation":
-      return "animate-pulse-urgent border-2";
+      return "border-l-blue-500";
+    case "executed":
+      return "border-l-success";
+    case "rejected":
+    case "failed":
+      return "border-l-destructive";
+    case "skipped":
+      return "border-l-warning";
     default:
-      return "";
+      return "border-l-white/10";
   }
+}
+
+/**
+ * Get card animation class - NOW SUBTLE (no flashing)
+ * Just returns transition classes for smooth color changes
+ */
+export function getCardAnimationClass(status) {
+  // No more pulsing/flashing - just smooth transitions
+  return "transition-all duration-300";
 }
 
 /**

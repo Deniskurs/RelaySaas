@@ -24,11 +24,11 @@ const SOUND_CONFIGS = {
     gain: 0.2,
   },
   executed: {
-    // Success confirmation - pleasant ascending arpeggio
-    frequencies: [523, 659, 784],
-    durations: [0.08, 0.08, 0.2],
+    // Success confirmation - celebratory ascending arpeggio (C major chord)
+    frequencies: [523, 659, 784, 1047],
+    durations: [0.08, 0.08, 0.1, 0.25],
     type: "sine",
-    gain: 0.15,
+    gain: 0.18,
   },
   rejected: {
     // Error notification - descending notes
