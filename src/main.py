@@ -1418,16 +1418,39 @@ async def run_multi_tenant():
         supabase = get_supabase()
 
         # Get all active users who have completed onboarding
-        result = supabase.table("profiles").select("id").eq("status", "active").execute()
+        log.info("Querying for active users...")
+        result = supabase.table("profiles").select("id,email").eq("status", "active").execute()
 
         if result.data:
+            log.info(f"Found {len(result.data)} active users to connect")
+
             for profile in result.data:
                 user_id = profile["id"]
-                success = await user_manager.connect_user(user_id)
-                if success:
-                    log.info("Connected user", user_id=user_id[:8])
-                else:
-                    log.warning("Failed to connect user", user_id=user_id[:8])
+                email = profile.get("email", "unknown")
+                log.info(f"Connecting user {user_id[:8]} ({email})...")
+
+                try:
+                    success = await user_manager.connect_user(user_id)
+                    if success:
+                        log.info(f"Started connection tasks for user {user_id[:8]}")
+                    else:
+                        log.warning(f"Failed to start connection for user {user_id[:8]}")
+                except Exception as connect_err:
+                    log.error(f"Error connecting user {user_id[:8]}", error=str(connect_err))
+
+            # Wait for connections to establish
+            log.info("Waiting for connections to establish...")
+            await asyncio.sleep(5)
+
+            # Log final status
+            for conn_id, conn in user_manager._connections.items():
+                log.info(
+                    f"User {conn_id[:8]} connection status",
+                    telegram_connected=conn.telegram_connected,
+                    metaapi_connected=conn.metaapi_connected,
+                    telegram_listener_exists=conn.telegram_listener is not None,
+                    metaapi_executor_exists=conn.metaapi_executor is not None,
+                )
 
             log.info(
                 "Multi-tenant startup complete",
@@ -1438,7 +1461,7 @@ async def run_multi_tenant():
             log.info("No active users found - waiting for users to onboard")
 
     except Exception as e:
-        log.error("Error loading users from Supabase", error=str(e))
+        log.error("Error loading users from Supabase", error=str(e), exc_info=True)
 
     # Keep running
     while True:

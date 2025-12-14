@@ -211,7 +211,7 @@ class UserConnectionManager:
             )
 
             conn.telegram_listener = listener
-            conn.telegram_connected = True
+            # Don't set telegram_connected yet - wait for actual connection
 
             log.info("Telegram listener created for user", user_id=user_id[:8])
 
@@ -219,13 +219,22 @@ class UserConnectionManager:
             # Messages will be routed through the global message handler
             async def run_listener():
                 try:
+                    log.info(f"Starting Telegram listener for user {user_id[:8]}...")
                     await listener.start(self._on_user_message)
                 except Exception as e:
-                    log.error(f"Telegram listener error for user {user_id[:8]}", error=str(e))
+                    log.error(f"Telegram listener error for user {user_id[:8]}", error=str(e), exc_info=True)
                     conn.telegram_connected = False
+                finally:
+                    # Update connection status based on listener state
+                    conn.telegram_connected = listener.is_connected() if listener else False
+                    log.info(f"Telegram listener ended for user {user_id[:8]}, connected={conn.telegram_connected}")
 
             task = asyncio.create_task(run_listener())
             conn._tasks.add(task)
+
+            # Wait a moment for initial connection to establish
+            await asyncio.sleep(2)
+            conn.telegram_connected = listener.is_connected()
 
         except Exception as e:
             log.error("Failed to connect Telegram for user", user_id=user_id[:8], error=str(e))
@@ -250,12 +259,18 @@ class UserConnectionManager:
         """
         conn = self._connections.get(user_id)
         if not conn or not conn.credentials:
+            log.warning("No connection or credentials for MetaApi", user_id=user_id[:8])
             return
 
         # Check if we have a MetaApi account ID
         if not conn.credentials.metaapi_account_id:
             log.warning("No MetaApi account ID for user", user_id=user_id[:8])
             return
+
+        log.info(
+            f"Connecting MetaApi for user {user_id[:8]}",
+            account_id=conn.credentials.metaapi_account_id[:8] if conn.credentials.metaapi_account_id else None,
+        )
 
         try:
             # Import here to avoid circular imports
@@ -282,14 +297,15 @@ class UserConnectionManager:
                 executor_settings=executor_settings,
             )
 
+            log.info(f"Awaiting MetaApi connection for user {user_id[:8]}...")
             await executor.connect()
             conn.metaapi_executor = executor
             conn.metaapi_connected = True
 
-            log.info("MetaApi connected for user", user_id=user_id[:8])
+            log.info("MetaApi connected successfully for user", user_id=user_id[:8])
 
         except Exception as e:
-            log.error("Failed to connect MetaApi for user", user_id=user_id[:8], error=str(e))
+            log.error("Failed to connect MetaApi for user", user_id=user_id[:8], error=str(e), exc_info=True)
             conn.metaapi_connected = False
 
     def get_connection(self, user_id: str) -> Optional[UserConnection]:
