@@ -16,7 +16,6 @@ import {
   BarChart3,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApi } from "@/hooks/useApi";
@@ -641,30 +640,39 @@ function TelegramSection({
       {/* Collapsed/Expandable Header */}
       <div
         className={cn(
-          "flex items-center justify-between p-4 rounded-md cursor-pointer",
-          "hover:bg-white/[0.02] transition-colors",
+          "group flex items-center justify-between p-4 rounded-md cursor-pointer",
+          "transition-all duration-200",
           connectionStatus === "connected"
-            ? "bg-emerald-500/[0.04] border border-emerald-500/15"
+            ? "bg-emerald-500/[0.04] border border-emerald-500/15 hover:bg-emerald-500/[0.06] hover:border-emerald-500/25"
             : connectionStatus === "pending_code" || connectionStatus === "pending_password"
-            ? "bg-blue-500/[0.04] border border-blue-500/15"
+            ? "bg-blue-500/[0.04] border border-blue-500/15 hover:bg-blue-500/[0.06] hover:border-blue-500/25"
             : connectionStatus === "disconnected"
-            ? "bg-rose-500/[0.04] border border-rose-500/15"
-            : "bg-white/[0.02] border border-white/[0.06]"
+            ? "bg-rose-500/[0.04] border border-rose-500/15 hover:bg-rose-500/[0.06] hover:border-rose-500/25"
+            : "bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.10]"
         )}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-3">
-          <div className={cn(
-            "w-2 h-2 rounded-full",
-            connectionStatus === "connected" ? "bg-emerald-500" :
-            connectionStatus === "pending_code" || connectionStatus === "pending_password" ? "bg-blue-500 animate-pulse" :
-            connectionStatus === "disconnected" ? "bg-rose-500" :
-            connectionStatus === "loading" ? "bg-amber-500 animate-pulse" :
-            "bg-white/30"
-          )} />
+          {/* Status indicator with animations */}
+          <div className="relative">
+            <div className={cn(
+              "w-2.5 h-2.5 rounded-full transition-colors",
+              connectionStatus === "connected" ? "bg-emerald-500" :
+              connectionStatus === "pending_code" || connectionStatus === "pending_password" ? "bg-blue-500" :
+              connectionStatus === "disconnected" ? "bg-rose-500" :
+              connectionStatus === "loading" ? "bg-amber-500" :
+              "bg-white/30"
+            )} />
+            {(connectionStatus === "pending_code" || connectionStatus === "pending_password" || connectionStatus === "loading") && (
+              <div className={cn(
+                "absolute inset-0 w-2.5 h-2.5 rounded-full animate-ping",
+                connectionStatus === "loading" ? "bg-amber-500/50" : "bg-blue-500/50"
+              )} />
+            )}
+          </div>
           <div>
             <p className={cn(
-              "text-sm font-medium",
+              "text-sm font-medium transition-colors",
               connectionStatus === "connected" ? "text-emerald-400" :
               connectionStatus === "pending_code" || connectionStatus === "pending_password" ? "text-blue-400" :
               connectionStatus === "disconnected" ? "text-rose-400" :
@@ -677,18 +685,20 @@ function TelegramSection({
                connectionStatus === "loading" ? "Checking..." :
                "Not Configured"}
             </p>
-            <p className="text-xs text-foreground-muted/70 mt-0.5">
+            <p className="text-xs text-foreground-muted/70 mt-0.5 group-hover:text-foreground-muted/90 transition-colors">
               {connectionStatus === "connected" && channelCount > 0
                 ? `Listening to ${channelCount} channel(s)`
                 : connectionStatus === "connected"
                 ? "Ready to receive signals"
+                : connectionStatus === "not_configured" && !isExpanded
+                ? "Click to configure your Telegram connection"
                 : telegramCreds.telegram_phone
                 ? `Phone: ${telegramCreds.telegram_phone}`
                 : "Configure your Telegram credentials"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {connectionStatus === "connected" && (
             <Button
               variant="ghost"
@@ -698,12 +708,23 @@ function TelegramSection({
                 handleReconnect();
               }}
               disabled={isConnecting}
-              className="h-7 px-2 text-foreground-muted hover:text-foreground"
+              className="h-7 px-2 text-foreground-muted hover:text-foreground hover:bg-white/[0.05]"
             >
               {isConnecting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             </Button>
           )}
-          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {connectionStatus === "not_configured" && !isExpanded && (
+            <span className="text-[10px] text-foreground-muted/50 uppercase tracking-wider hidden sm:block group-hover:text-foreground-muted/70 transition-colors">
+              Configure
+            </span>
+          )}
+          <ChevronDown
+            size={16}
+            className={cn(
+              "text-foreground-muted/50 group-hover:text-foreground-muted transition-all duration-200",
+              isExpanded && "rotate-180"
+            )}
+          />
         </div>
       </div>
 
