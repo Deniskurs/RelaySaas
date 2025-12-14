@@ -744,20 +744,46 @@ class SignalRouter:
 
         # Get user settings
         user_settings = conn.settings
-        default_lot_size = user_settings.lot_reference_size_default if user_settings else 0.01
         max_lot_size = user_settings.max_lot_size if user_settings else 0.1
 
-        # Get lot size: use override if provided, otherwise extract from warnings or use default
+        # Get lot size: use override if provided, otherwise calculate from balance
         if lot_size_override is not None and lot_size_override > 0:
             lot_size = lot_size_override
         else:
-            lot_size = default_lot_size
+            # First try to extract from warnings (pre-calculated lot from validation)
+            lot_size = None
             for warning in (signal.get("warnings") or []):
                 if "lot size:" in warning.lower():
                     try:
                         lot_size = float(warning.split("lot size:")[1].strip().rstrip(")"))
+                        break
                     except:
                         pass
+
+            # If no lot size found in warnings, calculate dynamically from user's balance
+            if lot_size is None:
+                from .trading.validator import calculate_lot_for_symbol
+                from .database.supabase import get_settings
+
+                # Get user's actual balance from their executor
+                try:
+                    account_info = await executor.get_account_info()
+                    balance = account_info.get("balance", 0)
+                except Exception:
+                    balance = 0
+
+                # Get user's settings for reference balance calculation
+                db_settings = get_settings(user_id)
+
+                lot_size = calculate_lot_for_symbol(
+                    symbol=parsed.symbol,
+                    account_balance=balance,
+                    min_lot=0.01,
+                    max_lot=max_lot_size,
+                    db_settings=db_settings,
+                )
+                log.info(f"{user_tag}Calculated lot size for confirmation",
+                         symbol=parsed.symbol, balance=balance, lot_size=lot_size)
 
         # Ensure lot size is within bounds
         lot_size = max(0.01, min(lot_size, max_lot_size))
