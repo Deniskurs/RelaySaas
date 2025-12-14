@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,16 +62,28 @@ export default function Dashboard() {
   // Unsaved changes context for blocking navigation
   const { hasUnsavedChanges, setPendingNavigation } = useUnsavedChangesContext();
 
+  // Use ref to always have current value in callback (avoids stale closure)
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  const activeTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
   // Wrapped tab change that checks for unsaved changes
   const setActiveTab = useCallback((newTab) => {
     // If we're on settings and have unsaved changes, block navigation
-    if (activeTab === "settings" && hasUnsavedChanges && newTab !== "settings") {
+    if (activeTabRef.current === "settings" && hasUnsavedChangesRef.current && newTab !== "settings") {
       // Set a callback that will be executed after save/discard
       setPendingNavigation(() => () => setActiveTabInternal(newTab));
       return; // Don't change tab yet - SettingsPage will show the dialog
     }
     setActiveTabInternal(newTab);
-  }, [activeTab, hasUnsavedChanges, setPendingNavigation]);
+  }, [setPendingNavigation]);
   const [telegramStatus, setTelegramStatus] = useState(null);
 
   // Sound notifications (disabled by default, user can enable)
