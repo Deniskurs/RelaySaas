@@ -280,6 +280,7 @@ const SignalCard = ({
   isExpanded,
   onExpand,
   onDismiss,
+  playSound,
 }) => {
   const status = signal.status?.toLowerCase() || "pending";
   const price = signal.price || signal.entryPrice || "--";
@@ -341,6 +342,8 @@ const SignalCard = ({
     setLocalStatus("executed"); // Optimistic update
     try {
       await onConfirm(signalId, lotSize);
+      // Play success sound immediately after successful execution
+      if (playSound) playSound("executed");
       // Clear lot selection state after successful confirm
       setLotPresets(null);
       setSelectedLot(null);
@@ -349,6 +352,8 @@ const SignalCard = ({
       // Revert on error
       setLocalStatus(null);
       setIsConfirmationDismissed(false);
+      // Play error sound on failure
+      if (playSound) playSound("rejected");
       console.error(e);
     } finally {
       setIsLoading(false);
@@ -362,6 +367,8 @@ const SignalCard = ({
     setLocalStatus("rejected"); // Optimistic update
     try {
       await onReject(signalId);
+      // Play rejected sound
+      if (playSound) playSound("rejected");
       // Clear lot selection state after reject
       setLotPresets(null);
       setSelectedLot(null);
@@ -539,8 +546,8 @@ const SignalCard = ({
               </div>
             )}
 
-          {/* Pending Confirmation Actions - ONLY show when actually pending */}
-          {isPendingConfirmation && status === "pending_confirmation" && (
+          {/* Pending Confirmation Actions - ONLY show when signal status is actually pending_confirmation */}
+          {status === "pending_confirmation" && !isConfirmationDismissed && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
@@ -678,6 +685,7 @@ export default function RecentSignals({
   onNavigateSettings = null,
   soundEnabled = false,
   onSoundToggle = null,
+  playSound = null,
 }) {
   const { postData } = useApi();
 
@@ -871,6 +879,7 @@ export default function RecentSignals({
                       isExpanded={expandedSignals.has(signal.id)}
                       onExpand={handleToggleExpand}
                       onDismiss={handleDismiss}
+                      playSound={playSound}
                     />
                   </motion.div>
                 ))}

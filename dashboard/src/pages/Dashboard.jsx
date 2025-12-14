@@ -349,6 +349,7 @@ export default function Dashboard() {
             onNavigateSettings={() => setActiveTab("settings")}
             soundEnabled={soundEnabled}
             onSoundToggle={handleSoundToggle}
+            playSound={playSound}
           />
         </div>
       </div>
@@ -424,6 +425,7 @@ export default function Dashboard() {
             onNavigateSettings={() => setActiveTab("settings")}
             soundEnabled={soundEnabled}
             onSoundToggle={handleSoundToggle}
+            playSound={playSound}
             fullPage
           />
         );
