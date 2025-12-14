@@ -296,28 +296,14 @@ export default function SettingsPage() {
   // Unsaved changes warning state
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingTab, setPendingTab] = useState(null);
-  const [dialogAction, setDialogAction] = useState(null); // 'tab' or 'route'
 
-  // Hook for route navigation blocking and browser close warning
-  const {
-    blocker,
-    proceedNavigation,
-    cancelNavigation,
-  } = useUnsavedChanges(anyChanges, handleSaveAll);
-
-  // Show dialog when route blocker activates
-  useEffect(() => {
-    if (blocker.state === "blocked") {
-      setDialogAction("route");
-      setShowUnsavedDialog(true);
-    }
-  }, [blocker.state]);
+  // Hook for browser close/refresh warning
+  useUnsavedChanges(anyChanges, handleSaveAll);
 
   // Handle tab change with unsaved changes check
   const handleTabChange = useCallback((newTab) => {
     if (anyChanges && newTab !== activeTab) {
       setPendingTab(newTab);
-      setDialogAction("tab");
       setShowUnsavedDialog(true);
     } else {
       setActiveTab(newTab);
@@ -331,36 +317,25 @@ export default function SettingsPage() {
 
     setShowUnsavedDialog(false);
 
-    if (dialogAction === "tab" && pendingTab) {
+    if (pendingTab) {
       setActiveTab(pendingTab);
       setPendingTab(null);
-    } else if (dialogAction === "route") {
-      proceedNavigation();
     }
-    setDialogAction(null);
   };
 
   const handleDialogDiscard = () => {
     handleResetAll();
     setShowUnsavedDialog(false);
 
-    if (dialogAction === "tab" && pendingTab) {
+    if (pendingTab) {
       setActiveTab(pendingTab);
       setPendingTab(null);
-    } else if (dialogAction === "route") {
-      proceedNavigation();
     }
-    setDialogAction(null);
   };
 
   const handleDialogCancel = () => {
     setShowUnsavedDialog(false);
     setPendingTab(null);
-
-    if (dialogAction === "route") {
-      cancelNavigation();
-    }
-    setDialogAction(null);
   };
 
   // Determine connection status for tab badges
