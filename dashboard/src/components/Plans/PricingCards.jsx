@@ -41,7 +41,7 @@ export const PLANS = {
     name: "Pro",
     tagline: "For serious traders who want more",
     monthlyPrice: 22.99,
-    annualPrice: 15.00, // £179.99/year = £15/mo
+    annualPrice: 15.0, // £179.99/year = £15/mo
     annualTotal: 179.99,
     currency: "£",
     icon: Shield,
@@ -90,198 +90,264 @@ export const PLANS = {
 // Billing toggle component
 export function BillingToggle({ isAnnual, onChange, className }) {
   return (
-    <div className={cn("flex items-center justify-center gap-4", className)}>
-      <span className={cn(
-        "text-sm transition-colors",
-        !isAnnual ? "text-foreground" : "text-foreground-muted"
-      )}>
-        Monthly
-      </span>
-
-      <button
+    <div className={cn("flex flex-col items-center gap-4", className)}>
+      <div
+        className="relative inline-flex items-center p-1 rounded-full bg-black/40 border border-white/[0.08] backdrop-blur-xl cursor-pointer select-none"
         onClick={() => onChange(!isAnnual)}
-        className={cn(
-          "relative w-14 h-7 rounded-full transition-colors",
-          isAnnual
-            ? "bg-[hsl(var(--accent-teal))]"
-            : "bg-white/[0.1]"
-        )}
       >
+        {/* Sliding background */}
         <motion.div
-          className="absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm"
-          animate={{ left: isAnnual ? 32 : 4 }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          className="absolute inset-y-1 w-1/2 rounded-full bg-[hsl(var(--accent-teal))]/10 border border-[hsl(var(--accent-teal))]/20 shadow-[0_0_15px_-3px_hsl(var(--accent-teal))/20]"
+          animate={{ x: isAnnual ? "100%" : "0%" }}
+          initial={false}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
         />
-      </button>
 
-      <div className="flex items-center gap-2">
-        <span className={cn(
-          "text-sm transition-colors",
-          isAnnual ? "text-foreground" : "text-foreground-muted"
-        )}>
+        {/* Monthly Option */}
+        <div
+          className={cn(
+            "relative z-10 px-6 py-2 rounded-full transition-colors duration-200 text-sm font-medium",
+            !isAnnual
+              ? "text-foreground"
+              : "text-foreground-muted hover:text-foreground-muted/80"
+          )}
+        >
+          Monthly
+        </div>
+
+        {/* Annual Option */}
+        <div
+          className={cn(
+            "relative z-10 px-6 py-2 rounded-full transition-colors duration-200 text-sm font-medium flex items-center gap-2",
+            isAnnual
+              ? "text-foreground"
+              : "text-foreground-muted hover:text-foreground-muted/80"
+          )}
+        >
           Annual
-        </span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-[hsl(var(--accent-teal))]/10 text-[hsl(var(--accent-teal))] font-medium">
-          Save 33%
-        </span>
+          {/* Badge */}
+          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[hsl(var(--accent-teal))] text-black tracking-wide">
+            -33%
+          </span>
+        </div>
       </div>
+
+      {/* Helper text */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-xs text-foreground-muted font-medium"
+      >
+        Save up to <span className="text-[hsl(var(--accent-teal))]">33%</span>{" "}
+        with annual billing
+      </motion.p>
     </div>
   );
 }
 
 // Single pricing card
-function PricingCard({
-  plan,
-  isAnnual,
-  isCurrent,
-  onSelect,
-  className,
-}) {
+function PricingCard({ plan, isAnnual, isCurrent, onSelect, className }) {
   const Icon = plan.icon;
   const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
   const isPro = plan.id === "pro";
   const isPremium = plan.id === "premium";
+  const isFree = plan.id === "free";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -5 }}
       transition={{ duration: 0.4 }}
       className={cn(
-        "relative rounded-none border p-6 transition-all duration-300",
-        // Base styling
-        "bg-white/[0.02]",
-        // Pro card - emphasized
+        "relative flex flex-col p-8 transition-all duration-300 rounded-2xl overflow-hidden h-full",
+        // Base Glass styling
+        "bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]",
+
+        // Hover effects
+        "hover:bg-white/[0.05] hover:border-white/[0.1]",
+        "hover:shadow-[0_0_40px_-10px_rgba(255,255,255,0.05)]",
+
+        // Pro card - subtle teal glow
         isPro && [
-          "border-[hsl(var(--accent-teal))]/40",
-          "bg-gradient-to-b from-[hsl(var(--accent-teal))]/5 to-transparent",
-          "shadow-lg shadow-[hsl(var(--accent-teal))]/5",
-          "scale-[1.02] z-10",
+          "border-[hsl(var(--accent-teal))]/30",
+          "bg-gradient-to-b from-[hsl(var(--accent-teal))]/10 to-transparent",
+          "shadow-[0_0_40px_-15px_hsl(var(--accent-teal))/20]",
+          "hover:shadow-[0_0_60px_-15px_hsl(var(--accent-teal))/30]",
         ],
         // Premium card - gold accent
         isPremium && [
           "border-[hsl(var(--accent-gold))]/30",
-          "bg-gradient-to-b from-[hsl(var(--accent-gold))]/5 to-transparent",
+          "bg-gradient-to-b from-[hsl(var(--accent-gold))]/10 to-transparent",
+          "shadow-[0_0_40px_-15px_hsl(var(--accent-gold))/20]",
+          "hover:shadow-[0_0_60px_-15px_hsl(var(--accent-gold))/30]",
         ],
-        // Free card - subtle
-        !isPro && !isPremium && "border-white/[0.08]",
         // Current plan indicator
         isCurrent && "ring-1 ring-[hsl(var(--accent-teal))]",
         className
       )}
     >
+      {/* Background ambient glow/noise for premium feel */}
+      <div className="absolute inset-0 bg-noise opacity-[0.03] pointer-events-none" />
+
+      {/* Highlight glow at top */}
+      <div
+        className={cn(
+          "absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-50",
+          isPro && "via-[hsl(var(--accent-teal))]/50",
+          isPremium && "via-[hsl(var(--accent-gold))]/50"
+        )}
+      />
+
       {/* Badge */}
       {plan.badge && !isCurrent && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className={cn(
-            "px-3 py-1 rounded-none text-[10px] font-semibold",
-            isPro
-              ? "bg-[hsl(var(--accent-teal))] text-background"
-              : "bg-[hsl(var(--accent-gold))] text-background"
-          )}>
+        <div className="absolute top-0 right-0">
+          <div
+            className={cn(
+              "px-4 py-1 rounded-bl-xl text-xs font-bold tracking-wide uppercase",
+              isPro
+                ? "bg-[hsl(var(--accent-teal))] text-background"
+                : "bg-[hsl(var(--accent-gold))] text-background"
+            )}
+          >
             {plan.badge}
-          </span>
+          </div>
         </div>
       )}
 
       {/* Current plan badge */}
       {isCurrent && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="px-3 py-1 rounded-none text-[10px] font-semibold bg-white/[0.1] text-foreground border border-white/[0.1]">
+        <div className="absolute top-4 right-4">
+          <span className="px-3 py-1 rounded-full text-[10px] font-semibold bg-white/[0.1] text-foreground border border-white/[0.1]">
             Current Plan
           </span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4 pt-2">
-        <div className={cn(
-          "p-2.5 rounded-none",
-          isPro && "bg-[hsl(var(--accent-teal))]/10",
-          isPremium && "bg-[hsl(var(--accent-gold))]/10",
-          !isPro && !isPremium && "bg-white/[0.04]"
-        )}>
-          <Icon
-            size={20}
-            className={cn(
-              isPro && "text-[hsl(var(--accent-teal))]",
-              isPremium && "text-[hsl(var(--accent-gold))]",
-              !isPro && !isPremium && "text-foreground-muted"
-            )}
-          />
+      <div className="flex flex-col gap-6 mb-8 relative z-10">
+        <div
+          className={cn(
+            "w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 duration-300",
+            isPro &&
+              "bg-[hsl(var(--accent-teal))]/10 text-[hsl(var(--accent-teal))]",
+            isPremium &&
+              "bg-[hsl(var(--accent-gold))]/10 text-[hsl(var(--accent-gold))]",
+            isFree && "bg-white/[0.06] text-foreground-muted"
+          )}
+        >
+          <Icon size={24} strokeWidth={1.5} />
         </div>
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
-          <p className="text-xs text-foreground-muted">{plan.tagline}</p>
-        </div>
-      </div>
 
-      {/* Price */}
-      <div className="mb-6">
-        <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-bold text-foreground">{plan.currency || "£"}{price}</span>
-          <span className="text-sm text-foreground-muted">/mo</span>
-        </div>
-        {isAnnual && price > 0 && plan.annualTotal && (
-          <p className="text-xs text-foreground-muted mt-1">
-            Billed annually ({plan.currency || "£"}{plan.annualTotal}/year)
+        <div>
+          <h3 className="text-xl font-bold text-foreground mb-1 tracking-tight">
+            {plan.name}
+          </h3>
+          <p className="text-sm text-foreground-muted/80 font-medium">
+            {plan.tagline}
           </p>
+        </div>
+
+        {/* Price */}
+        <div className="flex items-baseline gap-1">
+          <span className="text-5xl font-bold tracking-tighter text-foreground">
+            {plan.currency || "£"}
+            {price}
+          </span>
+          <span className="text-base text-foreground-muted/60 font-medium">
+            /mo
+          </span>
+        </div>
+
+        {isAnnual && price > 0 && plan.annualTotal && (
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 w-fit">
+            <span className="text-xs font-semibold text-green-400">
+              Billed {plan.currency || "£"}
+              {plan.annualTotal} yearly
+            </span>
+          </div>
         )}
         {!isAnnual && plan.monthlyPrice > 0 && (
-          <p className="text-xs text-[hsl(var(--accent-teal))] mt-1">
-            Save {plan.currency || "£"}{((plan.monthlyPrice - plan.annualPrice) * 12).toFixed(0)}/year with annual
+          <p className="text-xs text-[hsl(var(--accent-teal))] font-medium">
+            Save {plan.currency || "£"}
+            {((plan.monthlyPrice - plan.annualPrice) * 12).toFixed(0)}/year with
+            annual
           </p>
         )}
       </div>
 
       {/* Features */}
-      <ul className="space-y-3 mb-6">
-        {plan.features.map((feature, i) => (
-          <li key={i} className="flex items-start gap-2">
-            <div className={cn(
-              "w-4 h-4 rounded-full flex items-center justify-center mt-0.5 shrink-0",
-              feature.highlight
-                ? "bg-[hsl(var(--accent-teal))]/10"
-                : "bg-white/[0.04]"
-            )}>
-              {feature.text.includes("Unlimited") || feature.text.includes("unlimited") ? (
-                <Infinity size={8} className="text-[hsl(var(--accent-teal))]" />
-              ) : (
-                <Check
-                  size={10}
-                  className={cn(
-                    feature.highlight
-                      ? "text-[hsl(var(--accent-teal))]"
-                      : "text-foreground-muted"
-                  )}
-                />
-              )}
-            </div>
-            <span className={cn(
-              "text-sm",
-              feature.highlight ? "text-foreground" : "text-foreground-muted"
-            )}>
-              {feature.text}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <div className="flex-grow mb-8 relative z-10">
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-white/[0.08] to-transparent mb-6" />
+        <ul className="space-y-4">
+          {plan.features.map((feature, i) => (
+            <li key={i} className="flex items-start gap-3 group/item">
+              <div
+                className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center mt-0.5 shrink-0 transition-colors",
+                  feature.highlight || isPro || isPremium
+                    ? "bg-[hsl(var(--accent-teal))]/20 text-[hsl(var(--accent-teal))]"
+                    : "bg-white/[0.06] text-foreground-muted group-hover/item:text-foreground",
+                  isPremium &&
+                    "bg-[hsl(var(--accent-gold))]/20 text-[hsl(var(--accent-gold))]"
+                )}
+              >
+                {feature.text.toLowerCase().includes("unlimited") ? (
+                  <Infinity size={10} strokeWidth={2.5} />
+                ) : (
+                  <Check size={10} strokeWidth={3} />
+                )}
+              </div>
+              <span
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  feature.highlight
+                    ? "text-foreground"
+                    : "text-foreground-muted group-hover/item:text-foreground"
+                )}
+              >
+                {feature.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {/* CTA */}
-      <Button
-        onClick={() => !isCurrent && onSelect?.(plan.id)}
-        disabled={isCurrent}
-        className={cn(
-          "w-full h-11 font-medium",
-          isCurrent && "opacity-50 cursor-not-allowed",
-          isPro && !isCurrent && "bg-[hsl(var(--accent-teal))] hover:bg-[hsl(var(--accent-teal))]/90 text-background",
-          isPremium && !isCurrent && "bg-[hsl(var(--accent-gold))] hover:bg-[hsl(var(--accent-gold))]/90 text-background",
-          plan.ctaVariant === "outline" && !isCurrent && "bg-transparent border border-white/[0.1] text-foreground hover:bg-white/[0.04]"
-        )}
-      >
-        {isCurrent ? "Current Plan" : plan.cta}
-        {!isCurrent && <ChevronRight size={16} className="ml-1" />}
-      </Button>
+      <div className="relative z-10 mt-auto">
+        <Button
+          onClick={() => !isCurrent && onSelect?.(plan.id)}
+          disabled={isCurrent}
+          className={cn(
+            "w-full h-12 rounded-xl text-sm font-semibold tracking-wide transition-all duration-300",
+            isCurrent && "opacity-50 cursor-not-allowed",
+
+            // Pro Button
+            isPro &&
+              !isCurrent && [
+                "bg-[hsl(var(--accent-teal))] hover:bg-[hsl(var(--accent-teal))]/90 text-white",
+                "shadow-[0_0_20px_-5px_hsl(var(--accent-teal))/40]",
+                "hover:shadow-[0_0_30px_-5px_hsl(var(--accent-teal))/60] hover:scale-[1.02]",
+              ],
+
+            // Premium Button
+            isPremium &&
+              !isCurrent && [
+                "bg-[hsl(var(--accent-gold))] hover:bg-[hsl(var(--accent-gold))]/90 text-black",
+                "shadow-[0_0_20px_-5px_hsl(var(--accent-gold))/40]",
+                "hover:shadow-[0_0_30px_-5px_hsl(var(--accent-gold))/60] hover:scale-[1.02]",
+              ],
+
+            // Free Button
+            isFree &&
+              !isCurrent &&
+              "bg-white/[0.08] text-foreground hover:bg-white/[0.15] border border-white/[0.05]"
+          )}
+        >
+          {isCurrent ? "Current Plan" : plan.cta}
+          {!isCurrent && <ChevronRight size={16} className="ml-1 opacity-70" />}
+        </Button>
+      </div>
     </motion.div>
   );
 }
@@ -369,10 +435,7 @@ export function PricingCards({
 }
 
 // Compact pricing cards (for modals/sheets)
-export function PricingCardsCompact({
-  onSelectPlan,
-  className,
-}) {
+export function PricingCardsCompact({ onSelectPlan, className }) {
   const { profile } = useAuth();
   const currentTier = profile?.subscription_tier?.toLowerCase() || "free";
 
@@ -392,19 +455,24 @@ export function PricingCardsCompact({
             className={cn(
               "w-full flex items-center gap-4 p-4 rounded-none border transition-all",
               "text-left",
-              isPro && "border-[hsl(var(--accent-teal))]/30 bg-[hsl(var(--accent-teal))]/5",
-              isPremium && "border-[hsl(var(--accent-gold))]/20 bg-[hsl(var(--accent-gold))]/5",
+              isPro &&
+                "border-[hsl(var(--accent-teal))]/30 bg-[hsl(var(--accent-teal))]/5",
+              isPremium &&
+                "border-[hsl(var(--accent-gold))]/20 bg-[hsl(var(--accent-gold))]/5",
               !isPro && !isPremium && "border-white/[0.06] bg-white/[0.02]",
               !isCurrent && "hover:border-white/[0.15] hover:bg-white/[0.04]",
-              isCurrent && "ring-1 ring-[hsl(var(--accent-teal))] cursor-default"
+              isCurrent &&
+                "ring-1 ring-[hsl(var(--accent-teal))] cursor-default"
             )}
           >
-            <div className={cn(
-              "p-2 rounded-none shrink-0",
-              isPro && "bg-[hsl(var(--accent-teal))]/10",
-              isPremium && "bg-[hsl(var(--accent-gold))]/10",
-              !isPro && !isPremium && "bg-white/[0.04]"
-            )}>
+            <div
+              className={cn(
+                "p-2 rounded-none shrink-0",
+                isPro && "bg-[hsl(var(--accent-teal))]/10",
+                isPremium && "bg-[hsl(var(--accent-gold))]/10",
+                !isPro && !isPremium && "bg-white/[0.04]"
+              )}
+            >
               <Icon
                 size={16}
                 className={cn(
@@ -429,16 +497,24 @@ export function PricingCardsCompact({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-foreground-muted truncate">{plan.tagline}</p>
+              <p className="text-xs text-foreground-muted truncate">
+                {plan.tagline}
+              </p>
             </div>
 
             <div className="text-right shrink-0">
-              <span className="text-lg font-semibold text-foreground">{plan.currency || "£"}{plan.monthlyPrice}</span>
+              <span className="text-lg font-semibold text-foreground">
+                {plan.currency || "£"}
+                {plan.monthlyPrice}
+              </span>
               <span className="text-xs text-foreground-muted">/mo</span>
             </div>
 
             {!isCurrent && (
-              <ChevronRight size={16} className="text-foreground-muted shrink-0" />
+              <ChevronRight
+                size={16}
+                className="text-foreground-muted shrink-0"
+              />
             )}
           </button>
         );

@@ -18,8 +18,18 @@ import { PricingCards, BillingToggle, PLANS } from "./PricingCards";
 // Feature comparison data
 const COMPARISON_FEATURES = {
   "Signal Management": [
-    { name: "Daily Signals", free: "5/day", pro: "Unlimited", premium: "Unlimited" },
-    { name: "Signal History", free: "7 days", pro: "30 days", premium: "1 year" },
+    {
+      name: "Daily Signals",
+      free: "5/day",
+      pro: "Unlimited",
+      premium: "Unlimited",
+    },
+    {
+      name: "Signal History",
+      free: "7 days",
+      pro: "30 days",
+      premium: "1 year",
+    },
     { name: "Early Access", free: false, pro: "5 min", premium: "10 min" },
     { name: "Advanced Filters", free: false, pro: true, premium: true },
     { name: "Signal Analytics", free: false, pro: "Basic", premium: "Full" },
@@ -31,14 +41,24 @@ const COMPARISON_FEATURES = {
   ],
   "Automation & Integration": [
     { name: "Auto-copy Signals", free: true, pro: true, premium: true },
-    { name: "Risk Management", free: "Basic", pro: "Advanced", premium: "Advanced" },
+    {
+      name: "Risk Management",
+      free: "Basic",
+      pro: "Advanced",
+      premium: "Advanced",
+    },
     { name: "Custom Lot Sizing", free: false, pro: true, premium: true },
     { name: "API Access", free: false, pro: false, premium: true },
     { name: "Custom Webhooks", free: false, pro: false, premium: true },
   ],
-  "Support": [
+  Support: [
     { name: "Response Time", free: "24-48h", pro: "4-8h", premium: "1-2h" },
-    { name: "Support Channels", free: "Email", pro: "Email + Chat", premium: "Email + Chat + Phone" },
+    {
+      name: "Support Channels",
+      free: "Email",
+      pro: "Email + Chat",
+      premium: "Email + Chat + Phone",
+    },
     { name: "Onboarding Call", free: false, pro: false, premium: true },
   ],
 };
@@ -47,27 +67,33 @@ const COMPARISON_FEATURES = {
 const FAQ_ITEMS = [
   {
     question: "Can I switch plans anytime?",
-    answer: "Yes! You can upgrade instantly or downgrade at the end of your current billing cycle. Changes take effect immediately for upgrades, with prorated billing.",
+    answer:
+      "Yes! You can upgrade instantly or downgrade at the end of your current billing cycle. Changes take effect immediately for upgrades, with prorated billing.",
   },
   {
     question: "What payment methods do you accept?",
-    answer: "We accept all major credit cards (Visa, Mastercard, Amex) via Stripe. For annual plans, we also accept cryptocurrency payments.",
+    answer:
+      "We accept all major credit cards (Visa, Mastercard, Amex) via Stripe. For annual plans, we also accept cryptocurrency payments.",
   },
   {
     question: "Do you offer refunds?",
-    answer: "Yes, we offer a 14-day money-back guarantee on all paid plans. If you're not satisfied, contact us for a full refund, no questions asked.",
+    answer:
+      "Yes, we offer a 14-day money-back guarantee on all paid plans. If you're not satisfied, contact us for a full refund, no questions asked.",
   },
   {
     question: "What happens if I downgrade?",
-    answer: "Your Pro/Premium features remain active until the end of your billing period. After that, limits apply and extra accounts will be disconnected (we'll notify you first).",
+    answer:
+      "Your Pro/Premium features remain active until the end of your billing period. After that, limits apply and extra accounts will be disconnected (we'll notify you first).",
   },
   {
     question: "Can I try Pro before buying?",
-    answer: "After 7 days of active use on the Free plan, you'll receive a free 24-hour Pro Day to experience all features. You can also request an extended trial by contacting support.",
+    answer:
+      "After 7 days of active use on the Free plan, you'll receive a free 24-hour Pro Day to experience all features. You can also request an extended trial by contacting support.",
   },
   {
     question: "Do prices include taxes?",
-    answer: "Prices shown exclude VAT/sales tax. Applicable taxes will be calculated at checkout based on your location.",
+    answer:
+      "Prices shown exclude VAT/sales tax. Applicable taxes will be calculated at checkout based on your location.",
   },
 ];
 
@@ -80,7 +106,11 @@ function FeatureValue({ value }) {
     return <X size={16} className="text-foreground-muted/30" />;
   }
   if (value === "Unlimited") {
-    return <span className="text-[hsl(var(--accent-teal))] font-medium">{value}</span>;
+    return (
+      <span className="text-[hsl(var(--accent-teal))] font-medium">
+        {value}
+      </span>
+    );
   }
   return <span className="text-foreground-muted">{value}</span>;
 }
@@ -100,34 +130,60 @@ function ComparisonTable({ className }) {
   };
 
   return (
-    <div className={cn("w-full", className)}>
-      <h3 className="text-lg font-semibold text-foreground text-center mb-6">
-        Compare All Features
-      </h3>
+    <div className={cn("w-full max-w-5xl mx-auto", className)}>
+      <div className="text-center mb-12">
+        <h3 className="text-3xl font-bold text-foreground mb-4">
+          Compare All Features
+        </h3>
+        <p className="text-foreground-muted">
+          Detailed breakdown of what's included in each plan
+        </p>
+      </div>
 
-      {/* Mobile scroll wrapper */}
-      <div className="overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0">
-        <div className="min-w-[500px] lg:min-w-0">
+      {/* Mobile scroll wrapper - styled scrollbar */}
+      <div className="overflow-x-auto lg:overflow-visible pb-4 -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="min-w-[700px] lg:min-w-0 bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden backdrop-blur-sm">
           {/* Table header - sticky */}
-          <div className="sticky top-0 z-10 bg-background border-b border-white/[0.06] py-3">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="text-sm font-medium text-foreground-muted">Feature</div>
-              <div className="text-center text-sm font-medium text-foreground-muted">Free</div>
-              <div className="text-center text-sm font-medium text-[hsl(var(--accent-teal))]">Pro</div>
-              <div className="text-center text-sm font-medium text-[hsl(var(--accent-gold))]">Premium</div>
+          <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/[0.06] py-6 px-6">
+            <div className="grid grid-cols-4 gap-4 items-center">
+              <div className="text-base font-semibold text-foreground">
+                Feature
+              </div>
+              <div className="text-center">
+                <div className="text-base font-bold text-foreground mb-1">
+                  Free
+                </div>
+                <div className="text-xs text-foreground-muted">Entry Level</div>
+              </div>
+              <div className="text-center relative">
+                <div className="text-lg font-bold text-[hsl(var(--accent-teal))] mb-1">
+                  Pro
+                </div>
+                <div className="text-xs text-foreground-muted">
+                  Most Popular
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-[hsl(var(--accent-gold))] mb-1">
+                  Premium
+                </div>
+                <div className="text-xs text-foreground-muted">Power Users</div>
+              </div>
             </div>
           </div>
 
           {/* Feature sections */}
           <div className="divide-y divide-white/[0.04]">
             {Object.entries(COMPARISON_FEATURES).map(([section, features]) => (
-              <div key={section}>
+              <div key={section} className="bg-transparent">
                 {/* Section header */}
                 <button
                   onClick={() => toggleSection(section)}
-                  className="w-full flex items-center justify-between py-4 hover:bg-white/[0.02] transition-colors"
+                  className="w-full flex items-center justify-between py-4 px-6 bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
                 >
-                  <span className="text-sm font-medium text-foreground">{section}</span>
+                  <span className="text-sm font-bold uppercase tracking-wider text-foreground-muted">
+                    {section}
+                  </span>
                   {expandedSections.includes(section) ? (
                     <ChevronUp size={16} className="text-foreground-muted" />
                   ) : (
@@ -148,18 +204,25 @@ function ComparisonTable({ className }) {
                       {features.map((feature, i) => (
                         <div
                           key={i}
-                          className="grid grid-cols-4 gap-4 py-3 border-t border-white/[0.02]"
+                          className="grid grid-cols-4 gap-4 py-4 px-6 border-t border-white/[0.02] hover:bg-white/[0.01] transition-colors"
                         >
-                          <div className="text-sm text-foreground-muted pl-4">
+                          <div className="text-sm font-medium text-foreground-muted/90 flex items-center">
                             {feature.name}
+                            {feature.name.includes("Analytics") && (
+                              <span className="ml-2 text-[10px] bg-[hsl(var(--accent-teal))]/10 text-[hsl(var(--accent-teal))] px-1.5 py-0.5 rounded">
+                                NEW
+                              </span>
+                            )}
                           </div>
-                          <div className="flex justify-center">
+                          <div className="flex justify-center items-center">
                             <FeatureValue value={feature.free} />
                           </div>
-                          <div className="flex justify-center">
+                          <div className="flex justify-center items-center relative">
+                            {/* Subtle column highlight for Pro */}
+                            <div className="absolute inset-y-[-16px] inset-x-[-16px] bg-[hsl(var(--accent-teal))]/[0.02] pointer-events-none" />
                             <FeatureValue value={feature.pro} />
                           </div>
-                          <div className="flex justify-center">
+                          <div className="flex justify-center items-center">
                             <FeatureValue value={feature.premium} />
                           </div>
                         </div>
@@ -181,49 +244,81 @@ function FAQSection({ className }) {
   const [openIndex, setOpenIndex] = useState(null);
 
   return (
-    <div className={cn("w-full max-w-2xl mx-auto", className)}>
-      <h3 className="text-lg font-semibold text-foreground text-center mb-6">
-        Frequently Asked Questions
-      </h3>
+    <div className={cn("w-full max-w-3xl mx-auto", className)}>
+      <div className="text-center mb-12">
+        <h3 className="text-3xl font-bold text-foreground mb-4">
+          Frequently Asked Questions
+        </h3>
+        <p className="text-foreground-muted">
+          Everything you need to know about our pricing and plans
+        </p>
+      </div>
 
-      <div className="space-y-2">
+      <div className="space-y-4">
         {FAQ_ITEMS.map((item, i) => (
-          <div
+          <motion.div
             key={i}
-            className="rounded-none border border-white/[0.06] overflow-hidden"
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+            className={cn(
+              "rounded-xl overflow-hidden transition-all duration-200 border",
+              openIndex === i
+                ? "bg-white/[0.04] border-white/[0.1] shadow-lg"
+                : "bg-transparent border-white/[0.04] hover:bg-white/[0.02] hover:border-white/[0.08]"
+            )}
           >
             <button
               onClick={() => setOpenIndex(openIndex === i ? null : i)}
-              className="w-full flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors text-left"
+              className="w-full flex items-center justify-between p-6 text-left"
             >
-              <span className="text-sm font-medium text-foreground pr-4">
+              <span
+                className={cn(
+                  "text-base font-medium transition-colors",
+                  openIndex === i
+                    ? "text-[hsl(var(--accent-teal))]"
+                    : "text-foreground"
+                )}
+              >
                 {item.question}
               </span>
-              <ChevronDown
-                size={16}
+              <div
                 className={cn(
-                  "text-foreground-muted shrink-0 transition-transform",
-                  openIndex === i && "rotate-180"
+                  "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
+                  openIndex === i
+                    ? "bg-[hsl(var(--accent-teal))]/20 text-[hsl(var(--accent-teal))]"
+                    : "bg-white/[0.06] text-foreground-muted"
                 )}
-              />
+              >
+                <ChevronDown
+                  size={14}
+                  className={cn(
+                    "transition-transform duration-300",
+                    openIndex === i && "rotate-180"
+                  )}
+                />
+              </div>
             </button>
 
             <AnimatePresence>
               {openIndex === i && (
                 <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: "auto" }}
-                  exit={{ height: 0 }}
-                  transition={{ duration: 0.2 }}
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3, ease: "circOut" }}
                   className="overflow-hidden"
                 >
-                  <p className="px-4 pb-4 text-sm text-foreground-muted">
-                    {item.answer}
-                  </p>
+                  <div className="px-6 pb-6 pt-0">
+                    <p className="text-base text-foreground-muted leading-relaxed border-t border-white/[0.06] pt-4">
+                      {item.answer}
+                    </p>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>
@@ -234,13 +329,15 @@ function FAQSection({ className }) {
 function Testimonials({ className }) {
   const testimonials = [
     {
-      quote: "Upgraded after missing a 200-pip EUR/USD move. Never again. Pro is worth 10x the price.",
+      quote:
+        "Upgraded after missing a 200-pip EUR/USD move. Never again. Pro is worth 10x the price.",
       author: "Marcus C.",
       role: "Pro Trader, London",
       rating: 5,
     },
     {
-      quote: "The analytics alone save me hours of manual tracking. Premium pays for itself every week.",
+      quote:
+        "The analytics alone save me hours of manual tracking. Premium pays for itself every week.",
       author: "Sarah M.",
       role: "Fund Analyst, NYC",
       rating: 5,
@@ -258,7 +355,11 @@ function Testimonials({ className }) {
             {/* Rating */}
             <div className="flex gap-1 mb-3">
               {Array.from({ length: t.rating }).map((_, j) => (
-                <Star key={j} size={14} className="text-[hsl(var(--accent-gold))] fill-[hsl(var(--accent-gold))]" />
+                <Star
+                  key={j}
+                  size={14}
+                  className="text-[hsl(var(--accent-gold))] fill-[hsl(var(--accent-gold))]"
+                />
               ))}
             </div>
 
@@ -271,7 +372,9 @@ function Testimonials({ className }) {
                 <MessageSquare size={14} className="text-foreground-muted" />
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground">{t.author}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {t.author}
+                </p>
                 <p className="text-xs text-foreground-muted">{t.role}</p>
               </div>
             </div>
@@ -292,21 +395,40 @@ export function PricingPage({
     <div className={cn("w-full", className)}>
       {/* Hero section (for standalone mode) */}
       {standalone && (
-        <div className="text-center mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            From Manual Trader to Automated Pro
-          </h1>
-          <p className="text-lg text-foreground-muted max-w-2xl mx-auto">
-            Choose the plan that matches your trading goals. All plans include a 14-day money-back guarantee.
-          </p>
+        <div className="relative text-center mb-20 pt-10">
+          {/* Ambient background glow */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[hsl(var(--accent-teal))]/10 blur-[120px] rounded-full pointer-events-none" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-[hsl(var(--accent-teal))]/5 to-transparent blur-[80px] pointer-events-none" />
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="relative z-10"
+          >
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
+              From Manual Trader
+              <br />
+              to{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[hsl(var(--accent-teal))] to-[hsl(var(--accent-teal))]/60">
+                Automated Pro
+              </span>
+            </h1>
+            <p className="text-xl text-foreground-muted max-w-2xl mx-auto leading-relaxed">
+              Choose the plan that matches your trading goals.
+              <br className="hidden md:block" />
+              All plans include a{" "}
+              <span className="text-foreground font-medium">
+                14-day money-back guarantee
+              </span>
+              .
+            </p>
+          </motion.div>
         </div>
       )}
 
       {/* Pricing cards */}
-      <PricingCards
-        onSelectPlan={onSelectPlan}
-        className="mb-16"
-      />
+      <PricingCards onSelectPlan={onSelectPlan} className="mb-16" />
 
       {/* Comparison table */}
       <div className="border-t border-white/[0.06] pt-12 mb-16">
