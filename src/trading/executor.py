@@ -204,48 +204,68 @@ class TradeExecutor:
 
         executions = []
 
-        # Apply broker symbol suffix (always use dynamic settings)
+        # Smart symbol suffix handling with fallback
+        # Try with suffix first, then without if that fails
         executor_settings = self._get_settings()
         symbol_suffix = executor_settings.symbol_suffix
-        broker_symbol = signal.symbol + symbol_suffix
-
-        # Get current price for order type determination
-        try:
-            price = await self.connection.get_symbol_price(broker_symbol)
-            if not price:
-                raise ValueError(f"No price data returned for {broker_symbol}")
-            current_price = price["ask"] if signal.direction == "BUY" else price["bid"]
-        except Exception as e:
-            error_str = str(e).lower()
-            # Provide helpful error message for symbol not found
-            if "symbol" in error_str and ("not found" in error_str or "price" in error_str):
-                # Check if this is a crypto symbol (trades 24/7, no weekend closure)
-                symbol_upper = signal.symbol.upper()
-                crypto_keywords = ["BTC", "ETH", "XRP", "LTC", "ADA", "DOT", "DOGE", "SOL", "MATIC", "AVAX", "LINK", "UNI", "SHIB", "CRYPTO"]
-                is_crypto = any(kw in symbol_upper for kw in crypto_keywords)
-                
-                # Check if market is likely closed (weekend) - only for forex/metals/indices
-                from datetime import datetime
-                now_utc = datetime.utcnow()
-                weekday = now_utc.weekday()  # 0=Monday, 5=Saturday, 6=Sunday
-                
-                # Forex market is closed from Friday 22:00 UTC to Sunday 22:00 UTC
-                is_weekend = weekday == 5 or weekday == 6 or (weekday == 4 and now_utc.hour >= 22)
-                
-                if is_weekend and not is_crypto:
-                    friendly_error = (
-                        f"Market is closed (weekend). Forex/metals markets are closed from Friday 22:00 UTC "
-                        f"until Sunday 22:00 UTC. Please try again when markets reopen."
-                    )
-                else:
-                    suffix_hint = f" (current suffix: '{symbol_suffix}')" if symbol_suffix else " (no suffix configured)"
-                    friendly_error = (
-                        f"Symbol '{broker_symbol}' not found on broker{suffix_hint}. "
-                        f"Check your Symbol Suffix in Settings to match your broker's symbol format."
-                    )
-                self.last_error = friendly_error
-                raise RuntimeError(friendly_error) from e
-            raise
+        base_symbol = signal.symbol
+        
+        # Build list of symbols to try (with suffix first, then without)
+        symbols_to_try = []
+        if symbol_suffix:
+            symbols_to_try.append(base_symbol + symbol_suffix)  # Try with suffix first
+            symbols_to_try.append(base_symbol)  # Fallback to no suffix
+        else:
+            symbols_to_try.append(base_symbol)  # No suffix configured
+        
+        # Try each symbol variant until one works
+        broker_symbol = None
+        current_price = None
+        last_error_msg = None
+        
+        for try_symbol in symbols_to_try:
+            try:
+                price = await self.connection.get_symbol_price(try_symbol)
+                if price:
+                    broker_symbol = try_symbol
+                    current_price = price["ask"] if signal.direction == "BUY" else price["bid"]
+                    
+                    # Log if we used fallback
+                    if try_symbol != symbols_to_try[0]:
+                        user_tag = self._get_user_tag()
+                        log.info(f"{user_tag}Symbol fallback: '{symbols_to_try[0]}' not found, using '{try_symbol}'")
+                    break
+            except Exception as e:
+                last_error_msg = str(e)
+                continue
+        
+        # If no symbol worked, provide helpful error
+        if broker_symbol is None or current_price is None:
+            tried_symbols = "', '".join(symbols_to_try)
+            
+            # Check for weekend (forex/metals only)
+            from datetime import datetime
+            now_utc = datetime.utcnow()
+            weekday = now_utc.weekday()
+            is_weekend = weekday == 5 or weekday == 6 or (weekday == 4 and now_utc.hour >= 22)
+            
+            # Check if likely crypto
+            symbol_upper = base_symbol.upper()
+            crypto_keywords = ["BTC", "ETH", "XRP", "LTC", "ADA", "DOT", "DOGE", "SOL", "MATIC", "AVAX", "LINK"]
+            is_crypto = any(kw in symbol_upper for kw in crypto_keywords)
+            
+            if is_weekend and not is_crypto:
+                friendly_error = (
+                    f"Market closed (weekend). Forex/metals markets reopen Sunday 22:00 UTC."
+                )
+            else:
+                friendly_error = (
+                    f"Symbol not found. Tried: '{tried_symbols}'. "
+                    f"Verify this symbol exists on your broker."
+                )
+            
+            self.last_error = friendly_error
+            raise RuntimeError(friendly_error)
 
         # Determine threshold for pending vs market order
         threshold = self._get_price_threshold(signal.symbol)
