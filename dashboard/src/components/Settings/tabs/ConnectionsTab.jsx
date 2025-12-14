@@ -51,6 +51,16 @@ function MetaTraderSection({
     broker_keywords: "",
   });
 
+  // Sync form data when mtCreds changes (e.g., after loading from API)
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      login: mtCreds.mt_login || prev.login || "",
+      server: mtCreds.mt_server || prev.server || "",
+      platform: mtCreds.mt_platform || prev.platform || "mt5",
+    }));
+  }, [mtCreds.mt_login, mtCreds.mt_server, mtCreds.mt_platform]);
+
   // Poll for account deployment status (during active provisioning)
   useEffect(() => {
     if (provisioningStatus === "provisioning" && accountId) {
@@ -167,7 +177,7 @@ function MetaTraderSection({
   };
 
   const handleRetry = () => {
-    setProvisioningStatus(null);
+    setProvisioningStatus("idle");
     setProvisioningMessage("");
     setConnectionError("");
     setAccountId(null);
@@ -330,7 +340,7 @@ function MetaTraderSection({
           )}
 
           {/* Form Fields */}
-          {!provisioningStatus && (
+          {provisioningStatus === "idle" && (
             <>
               <SettingRow label="Platform" description="MetaTrader version">
                 <div className="flex gap-2">
