@@ -133,16 +133,16 @@ class TradeValidator:
         max_risk_percent = db_settings.get("max_risk_percent", 2.0)
         symbol_suffix = db_settings.get("symbol_suffix", "")
 
-        # Calculate dynamic base lot size from account balance (symbol-specific)
+        # Calculate reference-based lot size (this is the MINIMUM floor)
+        # Scales linearly with balance: (balance / ref_balance) * ref_lot
         balance = account_info.get("balance", 0)
-        base_lot_size = calculate_lot_for_symbol(
+        reference_lot_size = calculate_lot_for_symbol(
             symbol=signal.symbol,
             account_balance=balance,
             min_lot=0.01,
             max_lot=max_lot_size,
             db_settings=db_settings,
         )
-        adjusted_lot_size = base_lot_size
 
         # 1. Symbol whitelist check (still use static config for this)
         if static_settings.symbol_whitelist and signal.symbol not in static_settings.symbol_whitelist:
@@ -179,7 +179,11 @@ class TradeValidator:
                 f"Stop loss is {sl_distance_percent:.2f}% from entry - large risk"
             )
 
-        # 4. Risk calculation and lot size adjustment (may reduce from dynamic base)
+        # 4. Risk-based lot calculation with reference lot as minimum floor
+        # Formula: lot = (balance * risk%) / (SL_pips * pip_value_per_lot)
+        # Use the LARGER of risk-based or reference lot (but capped at max)
+        adjusted_lot_size = reference_lot_size  # Start with reference as floor
+
         if balance > 0:
             pip_value = self._get_pip_value(signal.symbol)
             sl_pips = abs(signal.entry_price - signal.stop_loss) / pip_value
@@ -190,18 +194,22 @@ class TradeValidator:
             risk_per_lot = sl_pips * pip_value_per_lot
 
             if risk_per_lot > 0:
-                calculated_lot = max_risk_amount / risk_per_lot
-                if calculated_lot < base_lot_size:
-                    adjusted_lot_size = max(0.01, round(calculated_lot, 2))
+                risk_based_lot = round(max_risk_amount / risk_per_lot, 2)
+
+                # Use the LARGER of risk-based or reference (reference is minimum)
+                if risk_based_lot > reference_lot_size:
+                    adjusted_lot_size = risk_based_lot
                     warnings.append(
-                        f"Lot size adjusted from {base_lot_size} to "
-                        f"{adjusted_lot_size} for risk management"
+                        f"Lot size {adjusted_lot_size} (risk-based: {max_risk_percent}% of ${balance:.0f})"
                     )
-                elif base_lot_size * risk_per_lot > max_risk_amount:
-                    adjusted_lot_size = max(0.01, round(calculated_lot, 2))
-                    warnings.append(
-                        f"Lot size adjusted to {adjusted_lot_size} for risk management"
-                    )
+                else:
+                    # Risk calculation would give smaller lot, but we use reference as floor
+                    adjusted_lot_size = reference_lot_size
+                    actual_risk = (reference_lot_size * risk_per_lot / balance) * 100
+                    if actual_risk > max_risk_percent:
+                        warnings.append(
+                            f"Using minimum lot {reference_lot_size} (actual risk: {actual_risk:.1f}%)"
+                        )
 
         # Ensure lot size is within bounds
         adjusted_lot_size = max(0.01, min(adjusted_lot_size, max_lot_size))
