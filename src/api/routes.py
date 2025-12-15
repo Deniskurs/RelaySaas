@@ -11,6 +11,7 @@ from ..database import supabase as supabase_db
 from ..auth.middleware import get_optional_user, get_current_user
 from ..auth.models import AuthUser
 from ..users.credentials import get_user_credentials
+from ..utils.logger import log
 
 
 router = APIRouter()
