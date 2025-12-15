@@ -971,19 +971,18 @@ class SignalRouter:
         )
 
         # Save trades
-        for exec_data in executions:
+        for exe in executions:
             await crud.create_trade(
                 signal_id=signal_id,
                 user_id=user_id,
-                position_id=exec_data.get("position_id"),
-                order_id=exec_data.get("order_id"),
-                symbol=exec_data.get("symbol"),
-                direction=exec_data.get("direction"),
-                lot_size=exec_data.get("lot_size"),
-                entry_price=exec_data.get("entry_price"),
-                stop_loss=exec_data.get("stop_loss"),
-                take_profit=exec_data.get("take_profit"),
-                tp_index=exec_data.get("tp_index", 0),
+                order_id=exe.order_id,
+                symbol=exe.symbol,
+                direction=exe.direction,
+                lot_size=exe.lot_size,
+                entry_price=exe.entry_price,
+                stop_loss=exe.stop_loss,
+                take_profit=exe.take_profit,
+                tp_index=exe.tp_index,
             )
 
         # Increment signal count for plan tracking
