@@ -167,27 +167,12 @@ export default function Dashboard() {
   // Command palette keyboard shortcut
   useCommandPalette(() => setCommandPaletteOpen(true));
 
-  // Initial data fetch with splash progress tracking
+  // Initial data fetch
   useEffect(() => {
-    const loadData = async (showLoader = false, trackProgress = false) => {
+    const loadData = async (showLoader = false) => {
       if (showLoader) setIsLoading(true);
 
-      // Progress tracking: auth done = 60%, each API call adds 7% (5 calls → 95%)
-      let progress = 60;
-      const updateProgress = () => {
-        if (trackProgress) {
-          progress += 7;
-          window.__setSplashProgress?.(Math.min(progress, 95));
-        }
-      };
-
-      // Set initial progress when starting data fetch
-      if (trackProgress) {
-        window.__setSplashProgress?.(65);
-      }
-
       try {
-        // Track each API call completion for progress
         const [
           statsData,
           signalsData,
@@ -195,11 +180,11 @@ export default function Dashboard() {
           settingsData,
           accountData,
         ] = await Promise.all([
-          fetchData("/stats").then(r => { updateProgress(); return r; }),
-          fetchData("/signals?limit=20").then(r => { updateProgress(); return r; }),
-          fetchData("/positions").then(r => { updateProgress(); return r; }),
-          fetchData("/settings").then(r => { updateProgress(); return r; }),
-          fetchData("/account").then(r => { updateProgress(); return r; }),
+          fetchData("/stats"),
+          fetchData("/signals?limit=20"),
+          fetchData("/positions"),
+          fetchData("/settings"),
+          fetchData("/account"),
         ]);
 
         if (statsData) setStats(transformStats(statsData));
@@ -212,8 +197,10 @@ export default function Dashboard() {
       }
     };
 
-    loadData(true, true); // Track progress on initial load
-    const interval = setInterval(() => loadData(false, false), 30000);
+    // Bump splash progress - continuous animation will smoothly catch up
+    window.__setSplashProgress?.(80);
+    loadData(true);
+    const interval = setInterval(() => loadData(false), 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

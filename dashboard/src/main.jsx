@@ -4,61 +4,96 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./index.css";
 
-// Splash screen progress control
+// Continuous splash screen progress - never stops moving
 // Arc: start offset = 56.5 (25% visible), end = 0 (100%)
 const ARC_START = 56.5;
-let currentProgress = 25;
+let displayProgress = 25;  // What's visually shown
+let targetProgress = 40;   // What we're animating toward
+let animationFrame = null;
+let splashHidden = false;
 
-function setSplashProgress(percent) {
-  // Only allow progress to increase
-  if (percent <= currentProgress) return;
-  currentProgress = percent;
-
+function updateArc(progress) {
   const arc = document.getElementById("splash-arc");
   if (arc) {
-    // Map 0-100% to offset 56.5 -> 0
-    const offset = ARC_START - (ARC_START * (percent / 100));
+    const offset = ARC_START - (ARC_START * (progress / 100));
     arc.style.strokeDashoffset = offset;
   }
 }
 
-let splashHidden = false;
+// Continuous animation loop - always moving toward target
+function animateProgress() {
+  if (splashHidden) return;
+
+  // Calculate how far we are from target
+  const diff = targetProgress - displayProgress;
+
+  if (diff > 0.1) {
+    // Move faster when far from target, slower when close
+    // This creates smooth deceleration as it approaches target
+    const speed = Math.max(0.15, diff * 0.08);
+    displayProgress += speed;
+    updateArc(displayProgress);
+  }
+
+  // Keep animating - never stop until hidden
+  animationFrame = requestAnimationFrame(animateProgress);
+}
+
+// Set a new target - animation will smoothly catch up
+function setSplashProgress(percent) {
+  if (percent > targetProgress) {
+    targetProgress = Math.min(percent, 95); // Cap at 95% until complete
+  }
+}
+
 function hideSplash() {
   if (splashHidden) return;
   splashHidden = true;
 
-  // Complete the arc first
-  currentProgress = 100;
-  const arc = document.getElementById("splash-arc");
-  if (arc) arc.style.strokeDashoffset = 0;
+  // Cancel the continuous animation
+  if (animationFrame) {
+    cancelAnimationFrame(animationFrame);
+  }
 
-  const splash = document.getElementById("splash");
-  if (splash) {
-    // Wait for arc to complete, then fade out
-    setTimeout(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
+  // Quickly complete to 100%
+  targetProgress = 100;
+  const completeAnimation = () => {
+    const diff = 100 - displayProgress;
+    if (diff > 0.5) {
+      displayProgress += diff * 0.2;
+      updateArc(displayProgress);
+      requestAnimationFrame(completeAnimation);
+    } else {
+      displayProgress = 100;
+      updateArc(100);
+
+      // Fade out splash
+      const splash = document.getElementById("splash");
+      if (splash) {
+        setTimeout(() => {
           splash.style.opacity = "0";
           setTimeout(() => splash.remove(), 400);
-        });
-      });
-    }, 300);
-  }
+        }, 150);
+      }
+    }
+  };
+  completeAnimation();
 }
 
 // Expose globally
 window.__setSplashProgress = setSplashProgress;
 window.__hideSplash = hideSplash;
 
-// Progressive loading simulation for smoother UX
-// JS bundle loaded = 40%
-setSplashProgress(40);
+// Start continuous animation immediately
+animateProgress();
 
-// Gradual progress while React initializes
-setTimeout(() => setSplashProgress(50), 100);
-setTimeout(() => setSplashProgress(55), 300);
+// Gradually increase target as app loads
+// These act as minimum progress gates - actual progress may be faster
+setTimeout(() => setSplashProgress(50), 500);
+setTimeout(() => setSplashProgress(60), 1500);
+setTimeout(() => setSplashProgress(70), 3000);
 
-// Safety fallback - hide after 10 seconds max
+// Safety fallback
 setTimeout(hideSplash, 10000);
 
 ReactDOM.createRoot(document.getElementById("root")).render(
