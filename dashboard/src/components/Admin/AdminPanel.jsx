@@ -29,7 +29,37 @@ import {
   Check,
   Eye,
   EyeOff,
+  ChevronDown,
+  ChevronRight,
+  Link,
+  Wifi,
+  WifiOff,
+  MessageSquare,
+  TrendingUp,
+  StickyNote,
+  Mail,
+  AlertCircle,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+
+// Helper function to format relative time
+function formatRelativeTime(dateString) {
+  if (!dateString) return "Never";
+
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+
+  return date.toLocaleDateString();
+}
 
 function StatCard({ title, value, icon: Icon, trend, className }) {
   return (
@@ -303,6 +333,14 @@ function SystemConfig() {
 }
 
 function UserRow({ user, onSuspend, onActivate, onTierChange }) {
+  const { fetchData, postData, putData } = useApi();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [userDetails, setUserDetails] = useState(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [adminNotes, setAdminNotes] = useState("");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
+
   const statusColors = {
     active: "bg-success/10 text-success",
     pending: "bg-warning/10 text-warning",
@@ -316,76 +354,358 @@ function UserRow({ user, onSuspend, onActivate, onTierChange }) {
     premium: "text-accent-teal",
   };
 
+  const handleExpand = async () => {
+    if (!isExpanded && !userDetails) {
+      // Fetch user details when expanding for the first time
+      setIsLoadingDetails(true);
+      const details = await fetchData(`/admin/users/${user.id}`);
+      if (details) {
+        setUserDetails(details);
+        // Fetch admin notes separately
+        const notesData = await fetchData(`/admin/users/${user.id}/notes`);
+        setAdminNotes(notesData?.notes || "");
+      }
+      setIsLoadingDetails(false);
+    }
+    setIsExpanded(!isExpanded);
+  };
+
+  const handleForceDisconnect = async () => {
+    setActionLoading('disconnect');
+    const result = await postData(`/admin/users/${user.id}/disconnect`, {});
+    if (result) {
+      // Update local state
+      if (userDetails) {
+        setUserDetails({ ...userDetails, is_connected: false });
+      }
+    }
+    setActionLoading(null);
+  };
+
+  const handleResetOnboarding = async () => {
+    if (!confirm('Are you sure you want to reset onboarding for this user? They will need to complete setup again.')) {
+      return;
+    }
+    setActionLoading('reset');
+    const result = await postData(`/admin/users/${user.id}/reset-onboarding`, {});
+    if (result) {
+      alert('Onboarding has been reset. User status updated.');
+      // Reload details
+      const details = await fetchData(`/admin/users/${user.id}`);
+      if (details) {
+        setUserDetails(details);
+      }
+    }
+    setActionLoading(null);
+  };
+
+  const handlePasswordReset = async () => {
+    setActionLoading('password');
+    const result = await postData(`/admin/users/${user.id}/password-reset`, {});
+    if (result) {
+      const resetLink = result.data?.reset_link;
+      if (resetLink) {
+        // Show the reset link in an alert
+        alert(`Password reset link:\n\n${resetLink}\n\nThis link expires in 1 hour.`);
+      } else {
+        alert(result.message || 'Password reset email sent');
+      }
+    }
+    setActionLoading(null);
+  };
+
+  const handleSaveNotes = async () => {
+    setIsSavingNotes(true);
+    const result = await putData(`/admin/users/${user.id}/notes`, { notes: adminNotes });
+    if (result) {
+      // Notes saved successfully
+    }
+    setIsSavingNotes(false);
+  };
+
   return (
-    <div className="flex items-center justify-between p-3 rounded-none hover:bg-surface-hover transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-          {user.avatar_url ? (
-            <img
-              src={user.avatar_url}
-              alt=""
-              className="w-10 h-10 rounded-full"
-            />
+    <div className="border-b border-border/50 last:border-b-0">
+      {/* Collapsed view - always visible */}
+      <div
+        className="flex items-center justify-between p-3 rounded-none hover:bg-surface-hover transition-colors cursor-pointer"
+        onClick={handleExpand}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {isExpanded ? (
+              <ChevronDown size={16} className="text-foreground-muted" />
+            ) : (
+              <ChevronRight size={16} className="text-foreground-muted" />
+            )}
+          </div>
+          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt=""
+                className="w-10 h-10 rounded-full"
+              />
+            ) : (
+              <span className="text-sm font-medium text-primary">
+                {(user.full_name || user.email)?.[0]?.toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              {user.full_name || user.email.split("@")[0]}
+            </p>
+            <p className="text-xs text-foreground-muted">{user.email}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Badge
+            className={
+              statusColors[user.status] || "bg-muted text-muted-foreground"
+            }
+          >
+            {user.status}
+          </Badge>
+          <Select
+            value={user.subscription_tier || "free"}
+            onValueChange={(value) => onTierChange(user.id, value)}
+          >
+            <SelectTrigger className="w-24 h-7 text-xs bg-background/50 border-border/50">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="free" className="text-xs">
+                <span className={tierColors.free}>Free</span>
+              </SelectItem>
+              <SelectItem value="pro" className="text-xs">
+                <span className={tierColors.pro}>Pro</span>
+              </SelectItem>
+              <SelectItem value="premium" className="text-xs">
+                <span className={tierColors.premium}>Premium</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          {user.status === "active" ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSuspend(user.id);
+              }}
+            >
+              <UserX size={14} />
+            </Button>
+          ) : user.status === "suspended" ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-success hover:text-success hover:bg-success/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onActivate(user.id);
+              }}
+            >
+              <UserCheck size={14} />
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Expanded details panel */}
+      {isExpanded && (
+        <div className="bg-surface/30 p-4 border-t border-border/50">
+          {isLoadingDetails ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : userDetails ? (
+            <div className="space-y-4">
+              {/* Connection Status & Last Active */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex items-center gap-2">
+                  {userDetails.is_connected ? (
+                    <Wifi className="w-4 h-4 text-success" />
+                  ) : (
+                    <WifiOff className="w-4 h-4 text-destructive" />
+                  )}
+                  <div>
+                    <p className="text-xs text-foreground-muted uppercase">Connection</p>
+                    <p className={`text-sm font-medium ${userDetails.is_connected ? 'text-success' : 'text-destructive'}`}>
+                      {userDetails.is_connected ? 'Connected' : 'Disconnected'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  <div>
+                    <p className="text-xs text-foreground-muted uppercase">Last Active</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {formatRelativeTime(userDetails.profile?.last_seen_at)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-primary" />
+                  <div>
+                    <p className="text-xs text-foreground-muted uppercase">Signals</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {userDetails.signals_count || 0}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-primary" />
+                  <div>
+                    <p className="text-xs text-foreground-muted uppercase">Trades</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {userDetails.trades_count || 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Telegram Channels */}
+              {userDetails.telegram_channels && userDetails.telegram_channels.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-primary" />
+                    <p className="text-xs text-foreground-muted uppercase">Telegram Channels</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {userDetails.telegram_channels.map((channel, idx) => (
+                      <Badge key={idx} variant="outline" className="bg-primary/5 border-primary/20">
+                        {channel}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* MT Account */}
+              {(userDetails.mt_server || userDetails.mt_login) && (
+                <div className="space-y-2">
+                  <p className="text-xs text-foreground-muted uppercase">MT Account</p>
+                  <div className="bg-background/50 p-3 rounded-none space-y-1">
+                    {userDetails.mt_server && (
+                      <p className="text-sm text-foreground">
+                        <span className="text-foreground-muted">Server:</span> {userDetails.mt_server}
+                      </p>
+                    )}
+                    {userDetails.mt_login && (
+                      <p className="text-sm text-foreground">
+                        <span className="text-foreground-muted">Login:</span> {userDetails.mt_login}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Stripe Customer Link */}
+              {userDetails.stripe_customer_id && (
+                <div className="space-y-2">
+                  <p className="text-xs text-foreground-muted uppercase">Stripe</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => window.open(`https://dashboard.stripe.com/test/customers/${userDetails.stripe_customer_id}`, '_blank')}
+                  >
+                    <Link size={14} />
+                    View Customer in Stripe
+                  </Button>
+                </div>
+              )}
+
+              {/* Admin Notes */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <StickyNote className="w-4 h-4 text-primary" />
+                  <p className="text-xs text-foreground-muted uppercase">Admin Notes</p>
+                </div>
+                <Textarea
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="Add internal notes about this user..."
+                  className="bg-background/50 min-h-[100px]"
+                />
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNotes}
+                    disabled={isSavingNotes || adminNotes === (userDetails.admin_notes || "")}
+                  >
+                    {isSavingNotes ? (
+                      <Loader2 size={14} className="mr-2 animate-spin" />
+                    ) : (
+                      <Save size={14} className="mr-2" />
+                    )}
+                    Save Notes
+                  </Button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-border/50">
+                <p className="text-xs text-foreground-muted uppercase mb-3">Admin Actions</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleForceDisconnect}
+                    disabled={actionLoading === 'disconnect'}
+                  >
+                    {actionLoading === 'disconnect' ? (
+                      <Loader2 size={14} className="mr-2 animate-spin" />
+                    ) : (
+                      <WifiOff size={14} className="mr-2" />
+                    )}
+                    Force Disconnect
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-warning/50 text-warning hover:bg-warning/10"
+                    onClick={handleResetOnboarding}
+                    disabled={actionLoading === 'reset'}
+                  >
+                    {actionLoading === 'reset' ? (
+                      <Loader2 size={14} className="mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw size={14} className="mr-2" />
+                    )}
+                    Reset Onboarding
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePasswordReset}
+                    disabled={actionLoading === 'password'}
+                  >
+                    {actionLoading === 'password' ? (
+                      <Loader2 size={14} className="mr-2 animate-spin" />
+                    ) : (
+                      <Mail size={14} className="mr-2" />
+                    )}
+                    Send Password Reset
+                  </Button>
+                </div>
+              </div>
+            </div>
           ) : (
-            <span className="text-sm font-medium text-primary">
-              {(user.full_name || user.email)?.[0]?.toUpperCase()}
-            </span>
+            <div className="flex items-center justify-center py-8 text-foreground-muted">
+              <AlertCircle size={16} className="mr-2" />
+              Failed to load user details
+            </div>
           )}
         </div>
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            {user.full_name || user.email.split("@")[0]}
-          </p>
-          <p className="text-xs text-foreground-muted">{user.email}</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Badge
-          className={
-            statusColors[user.status] || "bg-muted text-muted-foreground"
-          }
-        >
-          {user.status}
-        </Badge>
-        <Select
-          value={user.subscription_tier || "free"}
-          onValueChange={(value) => onTierChange(user.id, value)}
-        >
-          <SelectTrigger className="w-24 h-7 text-xs bg-background/50 border-border/50">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="free" className="text-xs">
-              <span className={tierColors.free}>Free</span>
-            </SelectItem>
-            <SelectItem value="pro" className="text-xs">
-              <span className={tierColors.pro}>Pro</span>
-            </SelectItem>
-            <SelectItem value="premium" className="text-xs">
-              <span className={tierColors.premium}>Premium</span>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        {user.status === "active" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={() => onSuspend(user.id)}
-          >
-            <UserX size={14} />
-          </Button>
-        ) : user.status === "suspended" ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-success hover:text-success hover:bg-success/10"
-            onClick={() => onActivate(user.id)}
-          >
-            <UserCheck size={14} />
-          </Button>
-        ) : null}
-      </div>
+      )}
     </div>
   );
 }

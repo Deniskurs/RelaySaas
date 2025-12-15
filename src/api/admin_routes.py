@@ -68,6 +68,11 @@ class UserDetailResponse(BaseModel):
     is_connected: bool
     signals_count: int = 0
     trades_count: int = 0
+    # Enhanced fields
+    telegram_channels: List[str] = []
+    mt_server: Optional[str] = None
+    mt_login: Optional[str] = None
+    stripe_customer_id: Optional[str] = None
 
 
 class SystemOverviewResponse(BaseModel):
@@ -98,6 +103,7 @@ class StatusResponse(BaseModel):
 
     status: str
     message: str = ""
+    data: Optional[dict] = None
 
 
 @router.get("/users", response_model=UserListResponse)
@@ -191,6 +197,12 @@ async def get_user_detail(
         signals_result = supabase.table("signals_v2").select("id", count="exact").eq("user_id", user_id).execute()
         trades_result = supabase.table("trades_v2").select("id", count="exact").eq("user_id", user_id).execute()
 
+        # Get user settings for telegram channels
+        settings_result = supabase.table("user_settings_v2").select("telegram_channel_ids").eq("user_id", user_id).execute()
+        telegram_channels = []
+        if settings_result.data and settings_result.data[0].get("telegram_channel_ids"):
+            telegram_channels = settings_result.data[0].get("telegram_channel_ids", [])
+
         profile = UserProfile(
             id=profile_data["id"],
             email=profile_data.get("email", ""),
@@ -212,6 +224,10 @@ async def get_user_detail(
             is_connected=conn_status.get("connected", False),
             signals_count=signals_result.count or 0,
             trades_count=trades_result.count or 0,
+            telegram_channels=telegram_channels,
+            mt_server=creds.get("mt_server"),
+            mt_login=creds.get("mt_login"),
+            stripe_customer_id=profile_data.get("stripe_customer_id"),
         )
 
     except HTTPException:
@@ -362,6 +378,203 @@ async def update_user_tier(
         raise
     except Exception as e:
         log.error("Error updating user tier", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/{user_id}/disconnect", response_model=StatusResponse)
+async def force_disconnect_user(
+    user_id: str,
+    admin: AuthUser = Depends(require_admin),
+):
+    """Force disconnect a user's active connections."""
+    try:
+        # Disconnect user if connected
+        await user_manager.disconnect_user(user_id)
+
+        # Log activity
+        await _log_activity(admin.id, "user.force_disconnected", {"target_user_id": user_id})
+
+        log.info("User force disconnected", user_id=user_id, admin_id=admin.id)
+
+        return StatusResponse(status="disconnected", message="User connections terminated")
+
+    except Exception as e:
+        log.error("Error disconnecting user", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/{user_id}/reset-onboarding", response_model=StatusResponse)
+async def reset_user_onboarding(
+    user_id: str,
+    admin: AuthUser = Depends(require_admin),
+):
+    """Reset user's onboarding status and clear credentials."""
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot reset your own onboarding")
+
+    try:
+        supabase = get_supabase_admin()
+
+        # Update profile to reset onboarding
+        profile_result = supabase.table("profiles").update({
+            "status": "onboarding",
+            "onboarding_step": "telegram",
+        }).eq("id", user_id).execute()
+
+        if not profile_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Clear credentials
+        creds_result = supabase.table("user_credentials").update({
+            "telegram_connected": False,
+            "mt_connected": False,
+        }).eq("user_id", user_id).execute()
+
+        # Disconnect user if connected
+        await user_manager.disconnect_user(user_id)
+
+        # Log activity
+        await _log_activity(admin.id, "user.onboarding_reset", {"target_user_id": user_id})
+
+        log.info("User onboarding reset", user_id=user_id, admin_id=admin.id)
+
+        return StatusResponse(status="reset", message="User onboarding has been reset")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Error resetting user onboarding", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class UserNotesResponse(BaseModel):
+    """User admin notes response."""
+    notes: str = ""
+
+
+class UserNotesUpdateRequest(BaseModel):
+    """Request to update user admin notes."""
+    notes: str
+
+
+@router.get("/users/{user_id}/notes", response_model=UserNotesResponse)
+async def get_user_notes(
+    user_id: str,
+    admin: AuthUser = Depends(require_admin),
+):
+    """Get admin notes for a user."""
+    try:
+        supabase = get_supabase_admin()
+
+        result = supabase.table("profiles").select("admin_notes").eq("id", user_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return UserNotesResponse(notes=result.data[0].get("admin_notes", ""))
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Error getting user notes", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/users/{user_id}/notes", response_model=StatusResponse)
+async def update_user_notes(
+    user_id: str,
+    request: UserNotesUpdateRequest,
+    admin: AuthUser = Depends(require_admin),
+):
+    """Update admin notes for a user."""
+    try:
+        supabase = get_supabase_admin()
+
+        result = supabase.table("profiles").update({
+            "admin_notes": request.notes,
+        }).eq("id", user_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Log activity
+        await _log_activity(
+            admin.id,
+            "user.notes_updated",
+            {
+                "target_user_id": user_id,
+                "notes_length": len(request.notes),
+            }
+        )
+
+        log.info("User notes updated", user_id=user_id, admin_id=admin.id)
+
+        return StatusResponse(status="updated", message="Admin notes updated")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Error updating user notes", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/{user_id}/password-reset", response_model=StatusResponse)
+async def send_password_reset(
+    user_id: str,
+    admin: AuthUser = Depends(require_admin),
+):
+    """Generate and return a password reset link for a user."""
+    try:
+        supabase = get_supabase_admin()
+
+        # Get user email
+        profile_result = supabase.table("profiles").select("email").eq("id", user_id).execute()
+
+        if not profile_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user_email = profile_result.data[0].get("email")
+        if not user_email:
+            raise HTTPException(status_code=400, detail="User has no email address")
+
+        # Generate password reset link using Supabase Admin API
+        try:
+            link_response = supabase.auth.admin.generate_link({
+                "type": "recovery",
+                "email": user_email,
+            })
+
+            reset_link = link_response.properties.action_link if hasattr(link_response, 'properties') else None
+
+            if not reset_link:
+                raise HTTPException(status_code=500, detail="Failed to generate reset link")
+
+            # Log activity
+            await _log_activity(
+                admin.id,
+                "user.password_reset_sent",
+                {
+                    "target_user_id": user_id,
+                    "email": user_email,
+                }
+            )
+
+            log.info("Password reset link generated", user_id=user_id, admin_id=admin.id, email=user_email)
+
+            return StatusResponse(
+                status="sent",
+                message=f"Password reset link generated for {user_email}",
+                data={"reset_link": reset_link}
+            )
+
+        except Exception as e:
+            log.error("Error generating password reset link", error=str(e))
+            raise HTTPException(status_code=500, detail=f"Failed to generate reset link: {str(e)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Error sending password reset", user_id=user_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
