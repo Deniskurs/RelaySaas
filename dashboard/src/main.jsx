@@ -7,8 +7,13 @@ import "./index.css";
 // Splash screen progress control
 // Arc: start offset = 56.5 (25% visible), end = 0 (100%)
 const ARC_START = 56.5;
+let currentProgress = 25;
 
 function setSplashProgress(percent) {
+  // Only allow progress to increase
+  if (percent <= currentProgress) return;
+  currentProgress = percent;
+
   const arc = document.getElementById("splash-arc");
   if (arc) {
     // Map 0-100% to offset 56.5 -> 0
@@ -23,7 +28,9 @@ function hideSplash() {
   splashHidden = true;
 
   // Complete the arc first
-  setSplashProgress(100);
+  currentProgress = 100;
+  const arc = document.getElementById("splash-arc");
+  if (arc) arc.style.strokeDashoffset = 0;
 
   const splash = document.getElementById("splash");
   if (splash) {
@@ -42,6 +49,14 @@ function hideSplash() {
 // Expose globally
 window.__setSplashProgress = setSplashProgress;
 window.__hideSplash = hideSplash;
+
+// Progressive loading simulation for smoother UX
+// JS bundle loaded = 40%
+setSplashProgress(40);
+
+// Gradual progress while React initializes
+setTimeout(() => setSplashProgress(50), 100);
+setTimeout(() => setSplashProgress(55), 300);
 
 // Safety fallback - hide after 10 seconds max
 setTimeout(hideSplash, 10000);

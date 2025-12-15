@@ -172,14 +172,19 @@ export default function Dashboard() {
     const loadData = async (showLoader = false, trackProgress = false) => {
       if (showLoader) setIsLoading(true);
 
-      // Progress tracking: auth done = 40%, each API call adds 12% (5 calls = 60%)
-      let progress = 40;
+      // Progress tracking: auth done = 60%, each API call adds 7% (5 calls → 95%)
+      let progress = 60;
       const updateProgress = () => {
         if (trackProgress) {
-          progress += 12;
+          progress += 7;
           window.__setSplashProgress?.(Math.min(progress, 95));
         }
       };
+
+      // Set initial progress when starting data fetch
+      if (trackProgress) {
+        window.__setSplashProgress?.(65);
+      }
 
       try {
         // Track each API call completion for progress

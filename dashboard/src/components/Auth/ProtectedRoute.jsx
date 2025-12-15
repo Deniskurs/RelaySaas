@@ -9,7 +9,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
   // Update splash progress when auth completes
   useEffect(() => {
     if (!isLoading) {
-      window.__setSplashProgress?.(40); // Auth done = 40%
+      window.__setSplashProgress?.(60); // Auth done = 60%
     }
   }, [isLoading]);
 
