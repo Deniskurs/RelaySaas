@@ -16,12 +16,13 @@ export default function BottomTabBar({
   isPaused,
   onPause,
   onResume,
+  pendingSignalsCount = 0,
 }) {
   const { profile } = useAuth();
   const isAdmin = profile?.role === "admin";
 
   const tabs = [
-    { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { id: "dashboard", icon: LayoutDashboard, label: "Dashboard", badge: pendingSignalsCount },
     { id: "pricing", icon: CreditCard, label: "Plans" },
     { id: "settings", icon: Settings, label: "Settings" },
     ...(isAdmin ? [{ id: "admin", icon: Shield, label: "Admin" }] : []),
@@ -65,13 +66,25 @@ export default function BottomTabBar({
                 />
               )}
 
-              <Icon
-                size={20}
-                className={cn(
-                  "transition-colors",
-                  isActive ? "text-foreground" : "text-foreground-muted"
+              <div className="relative">
+                <Icon
+                  size={20}
+                  className={cn(
+                    "transition-colors",
+                    isActive ? "text-foreground" : "text-foreground-muted"
+                  )}
+                />
+                {/* Notification Badge */}
+                {tab.badge > 0 && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-1 -right-1 min-w-[16px] h-4 flex items-center justify-center bg-primary text-white text-[9px] font-bold rounded-full px-1 border border-black/50"
+                  >
+                    {tab.badge > 9 ? "9+" : tab.badge}
+                  </motion.div>
                 )}
-              />
+              </div>
               <span
                 className={cn(
                   "text-[10px] font-medium uppercase tracking-wide",

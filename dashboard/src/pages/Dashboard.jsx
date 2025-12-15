@@ -390,15 +390,10 @@ export default function Dashboard() {
         openTrades={openTrades}
       />
 
-      {/* ACTIVE MONITORING - 2 Column Grid */}
+      {/* ACTIVE MONITORING - 2 Column Grid (desktop) / Reversed on mobile */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Open Positions - Left Column */}
-        <div>
-          <OpenPositions trades={openTrades} isLoading={isLoading} />
-        </div>
-
-        {/* Recent/Pending Signals - Right Column */}
-        <div>
+        {/* Recent/Pending Signals - PRIORITY on mobile (order-1), Right Column on desktop */}
+        <div className="order-1 lg:order-2">
           <RecentSignals
             signals={pendingSignals.length > 0 ? pendingSignals : signals.slice(0, 5)}
             isLoading={isLoading}
@@ -414,7 +409,14 @@ export default function Dashboard() {
             soundEnabled={soundEnabled}
             onSoundToggle={handleSoundToggle}
             playSound={playSound}
+            pendingCount={pendingSignals.length}
+            hasPendingSignals={pendingSignals.length > 0}
           />
+        </div>
+
+        {/* Open Positions - Secondary on mobile (order-2), Left Column on desktop */}
+        <div className="order-2 lg:order-1">
+          <OpenPositions trades={openTrades} isLoading={isLoading} />
         </div>
       </div>
 
@@ -565,6 +567,7 @@ export default function Dashboard() {
         onTabChange={setActiveTab}
         isConnected={isConnected}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        pendingSignalsCount={pendingSignals.length}
       />
 
       {/* Mobile Bottom Tab Bar */}
@@ -574,6 +577,7 @@ export default function Dashboard() {
         isPaused={isPaused}
         onPause={handlePause}
         onResume={handleResume}
+        pendingSignalsCount={pendingSignals.length}
       />
 
       {/* Command Palette */}

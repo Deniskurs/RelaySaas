@@ -433,7 +433,9 @@ const SignalCard = ({
         "border-l-4", // Thicker left border for status accent
         "relative",
         getStatusAccentColor(displayStatus),
-        getCardAnimationClass(displayStatus)
+        getCardAnimationClass(displayStatus),
+        // Enhanced styling for pending confirmation on mobile
+        isPendingConfirmation && "lg:border-white/5 border-primary/30 lg:bg-white/[0.02] bg-primary/5 shadow-lg shadow-primary/10"
       )}
     >
       {/* Header Section */}
@@ -673,7 +675,7 @@ const SignalCard = ({
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <Button
                   size="sm"
-                  className="h-8 text-xs bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20"
+                  className="h-10 lg:h-8 text-sm lg:text-xs bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 font-semibold"
                   onClick={() =>
                     handleConfirm(
                       signal.id,
@@ -682,16 +684,16 @@ const SignalCard = ({
                   }
                   disabled={isLoading}
                 >
-                  <CheckCircle size={14} className="mr-1.5" />
+                  <CheckCircle size={16} className="mr-1.5 lg:mr-1 lg:w-3.5 lg:h-3.5" />
                   {isLoading ? "Processing..." : "Accept"}
                 </Button>
                 <Button
                   size="sm"
-                  className="h-8 text-xs bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20"
+                  className="h-10 lg:h-8 text-sm lg:text-xs bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20 font-semibold"
                   onClick={() => handleReject(signal.id)}
                   disabled={isLoading}
                 >
-                  <XCircle size={14} className="mr-1.5" />
+                  <XCircle size={16} className="mr-1.5 lg:mr-1 lg:w-3.5 lg:h-3.5" />
                   Reject
                 </Button>
               </div>
@@ -746,6 +748,8 @@ export default function RecentSignals({
   soundEnabled = false,
   onSoundToggle = null,
   playSound = null,
+  pendingCount = 0,
+  hasPendingSignals = false,
 }) {
   const { postData } = useApi();
 
@@ -845,12 +849,36 @@ export default function RecentSignals({
   };
 
   return (
-    <Card className="glass-card border-border/40 bg-black/40 h-full flex flex-col shadow-none">
-      <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b border-white/5">
+    <Card className={cn(
+      "glass-card border-border/40 bg-black/40 h-full flex flex-col shadow-none",
+      // Add visual prominence for pending signals on mobile
+      hasPendingSignals && "lg:border-border/40 border-primary/30 lg:bg-black/40 bg-primary/5"
+    )}>
+      <CardHeader className={cn(
+        "flex flex-row items-center justify-between py-3 px-4 border-b border-white/5",
+        // Sticky header on mobile when pending signals exist
+        hasPendingSignals && "lg:static sticky top-0 z-10 bg-black/95 backdrop-blur-lg lg:bg-transparent"
+      )}>
         <div className="flex items-center gap-3">
-          <CardTitle className="text-sm font-medium text-foreground/90 font-sans tracking-tight">
-            Recent Signals
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-sm font-medium text-foreground/90 font-sans tracking-tight">
+              Recent Signals
+            </CardTitle>
+            {/* Pending Signals Badge - Prominent on mobile */}
+            {hasPendingSignals && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "bg-primary/20 text-primary font-mono text-[10px] border border-primary/30",
+                  "animate-pulse lg:animate-none",
+                  "px-2 py-0.5"
+                )}
+              >
+                <Clock size={10} className="mr-1" />
+                {pendingCount} pending
+              </Badge>
+            )}
+          </div>
           <ConnectionIndicator
             status={telegramStatus}
             onReconnect={onReconnect}
@@ -891,17 +919,19 @@ export default function RecentSignals({
             </Button>
           )}
 
-          <Badge
-            variant="secondary"
-            className="bg-white/5 hover:bg-white/10 text-foreground-muted font-mono text-[10px]"
-          >
-            {visibleSignals.length}
-          </Badge>
+          {!hasPendingSignals && (
+            <Badge
+              variant="secondary"
+              className="bg-white/5 hover:bg-white/10 text-foreground-muted font-mono text-[10px]"
+            >
+              {visibleSignals.length}
+            </Badge>
+          )}
         </div>
       </CardHeader>
 
       <CardContent className="flex-1 p-0 overflow-hidden">
-        <ScrollArea className="h-[500px]">
+        <ScrollArea className="h-[400px] lg:h-[500px]">
           <div className="flex flex-col gap-1 p-1">
             {isLoading ? (
               <div className="p-4 space-y-2">

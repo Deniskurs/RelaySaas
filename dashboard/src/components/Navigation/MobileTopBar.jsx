@@ -24,6 +24,7 @@ export default function MobileTopBar({
   onTabChange,
   isConnected,
   onOpenCommandPalette,
+  pendingSignalsCount = 0,
 }) {
   const { user, profile, logout } = useAuth();
   const { currency, setCurrency, currencies } = useCurrency();
@@ -65,31 +66,41 @@ export default function MobileTopBar({
     >
       {/* Left: Logo/Title */}
       <motion.div
-        className="flex items-center gap-2.5 cursor-pointer"
+        className="flex items-center gap-2.5 cursor-pointer relative"
         onClick={() => onTabChange("dashboard")}
         whileTap={{ scale: 0.98 }}
       >
         <div className="w-7 h-7 relative flex items-center justify-center">
           <Logo size={28} />
+          {/* Pending Signal Notification Badge */}
+          {pendingSignalsCount > 0 && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-1 -right-1 min-w-[16px] h-4 flex items-center justify-center bg-primary text-white text-[9px] font-bold rounded-full px-1 border border-black/50 shadow-lg"
+            >
+              {pendingSignalsCount > 9 ? "9+" : pendingSignalsCount}
+            </motion.div>
+          )}
         </div>
         <div className="flex flex-col">
-          {/* If we are on a specific page that isn't dashboard, we might want to show that title, 
+          {/* If we are on a specific page that isn't dashboard, we might want to show that title,
                but for branding consistency "Relay" should always be visible or at least the Logo.
-               The previous code showed getPageTitle(). Let's keep showing the specific page title 
-               but styled better, OR show BrandName if it's the dashboard. 
-               
-               Actually, the user wants "Relay" branding. Let's start with showing BrandName 
-               and maybe the page title in a different way or just stick to BrandName for now 
+               The previous code showed getPageTitle(). Let's keep showing the specific page title
+               but styled better, OR show BrandName if it's the dashboard.
+
+               Actually, the user wants "Relay" branding. Let's start with showing BrandName
+               and maybe the page title in a different way or just stick to BrandName for now
                to maximize the "premium brand" feeling.
-               
+
                If I look at getPageTitle logic:
                case "settings": return "Settings";
                ...
                default: return "Relay";
-               
+
                So if it's not a special page, it shows Relay.
-               
-               Let's render BrandName if activeTab is dashboard, otherwise the page title 
+
+               Let's render BrandName if activeTab is dashboard, otherwise the page title
                BUT styled nicely.
            */}
           {activeTab === "dashboard" ? (
