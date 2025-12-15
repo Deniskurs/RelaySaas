@@ -6,6 +6,11 @@ import { Loader2 } from "lucide-react";
 export default function AuthCallback() {
   const navigate = useNavigate();
 
+  // Hide splash on mount
+  useEffect(() => {
+    window.__hideSplash?.();
+  }, []);
+
   useEffect(() => {
     const handleCallback = async () => {
       try {

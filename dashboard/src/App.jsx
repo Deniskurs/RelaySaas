@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
@@ -19,19 +19,6 @@ const Checkout = lazy(() => import("./pages/Checkout"));
 
 // Loading fallback - invisible since static splash handles it
 function PageLoader() {
-  // Return null - static splash in index.html handles the visual
-  return null;
-}
-
-// Component to hide splash once mounted inside Suspense
-function HideSplashOnReady() {
-  useEffect(() => {
-    // Small delay for smoother transition
-    const timer = setTimeout(() => {
-      window.__hideSplash?.();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
   return null;
 }
 

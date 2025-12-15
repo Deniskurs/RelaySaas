@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,11 @@ import { Loader2, AlertCircle, TrendingUp, ArrowLeft, Check } from "lucide-react
 
 export default function ForgotPassword() {
   const { requestPasswordReset, error, clearError, isLoading } = useAuth();
+
+  // Hide splash on mount
+  useEffect(() => {
+    window.__hideSplash?.();
+  }, []);
 
   const [email, setEmail] = useState("");
   const [localError, setLocalError] = useState("");

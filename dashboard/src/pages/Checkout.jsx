@@ -86,6 +86,11 @@ export default function Checkout() {
   const planInfo = PLAN_INFO[plan];
   const priceInfo = PRICE_INFO[plan]?.[billing];
 
+  // Hide splash on mount
+  useEffect(() => {
+    window.__hideSplash?.();
+  }, []);
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {

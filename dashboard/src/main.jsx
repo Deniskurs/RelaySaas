@@ -5,9 +5,8 @@ import App from "./App";
 import "./index.css";
 
 // Splash screen progress control
-// Arc: circumference = 75.4, start offset = 56.5 (25% visible), end = 0 (100%)
+// Arc: start offset = 56.5 (25% visible), end = 0 (100%)
 const ARC_START = 56.5;
-const ARC_FULL = 75.4;
 
 function setSplashProgress(percent) {
   const arc = document.getElementById("splash-arc");
