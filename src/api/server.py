@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from .routes import router
 from .onboarding_routes import router as onboarding_router
@@ -59,15 +59,41 @@ app.add_api_websocket_route("/ws", websocket_endpoint)
 dashboard_path = os.path.join(os.path.dirname(__file__), "../../dashboard/dist")
 
 if os.path.exists(dashboard_path):
+    # Cache durations
+    CACHE_STATIC_MAX_AGE = 31536000  # 1 year for hashed assets
+    CACHE_SHORT_MAX_AGE = 3600  # 1 hour for non-hashed static files
+
+    # File extensions that are hashed by Vite (can be cached long-term)
+    HASHED_EXTENSIONS = {'.js', '.css'}
+    # Static file extensions (shorter cache)
+    STATIC_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.eot'}
+
+    def get_cache_headers(file_path: str) -> dict:
+        """Get appropriate cache headers based on file type."""
+        ext = os.path.splitext(file_path)[1].lower()
+
+        # Hashed assets (contain hash in filename like index-abc123.js)
+        if ext in HASHED_EXTENSIONS:
+            return {"Cache-Control": f"public, max-age={CACHE_STATIC_MAX_AGE}, immutable"}
+        # Static assets like images, fonts
+        elif ext in STATIC_EXTENSIONS:
+            return {"Cache-Control": f"public, max-age={CACHE_SHORT_MAX_AGE}"}
+        # Everything else (including index.html) - no cache
+        return {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        """Serve the React SPA."""
+        """Serve the React SPA with proper cache headers."""
         # Try to serve the requested file
         file_path = os.path.join(dashboard_path, full_path)
         if full_path and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        # Fall back to index.html for SPA routing
-        return FileResponse(os.path.join(dashboard_path, "index.html"))
+            headers = get_cache_headers(file_path)
+            return FileResponse(file_path, headers=headers)
+        # Fall back to index.html for SPA routing (no cache)
+        return FileResponse(
+            os.path.join(dashboard_path, "index.html"),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
 else:
     @app.get("/")
     async def root():

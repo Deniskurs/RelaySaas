@@ -17,10 +17,11 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AdminDashboard = lazy(() => import("./pages/Admin"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 
-// Minimal loading fallback
+// Loading fallback with meaningful LCP content
 function PageLoader() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+      <h1 className="text-2xl font-serif text-foreground">Relay</h1>
       <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
   );
