@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ..utils.logger import log
+from ..utils.events import event_bus, Events
+from ..database import supabase_crud as crud
 from .credentials import (
     get_user_credentials,
     get_user_settings,
@@ -77,6 +79,9 @@ class UserConnectionManager:
 
         # Start connection watchdog
         asyncio.create_task(self._connection_watchdog())
+
+        # Start trade sync loop (detects closed positions for win rate calculation)
+        asyncio.create_task(self._trade_sync_loop())
 
     async def stop(self):
         """Stop all user connections."""
@@ -507,6 +512,187 @@ class UserConnectionManager:
                 log.error("Watchdog error", error=str(e))
 
         log.info("Connection watchdog stopped")
+
+    async def _trade_sync_loop(self):
+        """Periodically sync closed trades for all connected users.
+
+        This detects when positions have closed on MetaAPI and updates
+        the database with profit/loss data for accurate win rate calculation.
+        """
+        SYNC_INTERVAL = 30  # Sync every 30 seconds
+
+        while self._running:
+            try:
+                await asyncio.sleep(SYNC_INTERVAL)
+
+                if not self._connections:
+                    continue
+
+                # Sync trades for all active users with MetaAPI connection
+                for user_id, conn in list(self._connections.items()):
+                    if not conn.is_active or not conn.metaapi_connected:
+                        continue
+
+                    if not conn.metaapi_executor or not conn.metaapi_executor.connection:
+                        continue
+
+                    try:
+                        await self._sync_closed_trades_for_user(user_id, conn)
+                    except Exception as e:
+                        log.error(
+                            f"Trade sync failed for user {user_id[:8]}",
+                            error=str(e),
+                        )
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.error("Trade sync loop error", error=str(e))
+
+        log.info("Trade sync loop stopped")
+
+    async def _sync_closed_trades_for_user(self, user_id: str, conn: UserConnection):
+        """Sync closed trades for a specific user.
+
+        Compares database trades with live MetaAPI positions and marks
+        trades as closed when their positions no longer exist.
+
+        Args:
+            user_id: User UUID.
+            conn: User's connection object.
+        """
+        executor = conn.metaapi_executor
+        if not executor:
+            return
+
+        try:
+            # Get current live positions from MetaAPI
+            account_info = await executor.get_account_info()
+            live_positions = account_info.get("positions", [])
+
+            # Build set of currently open position IDs
+            live_position_ids = set()
+            for pos in live_positions:
+                pos_id = str(pos.get("id") or pos.get("positionId", ""))
+                if pos_id:
+                    live_position_ids.add(pos_id)
+
+            # Get all "open" or "pending" trades from database for this user
+            db_trades = await crud.get_open_trades_for_sync(user_id=user_id)
+
+            if not db_trades:
+                return
+
+            closed_count = 0
+            for trade in db_trades:
+                order_id = str(trade.get("order_id", ""))
+                trade_id = trade["id"]
+
+                # Check if this trade's order_id matches any live position
+                if order_id and order_id not in live_position_ids:
+                    # Position has closed - fetch deal history and update DB
+                    await self._process_closed_trade(user_id, trade_id, order_id, executor)
+                    closed_count += 1
+
+            if closed_count > 0:
+                log.info(
+                    f"Synced {closed_count} closed trades for user {user_id[:8]}",
+                    closed_count=closed_count,
+                )
+
+        except Exception as e:
+            log.error(
+                f"Failed to sync trades for user {user_id[:8]}",
+                error=str(e),
+            )
+
+    async def _process_closed_trade(
+        self, user_id: str, trade_id: int, position_id: str, executor
+    ):
+        """Process a trade that appears to have closed.
+
+        Fetches deal history to get close price and profit, then updates DB.
+
+        Args:
+            user_id: User UUID.
+            trade_id: Database trade ID.
+            position_id: MetaAPI position/order ID.
+            executor: User's MetaAPI executor.
+        """
+        try:
+            # Fetch deal history from MetaAPI
+            deals = await executor.get_deals_by_position(position_id)
+
+            if not deals:
+                log.warning(
+                    f"No deals found for position {position_id}, marking as closed with unknown P&L",
+                    user_id=user_id[:8],
+                )
+                await crud.mark_trade_closed(
+                    trade_id=trade_id,
+                    close_price=0,
+                    profit=0,
+                    closed_at=datetime.utcnow().isoformat(),
+                )
+                return
+
+            # Find the closing deal (DEAL_ENTRY_OUT) and opening deal (DEAL_ENTRY_IN)
+            close_deal = None
+            open_deal = None
+            total_profit = 0
+
+            for deal in deals:
+                entry_type = deal.get("entryType", "")
+                if entry_type == "DEAL_ENTRY_OUT":
+                    close_deal = deal
+                elif entry_type == "DEAL_ENTRY_IN":
+                    open_deal = deal
+                # Sum up all profits (handles partial closes)
+                total_profit += deal.get("profit", 0) or 0
+
+            # Extract close data
+            close_price = close_deal.get("price", 0) if close_deal else 0
+            close_time = close_deal.get("time") if close_deal else None
+            if close_time:
+                closed_at = close_time.isoformat() if hasattr(close_time, "isoformat") else str(close_time)
+            else:
+                closed_at = datetime.utcnow().isoformat()
+            open_price = open_deal.get("price") if open_deal else None
+
+            # Update database
+            await crud.mark_trade_closed(
+                trade_id=trade_id,
+                close_price=close_price,
+                profit=total_profit,
+                closed_at=closed_at,
+                open_price=open_price,
+            )
+
+            log.info(
+                f"Trade closed for user {user_id[:8]}",
+                trade_id=trade_id,
+                position_id=position_id,
+                profit=total_profit,
+                close_price=close_price,
+            )
+
+            # Emit event for WebSocket clients
+            await event_bus.emit(
+                Events.TRADE_CLOSED,
+                {
+                    "user_id": user_id,
+                    "trade_id": trade_id,
+                    "position_id": position_id,
+                    "profit": total_profit,
+                    "close_price": close_price,
+                },
+            )
+
+        except Exception as e:
+            log.error(
+                f"Failed to process closed trade {trade_id} for user {user_id[:8]}",
+                error=str(e),
+            )
 
 
 # Global instance

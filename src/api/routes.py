@@ -1281,3 +1281,70 @@ async def get_user_credentials_endpoint(
         mt_connected=credentials.mt_connected,
     )
 
+
+# Manual trade sync endpoint
+class TradeSyncResponse(BaseModel):
+    """Trade sync response model."""
+    synced_count: int
+    message: str
+
+
+@router.post("/trades/sync", response_model=TradeSyncResponse)
+async def sync_closed_trades(
+    user: AuthUser = Depends(get_current_user),
+):
+    """Manually sync closed trades for the current user.
+
+    This detects positions that have closed on MetaTrader and updates
+    the database with profit/loss data for accurate win rate calculation.
+
+    Useful after trades have completed to immediately update statistics
+    without waiting for the automatic sync cycle.
+    """
+    from ..users.manager import user_manager
+
+    conn = user_manager.get_connection(user.id)
+    if not conn:
+        raise HTTPException(
+            status_code=503,
+            detail="Not connected. Go to Settings and click Refresh to connect."
+        )
+
+    if not conn.metaapi_connected or not conn.metaapi_executor:
+        raise HTTPException(
+            status_code=503,
+            detail="MetaTrader not connected. Please reconnect first."
+        )
+
+    try:
+        # Get initial count of open trades
+        open_trades_before = await crud.get_open_trades_for_sync(user_id=user.id)
+        initial_count = len(open_trades_before)
+
+        # Sync trades
+        await user_manager._sync_closed_trades_for_user(user.id, conn)
+
+        # Get count after sync
+        open_trades_after = await crud.get_open_trades_for_sync(user_id=user.id)
+        final_count = len(open_trades_after)
+
+        synced_count = initial_count - final_count
+
+        if synced_count > 0:
+            return TradeSyncResponse(
+                synced_count=synced_count,
+                message=f"Synced {synced_count} closed trades. Win rate should now be accurate."
+            )
+        else:
+            return TradeSyncResponse(
+                synced_count=0,
+                message="All trades already synced. No closed trades to update."
+            )
+
+    except Exception as e:
+        log.error("Manual trade sync failed", user_id=user.id[:8], error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Sync failed: {str(e)}"
+        )
+

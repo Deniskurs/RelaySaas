@@ -395,6 +395,12 @@ export default function Dashboard() {
     });
   };
 
+  // Refresh stats only - used by Performance sync button
+  const handleStatsRefresh = useCallback(async () => {
+    const data = await fetchData("/stats");
+    if (data) setStats(transformStats(data));
+  }, []);
+
   // Refresh all data - used by command palette
   const handleRefresh = useCallback(async () => {
     await refreshAll([
@@ -503,7 +509,7 @@ export default function Dashboard() {
       </div>
 
       {/* PERFORMANCE - Full Width Chart */}
-      <PerformanceChart stats={stats} isLoading={isLoading} />
+      <PerformanceChart stats={stats} isLoading={isLoading} onStatsRefresh={handleStatsRefresh} />
 
       {/* SYSTEM HEALTH - Collapsible Live Feed */}
       <div className="border border-white/[0.06] rounded-none bg-black/40 backdrop-blur-sm overflow-hidden">
@@ -585,7 +591,7 @@ export default function Dashboard() {
         return (
           <div className="space-y-6">
             <AccountCard account={account} openTrades={openTrades} />
-            <PerformanceChart stats={stats} isLoading={isLoading} />
+            <PerformanceChart stats={stats} isLoading={isLoading} onStatsRefresh={handleStatsRefresh} />
           </div>
         );
       case "profile":

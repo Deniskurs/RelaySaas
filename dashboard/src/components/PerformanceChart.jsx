@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useApi } from "@/hooks/useApi";
 
 /**
  * Get computed color from CSS variable
@@ -97,9 +100,26 @@ const StatRow = ({ label, value, color }) => (
   </div>
 );
 
-export default function PerformanceChart({ stats, isLoading = false }) {
+export default function PerformanceChart({ stats, isLoading = false, onStatsRefresh }) {
   const { formatPnL } = useCurrency();
   const COLORS = useChartColors();
+  const { postData } = useApi();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await postData("/trades/sync", {});
+      if (result) {
+        // Always refresh stats after sync attempt
+        onStatsRefresh?.();
+      }
+    } catch (error) {
+      console.error("Trade sync failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const getTradeData = () => {
     if (!stats) return [];
@@ -126,9 +146,21 @@ export default function PerformanceChart({ stats, isLoading = false }) {
     <Card className="glass-card border-border/40 bg-black/40 shadow-none">
       <CardHeader className="py-3 px-4 border-b border-white/5">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-foreground/90 font-sans tracking-tight">
-            Performance
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-sm font-medium text-foreground/90 font-sans tracking-tight">
+              Performance
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-foreground-muted hover:text-foreground"
+              onClick={handleSync}
+              disabled={isSyncing || isLoading}
+              title="Sync closed trades"
+            >
+              <RefreshCw className={cn("h-3 w-3", isSyncing && "animate-spin")} />
+            </Button>
+          </div>
           {stats && (
             <div
               className={cn(
