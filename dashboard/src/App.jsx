@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
@@ -17,14 +17,18 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AdminDashboard = lazy(() => import("./pages/Admin"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 
-// Loading fallback with meaningful LCP content
+// Loading fallback - invisible since static splash handles it
+// Hides splash when unmounted (meaning real page loaded)
 function PageLoader() {
-  return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-      <h1 className="text-2xl font-serif text-foreground">Relay</h1>
-      <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-    </div>
-  );
+  useEffect(() => {
+    return () => {
+      // When PageLoader unmounts, the actual page is ready
+      window.__hideSplash?.();
+    };
+  }, []);
+
+  // Return null - static splash in index.html handles the visual
+  return null;
 }
 
 export default function App() {
