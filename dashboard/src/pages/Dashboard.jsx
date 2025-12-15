@@ -69,6 +69,13 @@ export default function Dashboard() {
     unsavedChangesRef.current = unsavedChangesContext;
   }, [unsavedChangesContext]);
 
+  // Hide splash when dashboard data finishes loading
+  useEffect(() => {
+    if (!isLoading) {
+      window.__hideSplash?.();
+    }
+  }, [isLoading]);
+
   // State for unsaved changes dialog
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingTab, setPendingTab] = useState(null);

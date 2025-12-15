@@ -1,17 +1,9 @@
-import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function ProtectedRoute({ children, requireAdmin = false }) {
   const { isAuthenticated, isLoading, isAdmin, needsOnboarding } = useAuth();
   const location = useLocation();
-
-  // Hide splash when auth loading completes
-  useEffect(() => {
-    if (!isLoading) {
-      window.__hideSplash?.();
-    }
-  }, [isLoading]);
 
   // Show nothing while loading - splash screen handles it
   if (isLoading) {

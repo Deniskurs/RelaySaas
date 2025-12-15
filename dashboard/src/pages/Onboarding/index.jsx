@@ -24,6 +24,13 @@ export default function Onboarding() {
   // Allow bypassing active check with ?force=true (for testing)
   const forceOnboarding = searchParams.get("force") === "true";
 
+  // Hide splash when onboarding loads
+  useEffect(() => {
+    if (!authLoading) {
+      window.__hideSplash?.();
+    }
+  }, [authLoading]);
+
   // Determine initial step from profile
   useEffect(() => {
     if (profile?.onboarding_step) {

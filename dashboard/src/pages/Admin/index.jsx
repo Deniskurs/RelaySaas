@@ -574,6 +574,13 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Hide splash when admin data loads
+  useEffect(() => {
+    if (!isLoading) {
+      window.__hideSplash?.();
+    }
+  }, [isLoading]);
+
   // Redirect if not admin
   useEffect(() => {
     if (!authLoading && !isAdmin) {
