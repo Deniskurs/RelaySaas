@@ -10,6 +10,10 @@ import {
   transformSignals,
   transformStats,
 } from "@/lib/transformers";
+
+// Polling intervals (ms)
+const POLL_INTERVAL_FAST = 10000;  // 10s for critical trading data
+const POLL_INTERVAL_SLOW = 30000; // 30s for less critical data
 import Sidebar, { SIDEBAR_EXPANDED_WIDTH, SIDEBAR_COLLAPSED_WIDTH, STORAGE_KEY } from "@/components/Navigation/Sidebar";
 import UnsavedChangesDialog from "@/components/Settings/UnsavedChangesDialog";
 import MobileTopBar from "@/components/Navigation/MobileTopBar";
@@ -152,59 +156,70 @@ export default function Dashboard() {
     return stored ? JSON.parse(stored) : false;
   });
 
-  // Listen for sidebar collapse changes
+  // Listen for sidebar collapse changes via custom event (more efficient than polling)
   useEffect(() => {
-    const handleStorageChange = () => {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      setSidebarCollapsed(stored ? JSON.parse(stored) : false);
+    const handleSidebarChange = (e) => {
+      setSidebarCollapsed(e.detail?.collapsed ?? false);
     };
 
-    // Poll for changes since storage events don't fire in same window
-    const interval = setInterval(handleStorageChange, 100);
-    return () => clearInterval(interval);
+    // Also handle storage event for cross-tab sync
+    const handleStorageChange = (e) => {
+      if (e.key === STORAGE_KEY) {
+        setSidebarCollapsed(e.newValue ? JSON.parse(e.newValue) : false);
+      }
+    };
+
+    window.addEventListener('sidebar-collapse', handleSidebarChange);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('sidebar-collapse', handleSidebarChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   // Command palette keyboard shortcut
   useCommandPalette(() => setCommandPaletteOpen(true));
 
-  // Initial data fetch
-  useEffect(() => {
-    const loadData = async (showLoader = false) => {
-      if (showLoader) setIsLoading(true);
+  // Load all data function
+  const loadData = useCallback(async (showLoader = false) => {
+    if (showLoader) setIsLoading(true);
 
-      try {
-        const [
-          statsData,
-          signalsData,
-          positionsData,
-          settingsData,
-          accountData,
-        ] = await Promise.all([
-          fetchData("/stats"),
-          fetchData("/signals?limit=20"),
-          fetchData("/positions"),
-          fetchData("/settings"),
-          fetchData("/account"),
-        ]);
+    try {
+      const [
+        statsData,
+        signalsData,
+        positionsData,
+        settingsData,
+        accountData,
+      ] = await Promise.all([
+        fetchData("/stats"),
+        fetchData("/signals?limit=20"),
+        fetchData("/positions"),
+        fetchData("/settings"),
+        fetchData("/account"),
+      ]);
 
-        if (statsData) setStats(transformStats(statsData));
-        if (signalsData) setSignals(transformSignals(signalsData));
-        if (positionsData) setOpenTrades(transformPositions(positionsData));
-        if (settingsData) setIsPaused(settingsData.paused);
-        if (accountData) setAccount(accountData);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    // Bump splash progress - continuous animation will smoothly catch up
-    window.__setSplashProgress?.(80);
-    loadData(true);
-    const interval = setInterval(() => loadData(false), 30000);
-    return () => clearInterval(interval);
+      if (statsData) setStats(transformStats(statsData));
+      if (signalsData) setSignals(transformSignals(signalsData));
+      if (positionsData) setOpenTrades(transformPositions(positionsData));
+      if (settingsData) setIsPaused(settingsData.paused);
+      if (accountData) setAccount(accountData);
+    } finally {
+      setIsLoading(false);
+    }
   }, [fetchData]);
 
-  // Telegram connection status polling
+  // Initial data fetch and 10s polling (always active, even in background tabs)
+  useEffect(() => {
+    window.__setSplashProgress?.(80);
+    loadData(true);
+
+    // Poll every 10 seconds - always active for real-time trading updates
+    const intervalId = setInterval(() => loadData(false), POLL_INTERVAL_FAST);
+    return () => clearInterval(intervalId);
+  }, [loadData]);
+
+  // Telegram connection status polling - every 10s (always active)
   useEffect(() => {
     const loadTelegramStatus = async () => {
       try {
@@ -216,11 +231,25 @@ export default function Dashboard() {
     };
 
     loadTelegramStatus();
-    const interval = setInterval(loadTelegramStatus, 10000); // Poll every 10s
-    return () => clearInterval(interval);
+    const intervalId = setInterval(loadTelegramStatus, POLL_INTERVAL_FAST);
+    return () => clearInterval(intervalId);
   }, [fetchData]);
 
-  // Handle WebSocket updates
+  // Debounced fetch refs to avoid rapid re-fetching
+  const pendingFetchRef = useRef({ signals: null, positions: null, stats: null });
+
+  // Debounced fetch helper - batches rapid updates into single fetch
+  const debouncedFetch = useCallback((key, fetchFn, delayMs = 500) => {
+    if (pendingFetchRef.current[key]) {
+      clearTimeout(pendingFetchRef.current[key]);
+    }
+    pendingFetchRef.current[key] = setTimeout(() => {
+      fetchFn();
+      pendingFetchRef.current[key] = null;
+    }, delayMs);
+  }, []);
+
+  // Handle WebSocket updates - use event data directly for instant updates
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -228,12 +257,14 @@ export default function Dashboard() {
 
     switch (type) {
       case "account.updated":
-        setAccount(data);
-        // Positions are updated along with account info
-        fetchData("/positions").then(
-          (d) => d && setOpenTrades(transformPositions(d))
+        // Use account data directly - instant update
+        if (data) setAccount(data);
+        // Debounce positions fetch (account update often means position changes)
+        debouncedFetch('positions', () =>
+          fetchData("/positions").then(d => d && setOpenTrades(transformPositions(d)))
         );
         break;
+
       case "signal.received":
       case "signal.parsed":
       case "signal.validated":
@@ -241,26 +272,68 @@ export default function Dashboard() {
       case "signal.executed":
       case "signal.failed":
       case "signal.skipped":
-        // Trigger sound notification based on signal status
+        // Trigger sound notification immediately (critical for UX)
         if (data) {
           const statusFromType = type.replace("signal.", "");
           handleSignalUpdate({ ...data, status: statusFromType });
+
+          // INSTANT UPDATE: Insert/update signal in state directly
+          setSignals(prev => {
+            const signalId = data.id || data.signal_id;
+            const newSignal = { ...data, status: statusFromType };
+
+            // Check if signal already exists
+            const existingIndex = prev.findIndex(s =>
+              s.id === signalId || s.signal_id === signalId
+            );
+
+            if (existingIndex >= 0) {
+              // Update existing signal
+              const updated = [...prev];
+              updated[existingIndex] = { ...updated[existingIndex], ...newSignal };
+              return updated;
+            } else {
+              // Add new signal at the beginning
+              return [newSignal, ...prev].slice(0, 20);
+            }
+          });
         }
-        fetchData("/signals?limit=20").then(
-          (d) => d && setSignals(transformSignals(d))
-        );
-        fetchData("/stats").then((d) => d && setStats(transformStats(d)));
+
+        // Background fetch to ensure consistency (debounced)
+        debouncedFetch('signals', () =>
+          fetchData("/signals?limit=20").then(d => d && setSignals(transformSignals(d)))
+        , 1000);
+        debouncedFetch('stats', () =>
+          fetchData("/stats").then(d => d && setStats(transformStats(d)))
+        , 1500);
         break;
+
       case "trade.opened":
       case "trade.closed":
       case "trade.updated":
-        fetchData("/positions").then(
-          (d) => d && setOpenTrades(transformPositions(d))
-        );
-        fetchData("/stats").then((d) => d && setStats(transformStats(d)));
+        // For trades, use event data if available for instant feedback
+        if (data && type === "trade.opened") {
+          setOpenTrades(prev => [data, ...prev]);
+        } else if (data && type === "trade.closed") {
+          setOpenTrades(prev => prev.filter(t =>
+            t.ticket !== data.ticket && t.id !== data.id
+          ));
+        } else if (data && type === "trade.updated") {
+          setOpenTrades(prev => prev.map(t =>
+            (t.ticket === data.ticket || t.id === data.id) ? { ...t, ...data } : t
+          ));
+        }
+
+        // Background fetch to ensure consistency (debounced)
+        debouncedFetch('positions', () =>
+          fetchData("/positions").then(d => d && setOpenTrades(transformPositions(d)))
+        , 500);
+        debouncedFetch('stats', () =>
+          fetchData("/stats").then(d => d && setStats(transformStats(d)))
+        , 1000);
         break;
     }
-  }, [lastMessage, fetchData, handleSignalUpdate]);
+  }, [lastMessage, fetchData, handleSignalUpdate, debouncedFetch]);
 
   const handlePause = async () => {
     await postData("/control/pause");

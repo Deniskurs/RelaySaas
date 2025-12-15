@@ -65,9 +65,13 @@ export default function Sidebar({
 
   const isAdmin = profile?.role === "admin";
 
-  // Persist collapse state
+  // Persist collapse state and dispatch custom event for other components
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(isCollapsed));
+    // Dispatch custom event for same-window listeners (more efficient than polling)
+    window.dispatchEvent(new CustomEvent('sidebar-collapse', {
+      detail: { collapsed: isCollapsed }
+    }));
   }, [isCollapsed]);
 
   // Keyboard shortcuts for collapse toggle
