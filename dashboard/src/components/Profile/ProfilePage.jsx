@@ -22,7 +22,7 @@ import {
   EyeOff,
   Shield,
   Crown,
-  Sparkles,
+  User,
   Key,
   Zap,
 } from "lucide-react";
@@ -117,7 +117,7 @@ function SubscriptionBadge({ tier }) {
   const tierConfig = {
     free: {
       label: "Free",
-      icon: Sparkles,
+      icon: User,
       className: "border-white/10 bg-white/[0.04] text-foreground-muted",
     },
     pro: {

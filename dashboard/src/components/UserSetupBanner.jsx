@@ -3,7 +3,7 @@ import { useApi } from "@/hooks/useApi";
 import {
   CheckCircle2,
   Circle,
-  Sparkles,
+  Rocket,
   MessageSquare,
   TrendingUp,
   Radio,
@@ -176,7 +176,7 @@ export default function UserSetupBanner({ onNavigateToSettings }) {
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
           <div className="p-3 rounded-none bg-white/[0.06] border border-white/10">
-            <Sparkles className="w-6 h-6 text-foreground" />
+            <Rocket className="w-6 h-6 text-foreground" />
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground mb-1">
@@ -259,7 +259,7 @@ export default function UserSetupBanner({ onNavigateToSettings }) {
             onClick={handleConfigureClick}
             className="font-medium px-6 group"
           >
-            <Sparkles size={16} className="mr-2" />
+            <Rocket size={16} className="mr-2" />
             Configure Now
             <ArrowRight
               size={16}

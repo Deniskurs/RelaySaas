@@ -5,7 +5,7 @@ import {
   PauseCircle,
   PlayCircle,
   Shield,
-  Sparkles,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +22,7 @@ export default function BottomTabBar({
 
   const tabs = [
     { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { id: "pricing", icon: Sparkles, label: "Plans" },
+    { id: "pricing", icon: CreditCard, label: "Plans" },
     { id: "settings", icon: Settings, label: "Settings" },
     ...(isAdmin ? [{ id: "admin", icon: Shield, label: "Admin" }] : []),
   ];

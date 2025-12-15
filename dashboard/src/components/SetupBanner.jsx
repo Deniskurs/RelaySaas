@@ -6,7 +6,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Circle,
-  Sparkles,
+  Rocket,
   Shield,
   MessageSquare,
   Bot,
@@ -111,7 +111,7 @@ export default function SetupBanner({ onNavigateToAdmin }) {
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
           <div className="p-3 rounded-none bg-white/[0.06] border border-white/10">
-            <Sparkles className="w-6 h-6 text-foreground" />
+            <Rocket className="w-6 h-6 text-foreground" />
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground mb-1">

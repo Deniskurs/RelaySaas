@@ -13,7 +13,7 @@ import {
   PlayCircle,
   Search,
   Command,
-  Sparkles,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -524,7 +524,7 @@ export default function Sidebar({
               onClick={() => onTabChange("pricing")}
               className="gap-2 py-2 cursor-pointer focus:bg-white/[0.06]"
             >
-              <Sparkles size={14} className="text-foreground-muted" />
+              <CreditCard size={14} className="text-foreground-muted" />
               <span>Plans & Pricing</span>
             </DropdownMenuItem>
 

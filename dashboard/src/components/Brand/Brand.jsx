@@ -1,8 +1,13 @@
+import { useId } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 // Premium Logo Component - Abstract Relay/Connection Symbol
-export function Logo({ className, size = 32 }) {
+export function Logo({ className, size = 32, animate = true }) {
+  // Generate unique ID for this instance to avoid SVG gradient conflicts
+  const instanceId = useId();
+  const gradientId = `brand-gradient-${instanceId}`;
+
   return (
     <div
       className={cn("relative flex items-center justify-center", className)}
@@ -18,7 +23,7 @@ export function Logo({ className, size = 32 }) {
       >
         <defs>
           <linearGradient
-            id="brand-gradient"
+            id={gradientId}
             x1="0%"
             y1="0%"
             x2="100%"
@@ -28,57 +33,83 @@ export function Logo({ className, size = 32 }) {
             <stop offset="50%" stopColor="#A3E4DB" /> {/* Light Cyan */}
             <stop offset="100%" stopColor="#ECECEC" /> {/* Platinum */}
           </linearGradient>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
         </defs>
 
         {/* Outer Ring Segment - Connectivity */}
-        <motion.path
-          d="M16 4 A12 12 0 0 1 28 16"
-          stroke="url(#brand-gradient)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 1 }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-        />
+        {animate ? (
+          <motion.path
+            d="M16 4 A12 12 0 0 1 28 16"
+            stroke={`url(#${gradientId})`}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            initial={{ pathLength: 0, opacity: 0.5 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+          />
+        ) : (
+          <path
+            d="M16 4 A12 12 0 0 1 28 16"
+            stroke={`url(#${gradientId})`}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        )}
 
         {/* Inner Core - The Relay Node */}
-        <motion.circle
-          cx="16"
-          cy="16"
-          r="6"
-          fill="url(#brand-gradient)"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        />
+        {animate ? (
+          <motion.circle
+            cx="16"
+            cy="16"
+            r="6"
+            fill={`url(#${gradientId})`}
+            initial={{ scale: 0.8, opacity: 0.8 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          />
+        ) : (
+          <circle
+            cx="16"
+            cy="16"
+            r="6"
+            fill={`url(#${gradientId})`}
+          />
+        )}
 
-        {/* Pulse Effect */}
-        <motion.circle
-          cx="16"
-          cy="16"
-          r="6"
-          stroke="url(#brand-gradient)"
-          strokeWidth="1"
-          strokeOpacity="0.5"
-          initial={{ scale: 1, opacity: 0.8 }}
-          animate={{ scale: 2, opacity: 0 }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-        />
+        {/* Pulse Effect - only when animated */}
+        {animate && (
+          <motion.circle
+            cx="16"
+            cy="16"
+            r="6"
+            stroke={`url(#${gradientId})`}
+            strokeWidth="1"
+            strokeOpacity="0.5"
+            fill="none"
+            initial={{ scale: 1, opacity: 0.8 }}
+            animate={{ scale: 2, opacity: 0 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+          />
+        )}
 
         {/* Connection Line */}
-        <motion.path
-          d="M4 16 L10 16"
-          stroke="url(#brand-gradient)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.5 }}
-        />
+        {animate ? (
+          <motion.path
+            d="M4 16 L10 16"
+            stroke={`url(#${gradientId})`}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            initial={{ pathLength: 0, opacity: 0.5 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+          />
+        ) : (
+          <path
+            d="M4 16 L10 16"
+            stroke={`url(#${gradientId})`}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        )}
       </svg>
     </div>
   );

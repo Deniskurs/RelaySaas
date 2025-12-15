@@ -16,7 +16,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Shield, Sparkles } from "lucide-react";
+import { LogOut, Shield, CreditCard } from "lucide-react";
 import { Logo, BrandName } from "../Brand/Brand";
 
 export default function MobileTopBar({
@@ -69,8 +69,8 @@ export default function MobileTopBar({
         onClick={() => onTabChange("dashboard")}
         whileTap={{ scale: 0.98 }}
       >
-        <div className="w-7 h-7 relative">
-          <Logo size={28} />
+        <div className="w-7 h-7 relative flex items-center justify-center">
+          <Logo size={28} animate={false} />
         </div>
         <div className="flex flex-col">
           {/* If we are on a specific page that isn't dashboard, we might want to show that title, 
@@ -205,7 +205,7 @@ export default function MobileTopBar({
               onClick={() => onTabChange("pricing")}
               className="gap-2 py-2 cursor-pointer focus:bg-white/[0.06]"
             >
-              <Sparkles size={14} className="text-foreground-muted" />
+              <CreditCard size={14} className="text-foreground-muted" />
               <span>Plans & Pricing</span>
             </DropdownMenuItem>
 

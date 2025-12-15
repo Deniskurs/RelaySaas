@@ -23,7 +23,7 @@ import {
   ArrowLeft,
   Lock,
   Zap,
-  Sparkles,
+  Tag,
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -237,7 +237,7 @@ export default function Checkout() {
                       }
                       className="mt-3 text-xs text-[hsl(var(--accent-teal))] hover:underline flex items-center gap-1"
                     >
-                      <Sparkles size={12} />
+                      <Tag size={12} />
                       Save with annual billing
                       <ChevronRight size={12} />
                     </button>
