@@ -35,6 +35,9 @@ import {
   PRICE_INFO,
 } from "@/lib/stripe";
 
+// API URL for fallback endpoint
+const API_URL = import.meta.env.VITE_API_URL || "";
+
 // Plan display info
 const PLAN_INFO = {
   pro: {
@@ -117,15 +120,30 @@ export function CheckoutModal({
 
   const handleComplete = useCallback(async () => {
     setCheckoutComplete(true);
+
+    // Call the checkout session endpoint to activate subscription (fallback for webhook)
+    if (session?.access_token && clientSecret) {
+      // Extract session ID from client secret (format: cs_xxx_secret_yyy)
+      const sessionId = clientSecret.split('_secret_')[0];
+      try {
+        await fetch(`${API_URL}/api/stripe/checkout-session/${sessionId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+      } catch (err) {
+        console.error("Failed to verify checkout session:", err);
+      }
+    }
+
     // Refresh profile to get updated subscription status
     if (refreshProfile) {
       await refreshProfile();
     }
+
     // Close modal after delay
     setTimeout(() => {
       onOpenChange(false);
     }, 2000);
-  }, [refreshProfile, onOpenChange]);
+  }, [refreshProfile, onOpenChange, session?.access_token, clientSecret]);
 
   const stripeOptions = clientSecret
     ? {

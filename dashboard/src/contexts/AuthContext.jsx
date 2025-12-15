@@ -14,54 +14,6 @@ import {
 
 const AuthContext = createContext(null);
 
-// localStorage cache key for profile data
-const PROFILE_CACHE_KEY = 'relay-profile-cache';
-
-// Cache critical profile fields to localStorage
-const cacheProfile = (profileData) => {
-  if (profileData && typeof window !== 'undefined') {
-    try {
-      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
-        role: profileData.role,
-        subscription_tier: profileData.subscription_tier,
-        subscription_status: profileData.subscription_status,
-        status: profileData.status,
-        timestamp: Date.now()
-      }));
-    } catch (e) {
-      console.warn("Failed to cache profile:", e);
-    }
-  }
-};
-
-// Get cached profile data if less than 24 hours old
-const getCachedProfile = () => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const cached = localStorage.getItem(PROFILE_CACHE_KEY);
-    if (!cached) return null;
-    const data = JSON.parse(cached);
-    // Only use cache if less than 24 hours old
-    if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
-      return data;
-    }
-  } catch (e) {
-    console.warn("Failed to read profile cache:", e);
-  }
-  return null;
-};
-
-// Clear profile cache
-const clearProfileCache = () => {
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.removeItem(PROFILE_CACHE_KEY);
-    } catch (e) {
-      console.warn("Failed to clear profile cache:", e);
-    }
-  }
-};
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -90,12 +42,6 @@ export function AuthProvider({ children }) {
         return null;
       }
       console.log("Profile fetched:", data);
-
-      // Cache successful profile fetch
-      if (data) {
-        cacheProfile(data);
-      }
-
       return data;
     } catch (e) {
       console.error("Error fetching profile:", e);
@@ -152,50 +98,12 @@ export function AuthProvider({ children }) {
               const profileData = await fetchProfileWithRetry(session.user.id);
               console.log("initAuth: Profile result:", profileData);
               if (mounted) {
-                if (profileData) {
-                  setProfile(profileData);
-                } else {
-                  // Profile fetch failed - try to use cached profile data
-                  const cachedData = getCachedProfile();
-                  if (cachedData) {
-                    console.log("initAuth: Using cached profile data");
-                    setProfile({
-                      id: session.user.id,
-                      email: session.user.email,
-                      full_name: session.user.user_metadata?.full_name || null,
-                      role: cachedData.role,
-                      subscription_tier: cachedData.subscription_tier,
-                      subscription_status: cachedData.subscription_status,
-                      status: cachedData.status || "active",
-                    });
-                  } else {
-                    // No cache available - set profile to null (UI will handle gracefully)
-                    console.warn("initAuth: No cached profile available, profile will be null");
-                    setProfile(null);
-                  }
-                }
+                setProfile(profileData);
               }
             } catch (profileError) {
-              // Profile fetch failed but user is authenticated
               console.warn("initAuth: Profile fetch failed:", profileError);
               if (mounted) {
-                // Try to use cached profile data
-                const cachedData = getCachedProfile();
-                if (cachedData) {
-                  console.log("initAuth: Using cached profile data after error");
-                  setProfile({
-                    id: session.user.id,
-                    email: session.user.email,
-                    full_name: session.user.user_metadata?.full_name || null,
-                    role: cachedData.role,
-                    subscription_tier: cachedData.subscription_tier,
-                    subscription_status: cachedData.subscription_status,
-                    status: cachedData.status || "active",
-                  });
-                } else {
-                  // No cache - leave profile null
-                  setProfile(null);
-                }
+                setProfile(null);
               }
             }
           }
@@ -229,10 +137,9 @@ export function AuthProvider({ children }) {
       setSession(session);
       setUser(session?.user ?? null);
 
-      // Handle SIGNED_OUT - clear everything including cache
+      // Handle SIGNED_OUT - clear everything
       if (event === "SIGNED_OUT" || !session?.user) {
         setProfile(null);
-        clearProfileCache();
         if (mounted) {
           setIsLoading(false);
         }
@@ -258,25 +165,7 @@ export function AuthProvider({ children }) {
             } else {
               // Fetch failed - preserve existing profile (don't overwrite with null)
               console.log("Auth state change: Profile fetch failed, preserving existing profile");
-              // If we have no existing profile, try cache
-              setProfile(prev => {
-                if (prev) return prev; // Keep existing profile
-                // No existing profile - try cache
-                const cachedData = getCachedProfile();
-                if (cachedData) {
-                  console.log("Auth state change: Using cached profile");
-                  return {
-                    id: session.user.id,
-                    email: session.user.email,
-                    full_name: session.user.user_metadata?.full_name || null,
-                    role: cachedData.role,
-                    subscription_tier: cachedData.subscription_tier,
-                    subscription_status: cachedData.subscription_status,
-                    status: cachedData.status || "active",
-                  };
-                }
-                return null;
-              });
+              setProfile(prev => prev || null);
             }
           }
         } finally {
@@ -366,8 +255,6 @@ export function AuthProvider({ children }) {
     setUser(null);
     setProfile(null);
     setSession(null);
-    // Clear profile cache on logout
-    clearProfileCache();
     return { success: true };
   };
 
