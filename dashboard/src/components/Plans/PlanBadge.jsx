@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
-  Sparkles,
+  User,
   Shield,
   Crown,
   ChevronUp,
@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const TIER_CONFIG = {
   free: {
     label: "Free",
-    icon: Sparkles,
+    icon: User,
     className: "border-white/[0.08] bg-white/[0.03] text-foreground-muted",
     badgeClassName: "text-foreground-muted",
     showUpgrade: true,

@@ -10,7 +10,7 @@ import {
   Zap,
   Shield,
   Clock,
-  Sparkles,
+  Gift,
   Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -244,7 +244,7 @@ export function LimitReachedModal({
 export function FeatureUpgradePrompt({
   feature,
   description,
-  icon: Icon = Sparkles,
+  icon: Icon = Zap,
   onUpgrade,
   className,
 }) {
@@ -304,7 +304,7 @@ export function ProDayGiftBanner({
       <div className="relative flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-full bg-[hsl(var(--accent-gold))]/20">
-            <Sparkles size={18} className="text-[hsl(var(--accent-gold))]" />
+            <Gift size={18} className="text-[hsl(var(--accent-gold))]" />
           </div>
           <div>
             <p className="text-sm font-medium text-foreground">

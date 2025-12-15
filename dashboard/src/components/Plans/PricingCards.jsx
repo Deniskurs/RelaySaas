@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   Check,
-  Sparkles,
+  User,
   Shield,
   Crown,
   ChevronRight,
@@ -23,7 +23,7 @@ export const PLANS = {
     monthlyPrice: 0,
     annualPrice: 0,
     currency: "£",
-    icon: Sparkles,
+    icon: User,
     popular: false,
     features: [
       { text: "5 signals per month", highlight: false },

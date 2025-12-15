@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   Shield,
   Crown,
-  Sparkles,
+  User,
   ExternalLink,
   Calendar,
   CreditCard,
@@ -23,7 +23,7 @@ import { createPortalSession } from "@/lib/stripe";
 
 // Plan icons mapping
 const PLAN_ICONS = {
-  free: Sparkles,
+  free: User,
   pro: Shield,
   premium: Crown,
 };
@@ -50,7 +50,7 @@ export function SubscriptionManager({ className }) {
   const expiresAt = profile?.subscription_expires_at;
   const hasStripeCustomer = !!profile?.stripe_customer_id;
 
-  const Icon = PLAN_ICONS[tier] || Sparkles;
+  const Icon = PLAN_ICONS[tier] || User;
   const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
 
   const formatDate = (dateString) => {
@@ -242,7 +242,7 @@ export function SubscriptionManager({ className }) {
 export function SubscriptionBadge({ className }) {
   const { profile } = useAuth();
   const tier = profile?.subscription_tier?.toLowerCase() || "free";
-  const Icon = PLAN_ICONS[tier] || Sparkles;
+  const Icon = PLAN_ICONS[tier] || User;
 
   return (
     <div
