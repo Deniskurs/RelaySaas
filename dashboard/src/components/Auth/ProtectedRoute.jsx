@@ -1,18 +1,21 @@
+import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2 } from "lucide-react";
 
 export default function ProtectedRoute({ children, requireAdmin = false }) {
   const { isAuthenticated, isLoading, isAdmin, needsOnboarding } = useAuth();
   const location = useLocation();
 
-  // Show loading state
+  // Hide splash when auth loading completes
+  useEffect(() => {
+    if (!isLoading) {
+      window.__hideSplash?.();
+    }
+  }, [isLoading]);
+
+  // Show nothing while loading - splash screen handles it
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return null;
   }
 
   // Redirect to login if not authenticated

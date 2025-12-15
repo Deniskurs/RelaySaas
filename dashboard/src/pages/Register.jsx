@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,11 @@ import { Loader2, AlertCircle, TrendingUp, Check } from "lucide-react";
 export default function Register() {
   const navigate = useNavigate();
   const { register, loginWithGoogle, loginWithApple, error, clearError, isLoading } = useAuth();
+
+  // Hide static splash on mount
+  useEffect(() => {
+    window.__hideSplash?.();
+  }, []);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");

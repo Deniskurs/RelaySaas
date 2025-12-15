@@ -37,6 +37,11 @@ export default function Login() {
 
   const { showSplash, splashPhase, skipSplash } = useLoginSplash();
 
+  // Hide static HTML splash - Login has its own SplashIntro
+  useEffect(() => {
+    window.__hideSplash?.();
+  }, []);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

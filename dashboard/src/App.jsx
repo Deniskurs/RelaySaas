@@ -18,16 +18,20 @@ const AdminDashboard = lazy(() => import("./pages/Admin"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 
 // Loading fallback - invisible since static splash handles it
-// Hides splash when unmounted (meaning real page loaded)
 function PageLoader() {
-  useEffect(() => {
-    return () => {
-      // When PageLoader unmounts, the actual page is ready
-      window.__hideSplash?.();
-    };
-  }, []);
-
   // Return null - static splash in index.html handles the visual
+  return null;
+}
+
+// Component to hide splash once mounted inside Suspense
+function HideSplashOnReady() {
+  useEffect(() => {
+    // Small delay for smoother transition
+    const timer = setTimeout(() => {
+      window.__hideSplash?.();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
   return null;
 }
 
