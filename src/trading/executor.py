@@ -597,6 +597,80 @@ class TradeExecutor:
             )
             return []
 
+    async def get_deals_by_time_range(
+        self, start_time: datetime, end_time: datetime
+    ) -> List[Dict[str, Any]]:
+        """Get all deal history within a time range.
+
+        This returns ALL deals (closing deals have profit info), useful for
+        calculating P&L for any time period regardless of whether trades
+        were opened via signals or manually.
+
+        Args:
+            start_time: Start of time range (datetime).
+            end_time: End of time range (datetime).
+
+        Returns:
+            List of deal records with profit, price, time, entryType, etc.
+        """
+        if not self.connection:
+            raise RuntimeError("Not connected to MetaApi")
+
+        user_tag = self._get_user_tag()
+        try:
+            result = await self.connection.get_deals_by_time_range(
+                start_time=start_time, end_time=end_time
+            )
+            # MetaApi returns {'deals': [...], 'synchronizing': bool}
+            if isinstance(result, dict):
+                return result.get("deals", []) or []
+            return result or []
+        except Exception as e:
+            log.warning(
+                f"{user_tag}Failed to get deals by time range",
+                error=str(e),
+                start=start_time.isoformat(),
+                end=end_time.isoformat(),
+            )
+            return []
+
+    async def get_today_pnl(self) -> float:
+        """Get today's realized P&L from MetaAPI deal history.
+
+        Returns the sum of profits from all closing deals today,
+        regardless of whether trades were from signals or manual.
+
+        Returns:
+            Today's total realized P&L.
+        """
+        user_tag = self._get_user_tag()
+        try:
+            # Get today's start (midnight UTC)
+            now = datetime.utcnow()
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            deals = await self.get_deals_by_time_range(today_start, now)
+
+            # Sum profits from closing deals only (DEAL_ENTRY_OUT)
+            # Opening deals (DEAL_ENTRY_IN) have profit=0
+            total_pnl = 0.0
+            for deal in deals:
+                entry_type = deal.get("entryType", "")
+                # Only count closing deals - they have the actual profit
+                if entry_type == "DEAL_ENTRY_OUT":
+                    total_pnl += deal.get("profit", 0) or 0
+
+            log.debug(
+                f"{user_tag}Today's P&L calculated",
+                deals_count=len(deals),
+                closing_deals=len([d for d in deals if d.get("entryType") == "DEAL_ENTRY_OUT"]),
+                total_pnl=total_pnl,
+            )
+            return total_pnl
+        except Exception as e:
+            log.warning(f"{user_tag}Failed to get today's P&L", error=str(e))
+            return 0.0
+
     async def disconnect(self):
         """Disconnect from MetaApi."""
         user_tag = self._get_user_tag()

@@ -235,9 +235,34 @@ async def get_stats(
     """Get trading statistics.
 
     When authenticated, returns stats for the current user only.
+    Today's P&L is fetched from MetaAPI deal history for accuracy
+    (includes manual trades, not just signal-based trades).
     """
+    from ..users.manager import user_manager
+
     user_id = user.id if user else None
     stats = await crud.get_stats(user_id=user_id)
+
+    # Try to get today's P&L from MetaAPI for accuracy (includes manual trades)
+    if user:
+        try:
+            conn = user_manager.get_connection(user.id)
+            if conn and conn.metaapi_executor and conn.metaapi_executor.connection:
+                metaapi_today_pnl = await conn.metaapi_executor.get_today_pnl()
+                stats["today_profit"] = round(metaapi_today_pnl, 2)
+                log.debug(
+                    "Today's P&L from MetaAPI",
+                    user_id=user.id[:8],
+                    pnl=metaapi_today_pnl,
+                )
+        except Exception as e:
+            # Fall back to database calculation if MetaAPI fails
+            log.warning(
+                "Failed to get today's P&L from MetaAPI, using DB",
+                user_id=user.id[:8] if user else "anon",
+                error=str(e),
+            )
+
     return StatsResponse(**stats)
 
 
