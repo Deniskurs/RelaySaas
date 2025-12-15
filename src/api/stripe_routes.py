@@ -270,8 +270,8 @@ async def get_subscription_status(user: AuthUser = Depends(get_current_user)):
             )
             if subscriptions.data:
                 sub = subscriptions.data[0]
-                cancel_at_period_end = sub.cancel_at_period_end
-                current_period_end = sub.current_period_end
+                cancel_at_period_end = sub.get("cancel_at_period_end", False)
+                current_period_end = sub.get("current_period_end")
         except stripe.error.StripeError:
             pass  # Use profile data if Stripe call fails
 
@@ -364,9 +364,10 @@ async def get_checkout_session(
 
                     if subscription_id:
                         sub = stripe.Subscription.retrieve(subscription_id)
-                        if sub.current_period_end:
+                        period_end = sub.get("current_period_end") or sub.get("currentPeriodEnd")
+                        if period_end:
                             from datetime import datetime
-                            expires_at = datetime.fromtimestamp(sub.current_period_end).isoformat()
+                            expires_at = datetime.fromtimestamp(period_end).isoformat()
                             log.info(f"[checkout-session] Subscription expires_at={expires_at}")
 
                     update_data = {
@@ -502,7 +503,7 @@ async def handle_checkout_completed(supabase, session):
     subscription_id = session.get("subscription")
     if subscription_id:
         subscription = stripe.Subscription.retrieve(subscription_id)
-        current_period_end = subscription.current_period_end
+        current_period_end = subscription.get("current_period_end")
     else:
         current_period_end = None
 
@@ -549,11 +550,12 @@ async def handle_subscription_updated(supabase, subscription):
 
         if tier:
             from datetime import datetime
-            current_period_end = subscription.get("current_period_end")
+            current_period_end = subscription.get("current_period_end") if isinstance(subscription, dict) else subscription.get("current_period_end")
+            sub_status = subscription.get("status") if isinstance(subscription, dict) else subscription.get("status")
 
             update_data = {
                 "subscription_tier": tier,
-                "subscription_status": subscription.get("status"),
+                "subscription_status": sub_status,
             }
 
             if current_period_end:
