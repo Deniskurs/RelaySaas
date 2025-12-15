@@ -167,12 +167,22 @@ export default function Dashboard() {
   // Command palette keyboard shortcut
   useCommandPalette(() => setCommandPaletteOpen(true));
 
-  // Initial data fetch
+  // Initial data fetch with splash progress tracking
   useEffect(() => {
-    const loadData = async (showLoader = false) => {
+    const loadData = async (showLoader = false, trackProgress = false) => {
       if (showLoader) setIsLoading(true);
 
+      // Progress tracking: auth done = 40%, each API call adds 12% (5 calls = 60%)
+      let progress = 40;
+      const updateProgress = () => {
+        if (trackProgress) {
+          progress += 12;
+          window.__setSplashProgress?.(Math.min(progress, 95));
+        }
+      };
+
       try {
+        // Track each API call completion for progress
         const [
           statsData,
           signalsData,
@@ -180,11 +190,11 @@ export default function Dashboard() {
           settingsData,
           accountData,
         ] = await Promise.all([
-          fetchData("/stats"),
-          fetchData("/signals?limit=20"),
-          fetchData("/positions"),
-          fetchData("/settings"),
-          fetchData("/account"),
+          fetchData("/stats").then(r => { updateProgress(); return r; }),
+          fetchData("/signals?limit=20").then(r => { updateProgress(); return r; }),
+          fetchData("/positions").then(r => { updateProgress(); return r; }),
+          fetchData("/settings").then(r => { updateProgress(); return r; }),
+          fetchData("/account").then(r => { updateProgress(); return r; }),
         ]);
 
         if (statsData) setStats(transformStats(statsData));
@@ -197,8 +207,8 @@ export default function Dashboard() {
       }
     };
 
-    loadData(true);
-    const interval = setInterval(() => loadData(false), 30000);
+    loadData(true, true); // Track progress on initial load
+    const interval = setInterval(() => loadData(false, false), 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

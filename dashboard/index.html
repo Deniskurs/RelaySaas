@@ -34,14 +34,15 @@
             <stop offset="100%" stop-color="#ECECEC"/>
           </linearGradient>
         </defs>
-        <!-- Loading arc - animates from quarter to full circle -->
+        <!-- Loading arc - controlled by JS based on actual progress -->
         <circle
+          id="splash-arc"
           cx="16" cy="16" r="12"
           stroke="url(#splash-gradient)"
           stroke-width="2.5"
           stroke-linecap="round"
           fill="none"
-          class="loading-arc"
+          style="stroke-dasharray:75.4;stroke-dashoffset:56.5;transition:stroke-dashoffset 0.3s ease-out"
           transform="rotate(-90 16 16)"
         />
         <!-- Center core -->
@@ -60,17 +61,7 @@
     </div>
     <style>
       .pulse-dot{animation:pulse-dot 2s ease-in-out infinite}
-      /* Arc loading animation: starts at ~25% (quarter), fills to 100% over 2.5s */
-      .loading-arc{
-        stroke-dasharray:75.4;
-        stroke-dashoffset:56.5;
-        animation:arc-fill 2.5s ease-out forwards;
-      }
       @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.5}}
-      @keyframes arc-fill{
-        0%{stroke-dashoffset:56.5}
-        100%{stroke-dashoffset:0}
-      }
     </style>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

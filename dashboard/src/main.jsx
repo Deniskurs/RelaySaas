@@ -4,23 +4,48 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./index.css";
 
-// Hide splash screen when React is ready
+// Splash screen progress control
+// Arc: circumference = 75.4, start offset = 56.5 (25% visible), end = 0 (100%)
+const ARC_START = 56.5;
+const ARC_FULL = 75.4;
+
+function setSplashProgress(percent) {
+  const arc = document.getElementById("splash-arc");
+  if (arc) {
+    // Map 0-100% to offset 56.5 -> 0
+    const offset = ARC_START - (ARC_START * (percent / 100));
+    arc.style.strokeDashoffset = offset;
+  }
+}
+
 let splashHidden = false;
 function hideSplash() {
   if (splashHidden) return;
   splashHidden = true;
+
+  // Complete the arc first
+  setSplashProgress(100);
+
   const splash = document.getElementById("splash");
   if (splash) {
-    splash.style.opacity = "0";
-    setTimeout(() => splash.remove(), 400);
+    // Wait for arc to complete, then fade out
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          splash.style.opacity = "0";
+          setTimeout(() => splash.remove(), 400);
+        });
+      });
+    }, 300);
   }
 }
 
-// Expose globally so pages can call it when truly ready
+// Expose globally
+window.__setSplashProgress = setSplashProgress;
 window.__hideSplash = hideSplash;
 
-// Safety fallback - hide after 3 seconds max
-setTimeout(hideSplash, 3000);
+// Safety fallback - hide after 10 seconds max
+setTimeout(hideSplash, 10000);
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
