@@ -5,10 +5,10 @@ import App from "./App";
 import "./index.css";
 
 // Continuous splash screen progress - never stops moving
-// Arc: start offset = 56.5 (25% visible), end = 0 (100%)
-const ARC_START = 56.5;
-let displayProgress = 25;  // What's visually shown
-let targetProgress = 30;   // Initial target - just slightly ahead
+// Arc: start offset = 70.65 (6% visible), end = 0 (100%)
+const ARC_START = 70.65;
+let displayProgress = 6;   // What's visually shown - start very small
+let targetProgress = 10;   // Initial target - just slightly ahead
 let animationFrame = null;
 let splashHidden = false;
 
@@ -88,11 +88,12 @@ animateProgress();
 
 // Gradually increase target as app loads
 // Small increments so it never feels stuck, but stays behind actual progress
-setTimeout(() => setSplashProgress(35), 300);
-setTimeout(() => setSplashProgress(40), 800);
-setTimeout(() => setSplashProgress(45), 1500);
-setTimeout(() => setSplashProgress(50), 2500);
-setTimeout(() => setSplashProgress(55), 4000);
+setTimeout(() => setSplashProgress(15), 200);
+setTimeout(() => setSplashProgress(20), 500);
+setTimeout(() => setSplashProgress(25), 1000);
+setTimeout(() => setSplashProgress(30), 1800);
+setTimeout(() => setSplashProgress(35), 2800);
+setTimeout(() => setSplashProgress(40), 4000);
 
 // Safety fallback
 setTimeout(hideSplash, 10000);
