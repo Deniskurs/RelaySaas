@@ -87,13 +87,18 @@ window.__hideSplash = hideSplash;
 animateProgress();
 
 // Gradually increase target as app loads
-// Small increments so it never feels stuck, but stays behind actual progress
-setTimeout(() => setSplashProgress(15), 200);
-setTimeout(() => setSplashProgress(20), 500);
-setTimeout(() => setSplashProgress(25), 1000);
-setTimeout(() => setSplashProgress(30), 1800);
-setTimeout(() => setSplashProgress(35), 2800);
-setTimeout(() => setSplashProgress(40), 4000);
+// Continuous progression toward ~85% so it never feels like it jumps
+setTimeout(() => setSplashProgress(12), 150);
+setTimeout(() => setSplashProgress(18), 350);
+setTimeout(() => setSplashProgress(25), 600);
+setTimeout(() => setSplashProgress(32), 900);
+setTimeout(() => setSplashProgress(40), 1200);
+setTimeout(() => setSplashProgress(48), 1600);
+setTimeout(() => setSplashProgress(55), 2000);
+setTimeout(() => setSplashProgress(62), 2500);
+setTimeout(() => setSplashProgress(70), 3200);
+setTimeout(() => setSplashProgress(78), 4000);
+setTimeout(() => setSplashProgress(85), 5000);
 
 // Safety fallback
 setTimeout(hideSplash, 10000);
