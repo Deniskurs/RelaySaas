@@ -293,10 +293,29 @@ async def get_trades(
     return result.data or []
 
 
+def _parse_datetime(dt_value) -> Optional[datetime]:
+    """Parse a datetime value from various formats (string, datetime, None)."""
+    if dt_value is None:
+        return None
+    if isinstance(dt_value, datetime):
+        return dt_value
+    if isinstance(dt_value, str):
+        try:
+            # Handle ISO format with or without timezone
+            # Replace 'Z' with +00:00 for parsing
+            dt_str = dt_value.replace("Z", "+00:00")
+            # Try parsing with fromisoformat (handles most ISO formats)
+            return datetime.fromisoformat(dt_str.replace(" ", "T"))
+        except (ValueError, AttributeError):
+            pass
+    return None
+
+
 async def get_stats(user_id: Optional[str] = None) -> dict:
     """Get trading statistics."""
     supabase = get_supabase_admin()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_iso = today_start.isoformat()
 
     # Build base queries
     signals_query = supabase.table("signals_v2").select("id", count="exact")
@@ -310,7 +329,7 @@ async def get_stats(user_id: Optional[str] = None) -> dict:
     total_signals_result = signals_query.execute()
     total_signals = total_signals_result.count or 0
 
-    signals_today_query = supabase.table("signals_v2").select("id", count="exact").gte("received_at", today)
+    signals_today_query = supabase.table("signals_v2").select("id", count="exact").gte("received_at", today_iso)
     if user_id:
         signals_today_query = signals_today_query.eq("user_id", user_id)
     signals_today_result = signals_today_query.execute()
@@ -332,9 +351,15 @@ async def get_stats(user_id: Optional[str] = None) -> dict:
 
     total_profit = sum(t.get("profit") or 0 for t in closed_trades)
 
-    # Today's profit
-    today_closed = [t for t in closed_trades if t.get("closed_at") and t["closed_at"] >= today]
-    today_profit = sum(t.get("profit") or 0 for t in today_closed)
+    # Today's profit - properly parse and compare datetimes
+    today_profit = 0.0
+    for trade in closed_trades:
+        closed_at = _parse_datetime(trade.get("closed_at"))
+        if closed_at:
+            # Compare as timezone-naive (UTC)
+            closed_at_naive = closed_at.replace(tzinfo=None) if closed_at.tzinfo else closed_at
+            if closed_at_naive >= today_start:
+                today_profit += trade.get("profit") or 0
 
     return {
         "total_signals": total_signals,
