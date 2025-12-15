@@ -3,18 +3,19 @@
  * Matches the premium dark theme design of the app
  */
 
-import { loadStripe } from "@stripe/stripe-js";
-
 // Stripe publishable key from environment (with fallback for build issues)
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ||
   "pk_test_51Sdg4sAKcZSTaYXWzwKHY3h92S7A3ggX0CW0YqFTjvUEJDZIlcaVTdwqRkB1q7xJPevhBsaWF4qMXJWvrS0cHNRH00RxbdKOxU";
 
-// Lazy load Stripe instance
+// Lazy load Stripe instance - dynamically imports @stripe/stripe-js
+// This ensures the 200KB+ Stripe SDK only loads when checkout is opened
 let stripePromise = null;
 
 export function getStripe() {
   if (!stripePromise && stripePublishableKey) {
-    stripePromise = loadStripe(stripePublishableKey);
+    stripePromise = import("@stripe/stripe-js").then(({ loadStripe }) =>
+      loadStripe(stripePublishableKey)
+    );
   }
   return stripePromise;
 }

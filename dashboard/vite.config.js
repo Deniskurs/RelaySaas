@@ -17,18 +17,32 @@ export default defineConfig({
     modulePreload: false,
     rollupOptions: {
       output: {
-        // Manual chunk splitting for better caching and smaller initial bundle
-        manualChunks: {
+        // Function-based chunk splitting for precise control
+        // This ensures Stripe SDK is truly isolated and only loaded on checkout
+        manualChunks(id) {
+          // Stripe packages - must stay isolated, only load on checkout
+          if (id.includes('@stripe/stripe-js') || id.includes('@stripe/react-stripe-js')) {
+            return 'vendor-stripe';
+          }
           // Core React runtime - rarely changes, great cache candidate
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          if (id.includes('node_modules/react-dom') ||
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-router')) {
+            return 'vendor-react';
+          }
           // UI libraries - animation and icons
-          'vendor-ui': ['framer-motion', 'lucide-react'],
-          // Stripe SDK - only needed on checkout page
-          'vendor-stripe': ['@stripe/stripe-js', '@stripe/react-stripe-js'],
+          if (id.includes('node_modules/framer-motion') ||
+              id.includes('node_modules/lucide-react')) {
+            return 'vendor-ui';
+          }
           // Charts - only used in dashboard stats
-          'vendor-charts': ['recharts'],
+          if (id.includes('node_modules/recharts')) {
+            return 'vendor-charts';
+          }
           // Supabase client
-          'vendor-supabase': ['@supabase/supabase-js'],
+          if (id.includes('node_modules/@supabase')) {
+            return 'vendor-supabase';
+          }
         },
       },
     },
