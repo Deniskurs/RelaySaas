@@ -70,7 +70,7 @@ export default function MobileTopBar({
         whileTap={{ scale: 0.98 }}
       >
         <div className="w-7 h-7 relative flex items-center justify-center">
-          <Logo size={28} animate={false} />
+          <Logo size={28} />
         </div>
         <div className="flex flex-col">
           {/* If we are on a specific page that isn't dashboard, we might want to show that title, 
