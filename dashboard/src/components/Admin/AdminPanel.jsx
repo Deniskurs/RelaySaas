@@ -8,6 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Users,
   Activity,
   Radio,
@@ -295,12 +302,18 @@ function SystemConfig() {
   );
 }
 
-function UserRow({ user, onSuspend, onActivate }) {
+function UserRow({ user, onSuspend, onActivate, onTierChange }) {
   const statusColors = {
     active: "bg-success/10 text-success",
     pending: "bg-warning/10 text-warning",
     onboarding: "bg-primary/10 text-primary",
     suspended: "bg-destructive/10 text-destructive",
+  };
+
+  const tierColors = {
+    free: "text-foreground-muted",
+    pro: "text-primary",
+    premium: "text-accent-teal",
   };
 
   return (
@@ -334,9 +347,25 @@ function UserRow({ user, onSuspend, onActivate }) {
         >
           {user.status}
         </Badge>
-        <Badge variant="outline" className="text-xs">
-          {user.subscription_tier}
-        </Badge>
+        <Select
+          value={user.subscription_tier || "free"}
+          onValueChange={(value) => onTierChange(user.id, value)}
+        >
+          <SelectTrigger className="w-24 h-7 text-xs bg-background/50 border-border/50">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="free" className="text-xs">
+              <span className={tierColors.free}>Free</span>
+            </SelectItem>
+            <SelectItem value="pro" className="text-xs">
+              <span className={tierColors.pro}>Pro</span>
+            </SelectItem>
+            <SelectItem value="premium" className="text-xs">
+              <span className={tierColors.premium}>Premium</span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
         {user.status === "active" ? (
           <Button
             size="sm"
@@ -408,6 +437,23 @@ export default function AdminPanel() {
     if (result) {
       setUsers(
         users.map((u) => (u.id === userId ? { ...u, status: "active" } : u))
+      );
+    }
+  };
+
+  const handleTierChange = async (userId, newTier) => {
+    const result = await postData(`/admin/users/${userId}/tier`, { tier: newTier });
+    if (result) {
+      setUsers(
+        users.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                subscription_tier: newTier,
+                subscription_status: newTier !== "free" ? "active" : "inactive",
+              }
+            : u
+        )
       );
     }
   };
@@ -596,6 +642,7 @@ export default function AdminPanel() {
                         user={user}
                         onSuspend={handleSuspendUser}
                         onActivate={handleActivateUser}
+                        onTierChange={handleTierChange}
                       />
                     ))}
                   {users.length === 0 && !isLoading && (

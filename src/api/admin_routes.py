@@ -289,6 +289,82 @@ async def activate_user(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class TierUpdateRequest(BaseModel):
+    """Request to update user subscription tier."""
+    tier: str  # 'free', 'pro', 'premium'
+
+
+@router.post("/users/{user_id}/tier", response_model=StatusResponse)
+async def update_user_tier(
+    user_id: str,
+    request: TierUpdateRequest,
+    admin: AuthUser = Depends(require_admin),
+):
+    """Update a user's subscription tier (admin override).
+
+    This is a manual admin override that updates the Supabase profile directly.
+    It does not modify any Stripe subscriptions - use for:
+    - Giving free upgrades to users
+    - Fixing billing sync issues
+    - Testing purposes
+    """
+    valid_tiers = ["free", "pro", "premium"]
+    if request.tier not in valid_tiers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid tier. Must be one of: {', '.join(valid_tiers)}"
+        )
+
+    try:
+        supabase = get_supabase_admin()
+
+        # Get current tier for logging
+        current = supabase.table("profiles").select("subscription_tier").eq("id", user_id).execute()
+        if not current.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        old_tier = current.data[0].get("subscription_tier", "free")
+
+        # Update profile tier
+        result = supabase.table("profiles").update({
+            "subscription_tier": request.tier,
+            "subscription_status": "active" if request.tier != "free" else "inactive",
+        }).eq("id", user_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Log activity
+        await _log_activity(
+            admin.id,
+            "user.tier.updated",
+            {
+                "target_user_id": user_id,
+                "old_tier": old_tier,
+                "new_tier": request.tier,
+            }
+        )
+
+        log.info(
+            "User tier updated",
+            user_id=user_id,
+            admin_id=admin.id,
+            old_tier=old_tier,
+            new_tier=request.tier,
+        )
+
+        return StatusResponse(
+            status=request.tier,
+            message=f"User subscription tier updated to {request.tier}"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Error updating user tier", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/overview", response_model=SystemOverviewResponse)
 async def get_system_overview(
     admin: AuthUser = Depends(require_admin),
