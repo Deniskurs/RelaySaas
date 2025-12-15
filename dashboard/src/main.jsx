@@ -8,7 +8,7 @@ import "./index.css";
 // Arc: start offset = 56.5 (25% visible), end = 0 (100%)
 const ARC_START = 56.5;
 let displayProgress = 25;  // What's visually shown
-let targetProgress = 40;   // What we're animating toward
+let targetProgress = 30;   // Initial target - just slightly ahead
 let animationFrame = null;
 let splashHidden = false;
 
@@ -28,9 +28,8 @@ function animateProgress() {
   const diff = targetProgress - displayProgress;
 
   if (diff > 0.1) {
-    // Move faster when far from target, slower when close
-    // This creates smooth deceleration as it approaches target
-    const speed = Math.max(0.15, diff * 0.08);
+    // Slower, steadier movement - max speed capped low for smoothness
+    const speed = Math.max(0.08, diff * 0.03);
     displayProgress += speed;
     updateArc(displayProgress);
   }
@@ -88,10 +87,12 @@ window.__hideSplash = hideSplash;
 animateProgress();
 
 // Gradually increase target as app loads
-// These act as minimum progress gates - actual progress may be faster
-setTimeout(() => setSplashProgress(50), 500);
-setTimeout(() => setSplashProgress(60), 1500);
-setTimeout(() => setSplashProgress(70), 3000);
+// Small increments so it never feels stuck, but stays behind actual progress
+setTimeout(() => setSplashProgress(35), 300);
+setTimeout(() => setSplashProgress(40), 800);
+setTimeout(() => setSplashProgress(45), 1500);
+setTimeout(() => setSplashProgress(50), 2500);
+setTimeout(() => setSplashProgress(55), 4000);
 
 // Safety fallback
 setTimeout(hideSplash, 10000);
