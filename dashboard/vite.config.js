@@ -12,6 +12,9 @@ export default defineConfig({
   build: {
     // Warn if chunk > 500KB
     chunkSizeWarningLimit: 500,
+    // Disable modulepreload to prevent all chunks loading on initial page load
+    // This allows true lazy loading - chunks load only when routes are visited
+    modulePreload: false,
     rollupOptions: {
       output: {
         // Manual chunk splitting for better caching and smaller initial bundle

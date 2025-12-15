@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
@@ -9,10 +9,14 @@ import {
   ChevronRight,
   Zap,
   Infinity,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { CheckoutModal } from "./CheckoutModal";
+
+// Lazy load CheckoutModal to defer Stripe SDK loading until checkout is opened
+// This prevents ~200KB Stripe SDK from loading on every page that shows pricing
+const CheckoutModal = lazy(() => import("./CheckoutModal"));
 
 // Plan definitions with all features (prices in GBP to match Stripe)
 export const PLANS = {
@@ -471,13 +475,21 @@ export function PricingCards({
         </div>
       </div>
 
-      {/* Checkout Modal */}
-      <CheckoutModal
-        open={checkoutOpen}
-        onOpenChange={setCheckoutOpen}
-        plan={selectedPlan}
-        billing={isAnnual ? "annual" : "monthly"}
-      />
+      {/* Checkout Modal - Lazy loaded with Stripe SDK */}
+      {checkoutOpen && (
+        <Suspense fallback={
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 text-foreground-muted animate-spin" />
+          </div>
+        }>
+          <CheckoutModal
+            open={checkoutOpen}
+            onOpenChange={setCheckoutOpen}
+            plan={selectedPlan}
+            billing={isAnnual ? "annual" : "monthly"}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
