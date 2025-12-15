@@ -17,8 +17,11 @@ export default function HeroMetrics({ stats, account, openTrades = [] }) {
     (sum, t) => sum + (t.profit || t.unrealizedPnL || 0),
     0
   );
+  // Calculate equity in real-time from balance + open P&L for instant updates
+  // (MetaAPI's equity field has a delay vs position updates)
+  const realTimeEquity = account.balance + openPnL;
   const marginPercent =
-    account.equity > 0 ? (account.margin / account.equity) * 100 : 0;
+    realTimeEquity > 0 ? (account.margin / realTimeEquity) * 100 : 0;
   // Calculate starting balance to get accurate daily return %
   const startingBalance = account.balance - todayPnL;
   const todayChange =
@@ -68,7 +71,7 @@ export default function HeroMetrics({ stats, account, openTrades = [] }) {
       <HeroCard
         label="Balance"
         value={format(account.balance)}
-        subtitle={`Equity: ${format(account.equity)}`}
+        subtitle={`Equity: ${format(realTimeEquity)}`}
         variant="neutral"
         icon={Wallet}
         priority="medium"

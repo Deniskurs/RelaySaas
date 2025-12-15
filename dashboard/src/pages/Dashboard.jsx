@@ -511,7 +511,7 @@ export default function Dashboard() {
       case "account":
         return (
           <div className="space-y-6">
-            <AccountCard account={account} />
+            <AccountCard account={account} openTrades={openTrades} />
             <PerformanceChart stats={stats} isLoading={isLoading} />
           </div>
         );
