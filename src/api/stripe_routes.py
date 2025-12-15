@@ -322,36 +322,52 @@ async def get_checkout_session(
     returns to the success page, we check the session status and activate
     their subscription if payment was successful.
     """
+    log.info(f"[checkout-session] Starting for session_id={session_id}, user_id={user.id}")
+
     try:
+        log.info(f"[checkout-session] Retrieving session from Stripe...")
         session = stripe.checkout.Session.retrieve(session_id)
+        log.info(f"[checkout-session] Session retrieved: status={session.status}, payment_status={session.payment_status}")
+        log.info(f"[checkout-session] Session metadata: {session.metadata}")
 
         # Verify this session belongs to the user
-        if session.metadata.get("user_id") != user.id:
+        session_user_id = session.metadata.get("user_id")
+        log.info(f"[checkout-session] Session user_id={session_user_id}, request user_id={user.id}")
+
+        if session_user_id != user.id:
+            log.warning(f"[checkout-session] User mismatch! Session belongs to {session_user_id}, not {user.id}")
             raise HTTPException(status_code=403, detail="Session not found")
 
         # If payment completed, activate subscription (fallback for webhook)
         if session.status == "complete" and session.payment_status == "paid":
             plan = session.metadata.get("plan")
+            log.info(f"[checkout-session] Payment complete, plan={plan}")
+
             if plan:
                 supabase = get_supabase_admin()
 
                 # Check if already activated
+                log.info(f"[checkout-session] Checking current subscription tier...")
                 profile = supabase.table("profiles").select(
                     "subscription_tier"
                 ).eq("id", user.id).single().execute()
 
                 current_tier = profile.data.get("subscription_tier") if profile.data else "free"
+                log.info(f"[checkout-session] Current tier={current_tier}, target plan={plan}")
 
                 # Only update if not already on this plan
                 if current_tier != plan:
                     # Get subscription expiry from Stripe
                     subscription_id = session.subscription
                     expires_at = None
+                    log.info(f"[checkout-session] Subscription ID={subscription_id}")
+
                     if subscription_id:
                         sub = stripe.Subscription.retrieve(subscription_id)
                         if sub.current_period_end:
                             from datetime import datetime
                             expires_at = datetime.fromtimestamp(sub.current_period_end).isoformat()
+                            log.info(f"[checkout-session] Subscription expires_at={expires_at}")
 
                     update_data = {
                         "subscription_tier": plan,
@@ -360,19 +376,31 @@ async def get_checkout_session(
                     if expires_at:
                         update_data["subscription_expires_at"] = expires_at
 
+                    log.info(f"[checkout-session] Updating profile with: {update_data}")
                     supabase.table("profiles").update(update_data).eq("id", user.id).execute()
-                    log.info(f"Activated {plan} subscription for user {user.id} via checkout session check")
+                    log.info(f"[checkout-session] Successfully activated {plan} subscription for user {user.id}")
+                else:
+                    log.info(f"[checkout-session] User already on {plan} plan, no update needed")
 
-        return {
+        response_data = {
             "status": session.status,
             "payment_status": session.payment_status,
             "customer_email": session.customer_details.email if session.customer_details else None,
             "plan": session.metadata.get("plan"),
         }
+        log.info(f"[checkout-session] Returning: {response_data}")
+        return response_data
 
     except stripe.error.StripeError as e:
-        log.error(f"Error retrieving checkout session: {e}")
+        log.error(f"[checkout-session] Stripe error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"[checkout-session] Unexpected error: {type(e).__name__}: {e}")
+        import traceback
+        log.error(f"[checkout-session] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {str(e)}")
 
 
 # =============================================================================
