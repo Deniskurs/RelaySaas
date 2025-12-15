@@ -119,22 +119,38 @@ export function CheckoutModal({
   };
 
   const handleComplete = useCallback(async () => {
+    console.log("[Checkout] handleComplete called");
     setCheckoutComplete(true);
 
     // Call the checkout session endpoint to activate subscription (fallback for webhook)
+    console.log("[Checkout] session access_token:", session?.access_token ? "present" : "missing");
+    console.log("[Checkout] clientSecret:", clientSecret ? "present" : "missing");
+
     if (session?.access_token && clientSecret) {
       // Extract session ID from client secret (format: cs_xxx_secret_yyy)
       const sessionId = clientSecret.split('_secret_')[0];
+      console.log("[Checkout] Extracted session ID:", sessionId);
+      console.log("[Checkout] API_URL:", API_URL || "(empty - using relative URL)");
+
       try {
-        await fetch(`${API_URL}/api/stripe/checkout-session/${sessionId}`, {
+        const url = `${API_URL}/api/stripe/checkout-session/${sessionId}`;
+        console.log("[Checkout] Fetching:", url);
+
+        const response = await fetch(url, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
+
+        const data = await response.json();
+        console.log("[Checkout] Response:", response.status, data);
       } catch (err) {
-        console.error("Failed to verify checkout session:", err);
+        console.error("[Checkout] Failed to verify checkout session:", err);
       }
+    } else {
+      console.warn("[Checkout] Missing session or clientSecret, skipping activation");
     }
 
     // Refresh profile to get updated subscription status
+    console.log("[Checkout] Refreshing profile...");
     if (refreshProfile) {
       await refreshProfile();
     }
