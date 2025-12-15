@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Save,
@@ -55,6 +55,10 @@ export default function SettingsPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Refs to always access latest values in callbacks (prevents stale closures)
+  const localSettingsRef = useRef(localSettings);
+  const telegramCredsRef = useRef(null);
+
   // Tab state with URL sync
   const [activeTab, setActiveTab] = useState(() => {
     const urlTab = searchParams.get("tab");
@@ -100,6 +104,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setLocalSettings(settings);
+    localSettingsRef.current = settings; // Keep ref in sync
     setHasChanges(false);
   }, [settings]);
 
@@ -129,6 +134,7 @@ export default function SettingsPage() {
         };
         setTelegramCreds(telegramCredsData);
         setTelegramCredsOriginal(telegramCredsData);
+        telegramCredsRef.current = telegramCredsData; // Initialize ref
 
         // Load MetaTrader credentials from user's onboarding data
         setMtCreds({
@@ -191,23 +197,33 @@ export default function SettingsPage() {
 
   const updateLocal = (key, value) => {
     console.log("[SettingsPage] updateLocal:", key, "=", value);
-    setLocalSettings((prev) => ({ ...prev, [key]: value }));
+    setLocalSettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      localSettingsRef.current = updated; // Keep ref in sync immediately
+      return updated;
+    });
     setHasChanges(true);
     setSaveSuccess(false);
   };
 
   const updateTelegramCred = (key, value) => {
-    setTelegramCreds((prev) => ({ ...prev, [key]: value }));
+    setTelegramCreds((prev) => {
+      const updated = { ...prev, [key]: value };
+      telegramCredsRef.current = updated; // Keep ref in sync
+      return updated;
+    });
     setHasTelegramChanges(true);
     setSaveSuccess(false);
     setTelegramError("");
   };
 
   const handleSave = async () => {
+    // Use ref to get latest settings (prevents stale closure)
+    const currentSettings = localSettingsRef.current;
     console.log("[SettingsPage] handleSave called");
-    console.log("[SettingsPage] localSettings:", localSettings);
-    console.log("[SettingsPage] telegram_channel_ids:", localSettings.telegram_channel_ids);
-    const success = await updateSettings(localSettings);
+    console.log("[SettingsPage] localSettings (from ref):", currentSettings);
+    console.log("[SettingsPage] telegram_channel_ids:", currentSettings.telegram_channel_ids);
+    const success = await updateSettings(currentSettings);
     if (success) {
       setHasChanges(false);
     }
@@ -215,13 +231,16 @@ export default function SettingsPage() {
   };
 
   const handleSaveTelegram = async () => {
+    // Use ref to get latest telegram creds (prevents stale closure)
+    const currentCreds = telegramCredsRef.current || telegramCreds;
+
     // Validation
-    if (telegramCreds.telegram_api_id && !/^\d+$/.test(telegramCreds.telegram_api_id)) {
+    if (currentCreds.telegram_api_id && !/^\d+$/.test(currentCreds.telegram_api_id)) {
       setTelegramError("API ID must be a number");
       return false;
     }
 
-    if (telegramCreds.telegram_phone && !/^\+?\d{10,15}$/.test(telegramCreds.telegram_phone.replace(/\s/g, ""))) {
+    if (currentCreds.telegram_phone && !/^\+?\d{10,15}$/.test(currentCreds.telegram_phone.replace(/\s/g, ""))) {
       setTelegramError("Please enter a valid phone number with country code");
       return false;
     }
@@ -232,9 +251,9 @@ export default function SettingsPage() {
     try {
       // Save to user credentials via onboarding endpoint
       const result = await postData("/onboarding/telegram", {
-        api_id: telegramCreds.telegram_api_id,
-        api_hash: telegramCreds.telegram_api_hash,
-        phone: telegramCreds.telegram_phone,
+        api_id: currentCreds.telegram_api_id,
+        api_hash: currentCreds.telegram_api_hash,
+        phone: currentCreds.telegram_phone,
       });
 
       if (!result || !result.success) {
@@ -242,7 +261,7 @@ export default function SettingsPage() {
         return false;
       }
 
-      setTelegramCredsOriginal({ ...telegramCreds });
+      setTelegramCredsOriginal({ ...currentCreds });
       setHasTelegramChanges(false);
       return true;
     } catch (e) {
@@ -255,12 +274,14 @@ export default function SettingsPage() {
 
   const handleReset = () => {
     setLocalSettings(settings);
+    localSettingsRef.current = settings; // Reset ref too
     setHasChanges(false);
   };
 
   const handleResetTelegram = () => {
     if (telegramCredsOriginal) {
       setTelegramCreds({ ...telegramCredsOriginal });
+      telegramCredsRef.current = { ...telegramCredsOriginal }; // Reset ref too
     }
     setHasTelegramChanges(false);
     setTelegramError("");
