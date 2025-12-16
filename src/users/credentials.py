@@ -58,6 +58,7 @@ class UserSettings:
     gold_market_threshold: float = 3.0
     split_tps: bool = True
     tp_split_ratios: list = None
+    tp_lot_mode: str = "split"  # "split" = divide lot across TPs, "equal" = same lot for each TP
     enable_breakeven: bool = True
 
     # Broker
@@ -171,6 +172,7 @@ def get_user_settings(user_id: str) -> Optional[UserSettings]:
                 gold_market_threshold=float(data.get("gold_market_threshold") or 3.0),
                 split_tps=bool(data.get("split_tps")) if data.get("split_tps") is not None else True,
                 tp_split_ratios=data.get("tp_split_ratios") or [0.5, 0.3, 0.2],
+                tp_lot_mode=str(data.get("tp_lot_mode") or "split"),  # "split" or "equal"
                 enable_breakeven=bool(data.get("enable_breakeven")) if data.get("enable_breakeven") is not None else True,
                 symbol_suffix=str(data.get("symbol_suffix") or ""),
                 telegram_channel_ids=data.get("telegram_channel_ids") or [],

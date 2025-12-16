@@ -331,6 +331,7 @@ class UserConnectionManager:
                     symbol_suffix=conn.settings.symbol_suffix or "",
                     split_tps=conn.settings.split_tps if conn.settings.split_tps is not None else True,
                     tp_ratios=conn.settings.tp_split_ratios or [0.5, 0.3, 0.2],
+                    tp_lot_mode=conn.settings.tp_lot_mode or "split",  # "split" or "equal"
                     gold_market_threshold=conn.settings.gold_market_threshold or 3.0,
                     max_lot_size=conn.settings.max_lot_size or 0.1,
                     default_lot_size=conn.settings.lot_reference_size_default or 0.01,
@@ -394,6 +395,9 @@ class UserConnectionManager:
     async def reload_user_settings(self, user_id: str) -> bool:
         """Reload settings for a connected user.
 
+        Also updates the MetaAPI executor's cached settings so changes
+        take effect immediately without requiring reconnection.
+
         Args:
             user_id: User UUID.
 
@@ -407,6 +411,21 @@ class UserConnectionManager:
         settings = get_user_settings(user_id)
         if settings:
             conn.settings = settings
+
+            # Also update executor's cached settings if connected
+            if conn.metaapi_executor and conn.metaapi_executor._settings:
+                from ..trading.executor import ExecutorSettings
+                conn.metaapi_executor._settings = ExecutorSettings(
+                    symbol_suffix=settings.symbol_suffix or "",
+                    split_tps=settings.split_tps if settings.split_tps is not None else True,
+                    tp_ratios=settings.tp_split_ratios or [0.5, 0.3, 0.2],
+                    tp_lot_mode=settings.tp_lot_mode or "split",
+                    gold_market_threshold=settings.gold_market_threshold or 3.0,
+                    max_lot_size=settings.max_lot_size or 0.1,
+                    default_lot_size=settings.lot_reference_size_default or 0.01,
+                )
+                log.info("Executor settings also updated", user_id=user_id[:8])
+
             log.info("User settings reloaded", user_id=user_id)
             return True
 

@@ -458,6 +458,12 @@ async def update_settings_endpoint(
         updated = supabase_db.update_settings(user_id, updates)
         print(f"[API] Updated settings returned: telegram_channel_ids = {updated.get('telegram_channel_ids')}")
 
+        # Reload settings in user_manager to update executor's cached settings
+        # This ensures changes like tp_lot_mode take effect immediately
+        from ..users.manager import user_manager
+        await user_manager.reload_user_settings(user_id)
+        print(f"[API] User settings reloaded in user_manager")
+
         # Auto-restart Telegram listener if channels changed
         if channels_changed:
             copier = get_copier()
