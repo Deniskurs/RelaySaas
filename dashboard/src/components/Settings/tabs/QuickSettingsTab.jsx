@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { SettingRow, NumberInput, SymbolTags } from "../SettingsComponents";
+import { Info } from "lucide-react";
 
 export default function QuickSettingsTab({
   settings,
@@ -22,9 +23,21 @@ export default function QuickSettingsTab({
           </CardTitle>
         </CardHeader>
         <CardContent className="px-8 pt-5 pb-8 space-y-2">
+          {/* Info box explaining lot calculation */}
+          <div className="mb-4 p-3 bg-blue-500/[0.06] border border-blue-500/[0.12] rounded-lg">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-foreground-muted/80 leading-relaxed">
+                <span className="font-medium text-blue-400">How lot sizing works:</span> The system calculates lots using both your Reference Lot (from Lot Sizing tab) and Risk %.
+                The <span className="text-emerald-400">larger value</span> is used, then capped by Max Lot Size.
+                <span className="text-foreground-muted/60 ml-1">See Lot Sizing tab for full details.</span>
+              </p>
+            </div>
+          </div>
+
           <SettingRow
             label="Maximum Risk Per Trade"
-            description="Percentage of account balance to risk per trade"
+            description="Risk % can increase lot size above your reference lot if SL is tight"
           >
             <NumberInput
               value={settings.max_risk_percent}
@@ -37,7 +50,7 @@ export default function QuickSettingsTab({
           </SettingRow>
           <SettingRow
             label="Maximum Lot Size"
-            description="Upper limit for any single position size"
+            description="Absolute cap - no trade will ever exceed this regardless of calculations"
           >
             <NumberInput
               value={settings.max_lot_size}
