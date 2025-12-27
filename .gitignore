@@ -68,3 +68,6 @@ htmlcov/
 
 # Claude
 .claude/
+
+# Auto Claude data directory
+.auto-claude/

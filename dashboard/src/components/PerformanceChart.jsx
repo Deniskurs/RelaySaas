@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,8 @@ const StatRow = ({ label, value, color }) => (
   </div>
 );
 
-export default function PerformanceChart({ stats, isLoading = false, onStatsRefresh }) {
+// Memoize the entire component to prevent re-renders when parent state changes
+const PerformanceChart = memo(function PerformanceChart({ stats, isLoading = false, onStatsRefresh }) {
   const { formatPnL } = useCurrency();
   const COLORS = useChartColors();
   const { postData } = useApi();
@@ -121,26 +122,33 @@ export default function PerformanceChart({ stats, isLoading = false, onStatsRefr
     }
   };
 
-  const getTradeData = () => {
-    if (!stats) return [];
+  // Memoize expensive chart data calculations
+  const { tradeData, closedTrades, winRate, totalProfit } = useMemo(() => {
+    if (!stats) {
+      return { tradeData: [], closedTrades: 0, winRate: 0, totalProfit: 0 };
+    }
+
     const winning = stats.winningTrades || 0;
     const losing = stats.losingTrades || 0;
     const open = stats.openTrades || 0;
     const total = winning + losing + open;
-    if (total === 0) return [];
 
-    return [
+    const data = total === 0 ? [] : [
       { name: "Winning", value: winning, fill: COLORS.success },
       { name: "Losing", value: losing, fill: COLORS.destructive },
       { name: "Open", value: open, fill: COLORS.primary },
     ].filter((d) => d.value > 0);
-  };
 
-  const tradeData = getTradeData();
-  const closedTrades = (stats?.winningTrades || 0) + (stats?.losingTrades || 0);
-  const winRate =
-    closedTrades > 0 ? ((stats?.winningTrades || 0) / closedTrades) * 100 : 0;
-  const totalProfit = stats?.totalProfit || 0;
+    const closed = winning + losing;
+    const rate = closed > 0 ? (winning / closed) * 100 : 0;
+
+    return {
+      tradeData: data,
+      closedTrades: closed,
+      winRate: rate,
+      totalProfit: stats.totalProfit || 0,
+    };
+  }, [stats, COLORS]);
 
   return (
     <Card className="glass-card border-border/40 bg-black/40 shadow-none">
@@ -255,4 +263,6 @@ export default function PerformanceChart({ stats, isLoading = false, onStatsRefr
       </CardContent>
     </Card>
   );
-}
+});
+
+export default PerformanceChart;

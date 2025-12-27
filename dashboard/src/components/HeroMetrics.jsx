@@ -1,31 +1,37 @@
+import { memo, useMemo } from "react";
 import { TrendingUp, TrendingDown, AlertTriangle, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { motion } from "framer-motion";
 
 /**
  * HeroMetrics - Primary dashboard metrics with proper visual hierarchy
  *
  * Designed so traders can answer "Am I making money?" in < 1 second
+ * Memoized to prevent unnecessary re-renders when parent state changes
  */
-export default function HeroMetrics({ stats, account, openTrades = [] }) {
+const HeroMetrics = memo(function HeroMetrics({ stats, account, openTrades = [] }) {
   const { formatPnL, format } = useCurrency();
 
-  // Calculate key metrics
-  const todayPnL = stats?.todayPnL || stats?.today_pnl || 0;
-  const openPnL = openTrades.reduce(
-    (sum, t) => sum + (t.profit || t.unrealizedPnL || 0),
-    0
-  );
-  // Calculate equity in real-time from balance + open P&L for instant updates
-  // (MetaAPI's equity field has a delay vs position updates)
-  const realTimeEquity = account.balance + openPnL;
-  const marginPercent =
-    realTimeEquity > 0 ? (account.margin / realTimeEquity) * 100 : 0;
-  // Calculate starting balance to get accurate daily return %
-  const startingBalance = account.balance - todayPnL;
-  const todayChange =
-    startingBalance > 0 ? (todayPnL / startingBalance) * 100 : 0;
+  // Memoize expensive calculations to prevent recalculation on every render
+  const metrics = useMemo(() => {
+    const todayPnL = stats?.todayPnL || stats?.today_pnl || 0;
+    const openPnL = openTrades.reduce(
+      (sum, t) => sum + (t.profit || t.unrealizedPnL || 0),
+      0
+    );
+    // Calculate equity in real-time from balance + open P&L for instant updates
+    const realTimeEquity = account.balance + openPnL;
+    const marginPercent =
+      realTimeEquity > 0 ? (account.margin / realTimeEquity) * 100 : 0;
+    // Calculate starting balance to get accurate daily return %
+    const startingBalance = account.balance - todayPnL;
+    const todayChange =
+      startingBalance > 0 ? (todayPnL / startingBalance) * 100 : 0;
+
+    return { todayPnL, openPnL, realTimeEquity, marginPercent, todayChange };
+  }, [stats, account, openTrades]);
+
+  const { todayPnL, openPnL, realTimeEquity, marginPercent, todayChange } = metrics;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -78,9 +84,10 @@ export default function HeroMetrics({ stats, account, openTrades = [] }) {
       />
     </div>
   );
-}
+});
 
-function HeroCard({
+// Memoized HeroCard to prevent re-renders when props haven't changed
+const HeroCard = memo(function HeroCard({
   label,
   value,
   change,
@@ -133,12 +140,11 @@ function HeroCard({
   const isHero = priority === "hero";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+    <div
       className={cn(
+        // Use CSS animation instead of framer-motion (no JS overhead)
         "relative p-5 rounded-none border backdrop-blur-sm transition-all duration-300",
+        "animate-in fade-in slide-in-from-bottom-2 duration-300",
         style.bg,
         style.border,
         style.glow && `shadow-lg ${style.glow}`,
@@ -187,16 +193,14 @@ function HeroCard({
         <div className="text-xs text-foreground-muted mt-1.5">{subtitle}</div>
       )}
 
-      {/* Progress Bar (for margin) */}
+      {/* Progress Bar (for margin) - CSS animation instead of framer-motion */}
       {progress !== undefined && (
         <div className="mt-4">
           <div className="h-1.5 bg-white/[0.06] rounded-none overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(progress, 100)}%` }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            <div
+              style={{ width: `${Math.min(progress, 100)}%` }}
               className={cn(
-                "h-full rounded-none transition-colors",
+                "h-full rounded-none transition-all duration-500 ease-out",
                 variant === "danger"
                   ? "bg-destructive"
                   : variant === "warning"
@@ -227,15 +231,12 @@ function HeroCard({
         </div>
       )}
 
-      {/* Danger Pulse Animation for Critical States */}
+      {/* Danger Pulse Animation for Critical States - CSS animation */}
       {variant === "danger" && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0.5, 0, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute inset-0 border-2 border-destructive/50 rounded-none pointer-events-none"
-        />
+        <div className="absolute inset-0 border-2 border-destructive/50 rounded-none pointer-events-none animate-pulse" />
       )}
-    </motion.div>
+    </div>
   );
-}
+});
+
+export default HeroMetrics;

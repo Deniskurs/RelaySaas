@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2,
   AlertCircle,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApi } from "@/hooks/useApi";
+import { useConditionalPolling } from "@/hooks/useVisibilityPolling";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,60 +64,63 @@ function MetaTraderSection({
     }));
   }, [mtCreds.mt_login, mtCreds.mt_server, mtCreds.mt_platform]);
 
-  // Poll for account deployment status (during active provisioning)
-  useEffect(() => {
-    if (provisioningStatus === "provisioning" && accountId) {
-      const pollInterval = setInterval(async () => {
-        try {
-          const result = await fetchData(`/onboarding/metatrader/status/${accountId}`);
-          if (result) {
-            if (result.state === "DEPLOYED" && result.connection_status === "CONNECTED") {
-              setProvisioningStatus("deployed");
-              setProvisioningMessage("Account connected successfully!");
-              clearInterval(pollInterval);
-              setTimeout(() => {
-                window.location.reload();
-              }, 2000);
-            } else if (result.state === "DEPLOYED") {
-              setProvisioningMessage(`Account deployed. Connecting to broker... (${result.connection_status || "waiting"})`);
-            } else {
-              setProvisioningMessage(`Setting up your account... (${result.state || "initializing"})`);
-            }
-          }
-        } catch (e) {
-          console.error("Error polling status:", e);
-        }
-      }, 3000);
+  // Ref to track if we've already triggered a reload (prevents multiple reloads)
+  const hasReloadedRef = useRef(false);
 
-      return () => clearInterval(pollInterval);
+  // Poll callback for provisioning status
+  const checkProvisioningStatus = useCallback(async () => {
+    if (!accountId || hasReloadedRef.current) return;
+
+    try {
+      const result = await fetchData(`/onboarding/metatrader/status/${accountId}`);
+      if (result) {
+        if (result.state === "DEPLOYED" && result.connection_status === "CONNECTED") {
+          setProvisioningStatus("deployed");
+          setProvisioningMessage("Account connected successfully!");
+          hasReloadedRef.current = true;
+          setTimeout(() => window.location.reload(), 2000);
+        } else if (result.state === "DEPLOYED") {
+          setProvisioningMessage(`Account deployed. Connecting to broker... (${result.connection_status || "waiting"})`);
+        } else {
+          setProvisioningMessage(`Setting up your account... (${result.state || "initializing"})`);
+        }
+      }
+    } catch (e) {
+      console.error("Error polling status:", e);
     }
-  }, [provisioningStatus, accountId, fetchData]);
+  }, [accountId, fetchData]);
+
+  // Poll for account deployment status (only during active provisioning)
+  useConditionalPolling(
+    checkProvisioningStatus,
+    3000,
+    provisioningStatus === "provisioning" && accountId != null,
+    { runOnMount: true }
+  );
+
+  // Poll callback for auto-connection check
+  const checkAutoConnectionStatus = useCallback(async () => {
+    if (!mtCreds.metaapi_account_id || hasReloadedRef.current) return;
+
+    try {
+      const result = await fetchData(`/onboarding/metatrader/status/${mtCreds.metaapi_account_id}`);
+      if (result && result.state === "DEPLOYED" && result.connection_status === "CONNECTED") {
+        console.log("Account now connected, reloading...");
+        hasReloadedRef.current = true;
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error("Error polling connection status:", e);
+    }
+  }, [mtCreds.metaapi_account_id, fetchData]);
 
   // Auto-poll for connection status when page loads with unconnected account
-  useEffect(() => {
-    if (mtCreds.metaapi_account_id && !mtCreds.mt_connected && provisioningStatus === "idle") {
-      console.log("Auto-polling for MT connection status...", mtCreds.metaapi_account_id);
-
-      const pollInterval = setInterval(async () => {
-        try {
-          const result = await fetchData(`/onboarding/metatrader/status/${mtCreds.metaapi_account_id}`);
-          if (result) {
-            if (result.state === "DEPLOYED" && result.connection_status === "CONNECTED") {
-              console.log("Account now connected, reloading...");
-              clearInterval(pollInterval);
-              window.location.reload();
-            } else {
-              console.log("Account status:", result.state, result.connection_status);
-            }
-          }
-        } catch (e) {
-          console.error("Error polling connection status:", e);
-        }
-      }, 5000);
-
-      return () => clearInterval(pollInterval);
-    }
-  }, [mtCreds.metaapi_account_id, mtCreds.mt_connected, provisioningStatus, fetchData]);
+  useConditionalPolling(
+    checkAutoConnectionStatus,
+    5000,
+    mtCreds.metaapi_account_id && !mtCreds.mt_connected && provisioningStatus === "idle",
+    { runOnMount: true }
+  );
 
   const handleConnectAccount = async () => {
     setConnectionError("");

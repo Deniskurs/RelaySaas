@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useMemo, memo } from "react";
+import { AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   Clock,
@@ -736,8 +736,9 @@ const SignalCard = ({
 
 /**
  * RecentSignals - Main component with live feedback UI
+ * Memoized to prevent unnecessary re-renders from parent state changes
  */
-export default function RecentSignals({
+const RecentSignals = memo(function RecentSignals({
   signals = [],
   isLoading = false,
   onRefresh,
@@ -760,13 +761,14 @@ export default function RecentSignals({
   // Track if clearing all is in progress
   const [isClearingAll, setIsClearingAll] = useState(false);
 
-  // Filter out signals that are being dismissed (optimistic UI)
-  const visibleSignals = signals.filter((s) => !dismissingSignals.has(s.id));
-
-  // Count completed signals for "Clear all" button
-  const completedCount = visibleSignals.filter((s) =>
-    isCompletedStatus(s.status?.toLowerCase())
-  ).length;
+  // Memoize filtered and computed values
+  const { visibleSignals, completedCount } = useMemo(() => {
+    const visible = signals.filter((s) => !dismissingSignals.has(s.id));
+    const completed = visible.filter((s) =>
+      isCompletedStatus(s.status?.toLowerCase())
+    ).length;
+    return { visibleSignals: visible, completedCount: completed };
+  }, [signals, dismissingSignals]);
 
   // Handlers
   const handleCorrect = async (signalId, newDirection) => {
@@ -980,4 +982,6 @@ export default function RecentSignals({
       </CardContent>
     </Card>
   );
-}
+});
+
+export default RecentSignals;

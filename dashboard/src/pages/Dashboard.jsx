@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnsavedChangesContext } from "@/contexts/UnsavedChangesContext";
 import { useMultiRefresh, useRefresh } from "@/hooks/useRefresh";
 import { useSignalSounds } from "@/hooks/useSound";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import {
   transformPositions,
   transformSignals,
@@ -14,6 +15,14 @@ import {
 // Polling intervals (ms)
 const POLL_INTERVAL_FAST = 10000;  // 10s for critical trading data
 const POLL_INTERVAL_SLOW = 30000; // 30s for less critical data
+
+// Lazy load heavy components that aren't needed on initial render
+const SettingsPage = lazy(() => import("@/components/Settings/SettingsPage"));
+const AdminPanel = lazy(() => import("@/components/Admin/AdminPanel"));
+const PerformanceChart = lazy(() => import("@/components/PerformanceChart"));
+const ProfilePage = lazy(() => import("@/components/Profile/ProfilePage"));
+const PricingPageLazy = lazy(() => import("@/components/Plans").then(m => ({ default: m.PricingPage })));
+
 import Sidebar, { SIDEBAR_EXPANDED_WIDTH, SIDEBAR_COLLAPSED_WIDTH, STORAGE_KEY } from "@/components/Navigation/Sidebar";
 import UnsavedChangesDialog from "@/components/Settings/UnsavedChangesDialog";
 import MobileTopBar from "@/components/Navigation/MobileTopBar";
@@ -25,19 +34,21 @@ import OpenPositions from "@/components/OpenPositions";
 import RecentSignals from "@/components/RecentSignals";
 import HeroMetrics from "@/components/HeroMetrics";
 import AlertBanner, { useAlertSystem } from "@/components/AlertBanner";
-import PerformanceChart from "@/components/PerformanceChart";
-import SettingsPage from "@/components/Settings/SettingsPage";
-import AdminPanel from "@/components/Admin/AdminPanel";
 import SetupBanner from "@/components/SetupBanner";
 import UserSetupBanner from "@/components/UserSetupBanner";
-import ProfilePage from "@/components/Profile/ProfilePage";
-import { PricingPage } from "@/components/Plans";
 import {
   SoftUpgradeBanner,
   WarningUpgradeBanner,
   LimitReachedModal,
 } from "@/components/Plans";
 import { motion, AnimatePresence } from "framer-motion";
+
+// Lightweight loading fallback for lazy components
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[200px]">
+    <div className="w-6 h-6 border-2 border-foreground/20 border-t-foreground/60 rounded-full animate-spin" />
+  </div>
+);
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 export default function Dashboard() {
@@ -209,31 +220,34 @@ export default function Dashboard() {
     }
   }, [fetchData]);
 
-  // Initial data fetch and 10s polling (always active, even in background tabs)
+  // Initial data fetch on mount (visibility polling handles the rest)
   useEffect(() => {
     window.__setSplashProgress?.(80);
     loadData(true);
-
-    // Poll every 10 seconds - always active for real-time trading updates
-    const intervalId = setInterval(() => loadData(false), POLL_INTERVAL_FAST);
-    return () => clearInterval(intervalId);
   }, [loadData]);
 
-  // Telegram connection status polling - every 10s (always active)
-  useEffect(() => {
-    const loadTelegramStatus = async () => {
-      try {
-        const status = await fetchData("/telegram/connection-status");
-        if (status) setTelegramStatus(status);
-      } catch (e) {
-        // Silently fail - endpoint may not be available
-      }
-    };
+  // Main data polling - pauses when tab is hidden to save CPU/battery
+  useVisibilityPolling(
+    useCallback(() => loadData(false), [loadData]),
+    POLL_INTERVAL_FAST,
+    { runOnMount: false, runOnVisible: true }
+  );
 
-    loadTelegramStatus();
-    const intervalId = setInterval(loadTelegramStatus, POLL_INTERVAL_FAST);
-    return () => clearInterval(intervalId);
+  // Telegram status loading function
+  const loadTelegramStatus = useCallback(async () => {
+    try {
+      const status = await fetchData("/telegram/connection-status");
+      if (status) setTelegramStatus(status);
+    } catch (e) {
+      // Silently fail - endpoint may not be available
+    }
   }, [fetchData]);
+
+  // Telegram connection status polling - pauses when tab is hidden
+  useVisibilityPolling(loadTelegramStatus, POLL_INTERVAL_FAST, {
+    runOnMount: true,
+    runOnVisible: true
+  });
 
   // Debounced fetch refs to avoid rapid re-fetching
   const pendingFetchRef = useRef({ signals: null, positions: null, stats: null });
@@ -508,8 +522,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* PERFORMANCE - Full Width Chart */}
-      <PerformanceChart stats={stats} isLoading={isLoading} onStatsRefresh={handleStatsRefresh} />
+      {/* PERFORMANCE - Full Width Chart (lazy loaded) */}
+      <Suspense fallback={<PageLoader />}>
+        <PerformanceChart stats={stats} isLoading={isLoading} onStatsRefresh={handleStatsRefresh} />
+      </Suspense>
 
       {/* SYSTEM HEALTH - Collapsible Live Feed */}
       <div className="border border-white/[0.06] rounded-none bg-black/40 backdrop-blur-sm overflow-hidden">
@@ -562,7 +578,11 @@ export default function Dashboard() {
   const renderPage = () => {
     switch (activeTab) {
       case "settings":
-        return <SettingsPage />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <SettingsPage />
+          </Suspense>
+        );
       case "signals":
         return (
           <RecentSignals
@@ -589,24 +609,36 @@ export default function Dashboard() {
         );
       case "account":
         return (
-          <div className="space-y-6">
-            <AccountCard account={account} openTrades={openTrades} />
-            <PerformanceChart stats={stats} isLoading={isLoading} onStatsRefresh={handleStatsRefresh} />
-          </div>
+          <Suspense fallback={<PageLoader />}>
+            <div className="space-y-6">
+              <AccountCard account={account} openTrades={openTrades} />
+              <PerformanceChart stats={stats} isLoading={isLoading} onStatsRefresh={handleStatsRefresh} />
+            </div>
+          </Suspense>
         );
       case "profile":
-        return <ProfilePage />;
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <ProfilePage />
+          </Suspense>
+        );
       case "pricing":
         return (
-          <PricingPage
-            onSelectPlan={(planId) => {
-              console.log("Selected plan:", planId);
-              // TODO: Integrate with Stripe checkout
-            }}
-          />
+          <Suspense fallback={<PageLoader />}>
+            <PricingPageLazy
+              onSelectPlan={(planId) => {
+                console.log("Selected plan:", planId);
+                // TODO: Integrate with Stripe checkout
+              }}
+            />
+          </Suspense>
         );
       case "admin":
-        return isAdmin ? <AdminPanel /> : renderDashboard();
+        return isAdmin ? (
+          <Suspense fallback={<PageLoader />}>
+            <AdminPanel />
+          </Suspense>
+        ) : renderDashboard();
       case "dashboard":
       default:
         return renderDashboard();

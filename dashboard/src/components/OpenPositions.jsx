@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -5,7 +6,8 @@ import { TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
-const PositionRow = ({ trade, formatAmount }) => {
+// Memoize individual rows to prevent re-renders when other trades update
+const PositionRow = memo(function PositionRow({ trade, formatAmount }) {
   const isProfit = (trade.profit || 0) >= 0;
   // Case-insensitive check for buy type
   const isBuy = trade.type?.toString().toUpperCase() === "BUY";
@@ -62,16 +64,21 @@ const PositionRow = ({ trade, formatAmount }) => {
       </div>
     </div>
   );
-};
+});
 
-export default function OpenPositions({
+// Memoize entire component to prevent re-renders from parent state changes
+const OpenPositions = memo(function OpenPositions({
   trades = [],
   isLoading = false,
   fullPage = false,
 }) {
   const { format: formatAmount } = useCurrency();
-  const totalPnL = trades.reduce((sum, trade) => sum + (trade.profit || 0), 0);
-  const isTotalProfit = totalPnL >= 0;
+
+  // Memoize total P&L calculation
+  const { totalPnL, isTotalProfit } = useMemo(() => {
+    const total = trades.reduce((sum, trade) => sum + (trade.profit || 0), 0);
+    return { totalPnL: total, isTotalProfit: total >= 0 };
+  }, [trades]);
 
   return (
     <Card
@@ -134,4 +141,6 @@ export default function OpenPositions({
       </CardContent>
     </Card>
   );
-}
+});
+
+export default OpenPositions;

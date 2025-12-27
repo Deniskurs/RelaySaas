@@ -18,18 +18,44 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Function-based chunk splitting for precise control
-        // Only isolate Stripe - let Rollup handle other dependencies naturally
+        // Split vendors into logical groups for better caching and loading
         manualChunks(id) {
-          // Stripe packages - must stay isolated, only load on checkout
-          // This is the critical optimization - prevents 200KB+ Stripe SDK from loading on every page
+          if (!id.includes('node_modules')) {
+            return; // Let Rollup handle app code
+          }
+
+          // Stripe packages - must stay isolated, only load on checkout (~200KB)
           if (id.includes('@stripe/stripe-js') || id.includes('@stripe/react-stripe-js')) {
             return 'vendor-stripe';
           }
-          // Group all other node_modules into a single vendor chunk
-          // This avoids circular dependency issues while still separating vendor from app code
-          if (id.includes('node_modules')) {
-            return 'vendor';
+
+          // Recharts - only needed for PerformanceChart (~150KB)
+          if (id.includes('recharts') || id.includes('d3-')) {
+            return 'vendor-charts';
           }
+
+          // Framer Motion - animations (~180KB)
+          if (id.includes('framer-motion')) {
+            return 'vendor-motion';
+          }
+
+          // Radix UI components (~200KB total, used everywhere)
+          if (id.includes('@radix-ui')) {
+            return 'vendor-ui';
+          }
+
+          // Supabase - auth and database (~100KB)
+          if (id.includes('@supabase')) {
+            return 'vendor-supabase';
+          }
+
+          // React core - needed immediately (~150KB)
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            return 'vendor-react';
+          }
+
+          // Everything else goes to vendor-misc
+          return 'vendor-misc';
         },
       },
     },
