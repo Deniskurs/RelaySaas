@@ -226,12 +226,14 @@ export default function Dashboard() {
     loadData(true);
   }, [loadData]);
 
+  // Polling callback - defined separately (not inside hook call)
+  const pollData = useCallback(() => loadData(false), [loadData]);
+
   // Main data polling - pauses when tab is hidden to save CPU/battery
-  useVisibilityPolling(
-    useCallback(() => loadData(false), [loadData]),
-    POLL_INTERVAL_FAST,
-    { runOnMount: false, runOnVisible: true }
-  );
+  useVisibilityPolling(pollData, POLL_INTERVAL_FAST, {
+    runOnMount: false,
+    runOnVisible: true
+  });
 
   // Telegram status loading function
   const loadTelegramStatus = useCallback(async () => {
