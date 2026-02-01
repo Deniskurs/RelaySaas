@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, memo } from "react";
-import { AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   Clock,
