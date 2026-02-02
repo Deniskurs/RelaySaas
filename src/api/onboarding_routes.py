@@ -422,6 +422,19 @@ async def save_metatrader_credentials(
     user: AuthUser = Depends(get_current_user),
 ):
     """Save MetaTrader credentials and provision MetaApi account."""
+    # Pre-check: Verify MetaAPI token is configured
+    system_config = get_system_config()
+    metaapi_token = system_config.get("metaapi_token") or os.getenv("METAAPI_TOKEN")
+    if not metaapi_token:
+        log.error(
+            "MetaAPI token not configured - cannot provision account (onboarding)",
+            user_id=user.id[:8],
+        )
+        return MetaTraderCredentialsResponse(
+            success=False,
+            message="MetaAPI is not configured. An administrator needs to set the MetaAPI token in Admin > API Settings.",
+        )
+
     # Validate login is numeric
     try:
         int(request.login)
@@ -711,12 +724,29 @@ async def _provision_metaapi_account(
     # Get MetaAPI token from system_config (admin setting)
     system_config = get_system_config()
     metaapi_token = system_config.get("metaapi_token") or os.getenv("METAAPI_TOKEN")
+
+    # Debug logging for token status
+    has_db_token = bool(system_config.get("metaapi_token"))
+    has_env_token = bool(os.getenv("METAAPI_TOKEN"))
+    log.info(
+        "MetaAPI token check (onboarding)",
+        user_id=user_id[:8],
+        has_db_token=has_db_token,
+        has_env_token=has_env_token,
+        token_length=len(metaapi_token) if metaapi_token else 0,
+    )
+
     if not metaapi_token:
-        log.warning("metaapi_token not configured in system_config or environment")
-        await _emit_progress(user_id, "error", "MetaAPI not configured", 0, "error")
+        log.error(
+            "MetaAPI token not configured (onboarding)",
+            user_id=user_id[:8],
+            has_db_token=has_db_token,
+            has_env_token=has_env_token,
+        )
+        await _emit_progress(user_id, "error", "MetaAPI not configured. Please set the token in Admin settings.", 0, "error")
         return {
             "success": False,
-            "message": "MetaAPI is not configured. Please contact support.",
+            "message": "MetaAPI is not configured. Please set the MetaAPI token in Admin > API Settings.",
         }
 
     # MetaApi API base URL
@@ -764,17 +794,50 @@ async def _provision_metaapi_account(
 
             response = await client.post(api_url, json=payload, headers=headers)
 
+            log.info(
+                "MetaAPI create account response (onboarding)",
+                user_id=user_id[:8],
+                status_code=response.status_code,
+                has_response=bool(response.text),
+            )
+
             # Handle 202 - async operation in progress
             if response.status_code == 202:
-                log.info("MetaAPI returned 202, polling for completion...")
-                await _emit_progress(user_id, "creating", "Verifying broker connection...", 25)
-                result = await _poll_account_creation(
-                    client, base_url, headers, transaction_id, user_id
-                )
-                if not result["success"]:
-                    await _emit_progress(user_id, "error", result.get("message", "Failed"), 0, "error")
-                    return result
-                account_id = result["account_id"]
+                log.info("MetaAPI returned 202, retrying with same transaction-id...")
+                await _emit_progress(user_id, "creating", "Verifying broker connection (this may take up to 60s)...", 25)
+
+                # 202 means we need to retry with same transaction-id
+                # MetaAPI recommends waiting ~60 seconds for broker validation
+                account_id = None
+                for retry_attempt in range(12):  # Up to 12 retries (2 minutes total)
+                    await asyncio.sleep(10)  # Wait 10 seconds between retries
+
+                    progress = 25 + (retry_attempt * 5)  # 25% to 80%
+                    await _emit_progress(user_id, "creating", f"Validating with broker... ({(retry_attempt + 1) * 10}s)", min(progress, 80))
+
+                    retry_response = await client.post(api_url, json=payload, headers=headers)
+                    log.info(f"MetaAPI retry {retry_attempt + 1}: status={retry_response.status_code}")
+
+                    if retry_response.status_code in [200, 201]:
+                        data = retry_response.json()
+                        account_id = data.get("id")
+                        log.info(f"Account created on retry {retry_attempt + 1}: {account_id}")
+                        break
+                    elif retry_response.status_code == 202:
+                        # Still processing, continue waiting
+                        continue
+                    else:
+                        # Got an error response
+                        error_result = _handle_provisioning_error(retry_response, server)
+                        await _emit_progress(user_id, "error", error_result.get("message", "Failed"), 0, "error")
+                        return error_result
+
+                if not account_id:
+                    await _emit_progress(user_id, "error", "Account creation timed out", 0, "error")
+                    return {
+                        "success": False,
+                        "message": "Account creation is taking longer than expected. Please try again in a few minutes.",
+                    }
             elif response.status_code in [200, 201]:
                 data = response.json()
                 account_id = data.get("id")
@@ -844,12 +907,19 @@ async def _provision_metaapi_account(
 
 def _handle_provisioning_error(response, server: str) -> Dict[str, Any]:
     """Handle MetaAPI provisioning error responses with user-friendly messages."""
+    log.warning(
+        "MetaAPI provisioning error (onboarding)",
+        status_code=response.status_code,
+        response_text=response.text[:500] if response.text else "empty",
+    )
+
     try:
         data = response.json()
-    except Exception:
+    except Exception as e:
+        log.error("Failed to parse MetaAPI error response (onboarding)", error=str(e))
         return {
             "success": False,
-            "message": f"MetaAPI error (HTTP {response.status_code})",
+            "message": f"MetaAPI error (HTTP {response.status_code}): {response.text[:200] if response.text else 'No details'}",
         }
 
     error_details = data.get("details", {})

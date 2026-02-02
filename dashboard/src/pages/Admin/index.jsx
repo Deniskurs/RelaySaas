@@ -278,6 +278,11 @@ function SystemConfig() {
                 {config?.metaapi_token_set && (
                   <div className="flex items-center gap-2 text-xs text-success">
                     <Shield size={12} /> Token securely stored
+                    {config?.metaapi_token_preview && (
+                      <span className="text-foreground-muted ml-1">
+                        ({config.metaapi_token_preview})
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

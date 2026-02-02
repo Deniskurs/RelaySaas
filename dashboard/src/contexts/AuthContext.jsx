@@ -27,24 +27,22 @@ export function AuthProvider({ children }) {
   // Fetch profile data with timeout (single attempt)
   const fetchProfile = useCallback(async (userId) => {
     try {
-      console.log("Fetching profile for:", userId);
-
-      // Add timeout to prevent hanging (10 seconds for slower connections)
+      // Add timeout to prevent hanging (15 seconds for slower connections/cold starts)
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Profile fetch timeout")), 10000)
+        setTimeout(() => reject(new Error("Profile fetch timeout")), 15000)
       );
 
       const fetchPromise = getProfile(userId);
       const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (error) {
-        console.error("Error fetching profile:", error);
+        console.warn("Profile fetch error (will retry):", error.message || error);
         return null;
       }
-      console.log("Profile fetched:", data);
       return data;
     } catch (e) {
-      console.error("Error fetching profile:", e);
+      // Log as warning since retries will handle it
+      console.warn("Profile fetch failed (will retry):", e.message || e);
       return null;
     }
   }, []);
@@ -58,11 +56,10 @@ export function AuthProvider({ children }) {
       // Don't wait after the last failed attempt
       if (attempt < maxRetries - 1) {
         const delay = 1000 * (attempt + 1); // 1s, 2s, 3s delays
-        console.log(`Profile fetch attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-    console.warn("All profile fetch attempts failed");
+    console.error("All profile fetch attempts failed - user may need to re-login");
     return null;
   }, [fetchProfile]);
 
@@ -72,11 +69,8 @@ export function AuthProvider({ children }) {
 
     // Get initial session
     const initAuth = async () => {
-      console.log("initAuth: Starting...");
       try {
-        console.log("initAuth: Getting session...");
         const { data: { session }, error } = await supabase.auth.getSession();
-        console.log("initAuth: Session result:", { hasSession: !!session, error });
 
         if (error) {
           console.error("Error getting session:", error);
@@ -87,28 +81,24 @@ export function AuthProvider({ children }) {
         }
 
         if (mounted) {
-          console.log("initAuth: Setting session and user...");
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            console.log("initAuth: Fetching profile...");
             try {
               // Use retry logic for initial profile fetch
               const profileData = await fetchProfileWithRetry(session.user.id);
-              console.log("initAuth: Profile result:", profileData);
               if (mounted) {
                 setProfile(profileData);
               }
             } catch (profileError) {
-              console.warn("initAuth: Profile fetch failed:", profileError);
+              console.warn("Profile fetch failed during init:", profileError);
               if (mounted) {
                 setProfile(null);
               }
             }
           }
 
-          console.log("initAuth: Setting isLoading to false");
           setIsLoading(false);
         }
       } catch (e) {
@@ -125,8 +115,6 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", event);
-
       if (!mounted) return;
 
       // Skip INITIAL_SESSION as we handle it in initAuth
@@ -151,7 +139,6 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         // Prevent concurrent fetches (race condition prevention)
         if (fetchInProgressRef.current) {
-          console.log("Auth state change: Profile fetch already in progress, skipping");
           return;
         }
 
@@ -164,7 +151,6 @@ export function AuthProvider({ children }) {
               setProfile(profileData);
             } else {
               // Fetch failed - preserve existing profile (don't overwrite with null)
-              console.log("Auth state change: Profile fetch failed, preserving existing profile");
               setProfile(prev => prev || null);
             }
           }
