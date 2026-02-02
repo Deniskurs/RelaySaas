@@ -187,6 +187,7 @@ async def create_trade(
     take_profit: float,
     tp_index: int,
     user_id: str = None,
+    mt_account_id: str = None,
 ) -> dict:
     """Create a new trade record in Supabase.
 
@@ -201,6 +202,7 @@ async def create_trade(
         take_profit: Take profit price.
         tp_index: Take profit index (for split TPs).
         user_id: User UUID (REQUIRED in multi-tenant mode).
+        mt_account_id: MT account UUID from user_mt_accounts (for multi-account tracking).
 
     Returns:
         The created trade record.
@@ -227,6 +229,10 @@ async def create_trade(
         "status": "pending",
         "created_at": datetime.utcnow().isoformat(),
     }
+
+    # Add mt_account_id if provided
+    if mt_account_id:
+        data["mt_account_id"] = mt_account_id
 
     result = supabase.table("trades_v2").insert(data).execute()
     return result.data[0] if result.data else None
@@ -388,22 +394,35 @@ async def get_last_trade(user_id: Optional[str] = None) -> Optional[dict]:
     return result.data[0] if result.data else None
 
 
-async def get_open_trades_for_sync(user_id: Optional[str] = None) -> List[dict]:
+async def get_open_trades_for_sync(
+    user_id: Optional[str] = None,
+    mt_account_id: Optional[str] = None,
+) -> List[dict]:
     """Get all trades with status pending/open for sync checking.
 
     Returns trades that might need to be marked as closed when
     their positions no longer exist in MetaApi.
+
+    Args:
+        user_id: Filter by user ID.
+        mt_account_id: Filter by MT account ID (for per-account sync).
+
+    Returns:
+        List of trade records for sync checking.
     """
     supabase = get_supabase_admin()
 
     query = (
         supabase.table("trades_v2")
-        .select("id, order_id, symbol, status, created_at")
+        .select("id, order_id, symbol, status, created_at, mt_account_id")
         .in_("status", ["pending", "open"])
     )
 
     if user_id:
         query = query.eq("user_id", user_id)
+
+    if mt_account_id:
+        query = query.eq("mt_account_id", mt_account_id)
 
     result = query.execute()
     return result.data or []

@@ -8,8 +8,13 @@ from .database import supabase_crud as crud
 from .database.supabase import get_supabase_admin
 from .parser.llm_parser import SignalParser
 from .trading.validator import TradeValidator
-from .trading.executor import TradeExecutor, ExecutorSettings
-from .users.manager import user_manager, UserConnection
+from .trading.executor import (
+    TradeExecutor,
+    ExecutorSettings,
+    AccountExecutionResult,
+    MultiAccountExecutionResult,
+)
+from .users.manager import user_manager, UserConnection, AccountExecutor
 from .users.credentials import get_user_settings
 from .utils.events import event_bus, Events
 from .utils.logger import log
@@ -157,6 +162,62 @@ class SignalRouter:
                 # Pass user_id for multi-tenant settings lookup
                 self._validators[user_id] = TradeValidator(executor.connection, user_id=user_id)
         return self._validators.get(user_id)
+
+    async def _execute_on_all_accounts(
+        self,
+        account_executors: List[AccountExecutor],
+        signal: Any,
+        lot_size: float,
+    ) -> MultiAccountExecutionResult:
+        """Execute a signal on all provided MT account executors in parallel.
+
+        Each account execution is isolated - one failure doesn't stop others.
+
+        Args:
+            account_executors: List of AccountExecutor objects to execute on.
+            signal: Parsed signal to execute.
+            lot_size: Lot size to use for each execution.
+
+        Returns:
+            MultiAccountExecutionResult with per-account results.
+        """
+        async def execute_on_account(ae: AccountExecutor) -> AccountExecutionResult:
+            try:
+                executions = await ae.executor.execute(signal, lot_size)
+                return AccountExecutionResult(
+                    account_id=ae.account_id,
+                    account_alias=ae.account_alias,
+                    success=bool(executions),
+                    executions=executions or [],
+                    error=ae.executor.last_error if not executions else None,
+                )
+            except Exception as e:
+                log.error(
+                    f"Execution failed on account '{ae.account_alias}'",
+                    error=str(e),
+                )
+                return AccountExecutionResult(
+                    account_id=ae.account_id,
+                    account_alias=ae.account_alias,
+                    success=False,
+                    error=str(e),
+                )
+
+        # Execute on all accounts in parallel
+        results = await asyncio.gather(
+            *[execute_on_account(ae) for ae in account_executors],
+            return_exceptions=False,  # We handle exceptions inside execute_on_account
+        )
+
+        successful = sum(1 for r in results if r.success)
+        failed = len(results) - successful
+
+        return MultiAccountExecutionResult(
+            total_accounts=len(results),
+            successful_accounts=successful,
+            failed_accounts=failed,
+            results=list(results),
+        )
 
     async def route_message(self, message: dict):
         """Route a message to the appropriate user's signal processor.
@@ -338,16 +399,21 @@ class SignalRouter:
             confidence=parsed.confidence,
         )
 
-        # Get user's executor
-        executor = conn.metaapi_executor
-        if not executor:
-            log.error(f"{user_tag}No executor available")
+        # Get all connected executors for multi-account execution
+        account_executors = user_manager.get_all_executors(user_id)
+        if not account_executors:
+            log.error(f"{user_tag}No connected MT accounts available")
             await crud.update_signal(
                 signal_id,
                 status="failed",
-                failure_reason="MetaApi executor not connected",
+                failure_reason="No MetaApi accounts connected",
             )
             return
+
+        # Use primary executor for validation (backward compat)
+        executor = conn.metaapi_executor
+        if not executor:
+            executor = account_executors[0].executor
 
         # Validate
         try:
@@ -466,46 +532,59 @@ class SignalRouter:
             )
             return
 
-        # Auto-accept: Execute trades immediately
-        try:
-            executions = await executor.execute(parsed, lot_size)
-        except Exception as e:
-            log.error(f"{user_tag}Trade execution error", error=str(e), signal_id=signal_id)
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason=f"Execution error: {str(e)}",
-            )
-            return
-
-        if not executions:
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason="Order execution failed",
-            )
-            return
-
-        # Save trades and update signal
-        await crud.update_signal(
-            signal_id,
-            status="executed",
-            executed_at=datetime.utcnow().isoformat(),
+        # Auto-accept: Execute trades on ALL connected accounts
+        multi_result = await self._execute_on_all_accounts(
+            account_executors=account_executors,
+            signal=parsed,
+            lot_size=lot_size,
         )
 
-        for exe in executions:
-            await crud.create_trade(
-                signal_id=signal_id,
-                order_id=exe.order_id,
-                symbol=exe.symbol,
-                direction=exe.direction,
-                lot_size=exe.lot_size,
-                entry_price=exe.entry_price,
-                stop_loss=exe.stop_loss,
-                take_profit=exe.take_profit,
-                tp_index=exe.tp_index,
-                user_id=user_id,
+        # Determine signal status based on multi-account results
+        if multi_result.overall_status == "failed":
+            # Build error message from all failures
+            errors = [
+                f"{r.account_alias}: {r.error}"
+                for r in multi_result.results
+                if not r.success and r.error
+            ]
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="; ".join(errors) if errors else "Execution failed on all accounts",
             )
+            log.error(
+                f"{user_tag}Signal execution failed on all accounts",
+                signal_id=signal_id,
+                failed_accounts=multi_result.failed_accounts,
+            )
+            return
+
+        # Save trades from successful accounts
+        for account_result in multi_result.results:
+            if not account_result.success:
+                continue
+
+            for exe in account_result.executions:
+                await crud.create_trade(
+                    signal_id=signal_id,
+                    order_id=exe.order_id,
+                    symbol=exe.symbol,
+                    direction=exe.direction,
+                    lot_size=exe.lot_size,
+                    entry_price=exe.entry_price,
+                    stop_loss=exe.stop_loss,
+                    take_profit=exe.take_profit,
+                    tp_index=exe.tp_index,
+                    user_id=user_id,
+                    mt_account_id=account_result.account_id,
+                )
+
+        # Update signal status
+        await crud.update_signal(
+            signal_id,
+            status=multi_result.overall_status,
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
         # Increment daily signal count after successful execution
         await increment_signal_count(user_id)
@@ -517,34 +596,46 @@ class SignalRouter:
                 "user_id": user_id,
                 "symbol": parsed.symbol,
                 "direction": parsed.direction,
-                "trades": len(executions),
+                "trades": len(multi_result.all_executions),
                 "lot_size": lot_size,
+                "accounts": multi_result.total_accounts,
+                "successful_accounts": multi_result.successful_accounts,
             },
         )
 
         log.info(
-            f"{user_tag}Signal executed successfully",
+            f"{user_tag}{multi_result.summary_message}",
             signal_id=signal_id,
             symbol=parsed.symbol,
             direction=parsed.direction,
-            trades=len(executions),
+            trades=len(multi_result.all_executions),
             lot_size=lot_size,
+            accounts=f"{multi_result.successful_accounts}/{multi_result.total_accounts}",
         )
 
     async def _handle_close_signal(self, user_id: str, signal_id: int, parsed: Any, conn: UserConnection):
-        """Handle a CLOSE signal to exit positions."""
+        """Handle a CLOSE signal to exit positions on all connected accounts."""
         user_tag = self._get_user_tag(user_id)
         symbol = parsed.symbol
 
-        executor = conn.metaapi_executor
-        if not executor:
-            log.error(f"{user_tag}No executor for close signal")
+        # Get all connected executors
+        account_executors = user_manager.get_all_executors(user_id)
+        if not account_executors:
+            log.error(f"{user_tag}No connected accounts for close signal")
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="No MetaApi accounts connected",
+            )
             return
 
         symbol_suffix = conn.settings.symbol_suffix if conn.settings else ""
-        broker_symbol = symbol + symbol_suffix
 
-        log.info(f"{user_tag}Processing CLOSE signal", signal_id=signal_id, symbol=symbol)
+        log.info(
+            f"{user_tag}Processing CLOSE signal on {len(account_executors)} account(s)",
+            signal_id=signal_id,
+            symbol=symbol,
+        )
 
         await crud.update_signal(
             signal_id,
@@ -554,45 +645,50 @@ class SignalRouter:
             parsed_at=datetime.utcnow().isoformat(),
         )
 
-        try:
-            account_info = await executor.get_account_info()
-            positions = account_info.get("positions", [])
-        except Exception as e:
-            log.error(f"{user_tag}Failed to get positions for close signal", error=str(e))
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason=f"Could not fetch positions: {str(e)}",
-            )
-            return
+        # Close positions on all accounts in parallel
+        async def close_on_account(ae: AccountExecutor) -> int:
+            """Close matching positions on a single account. Returns count closed."""
+            try:
+                account_info = await ae.executor.get_account_info()
+                positions = account_info.get("positions", [])
 
-        # Find matching positions
-        matching = [
-            p for p in positions
-            if p.get("symbol", "").upper().replace(symbol_suffix.upper(), "") == symbol.upper()
-        ]
+                # Find matching positions
+                matching = [
+                    p for p in positions
+                    if p.get("symbol", "").upper().replace(symbol_suffix.upper(), "") == symbol.upper()
+                ]
 
-        if not matching:
-            log.warning(f"{user_tag}No open positions found for symbol", symbol=symbol)
-            await crud.update_signal(
-                signal_id,
-                status="skipped",
-                failure_reason=f"No open positions found for {symbol}",
-            )
-            return
+                closed = 0
+                for pos in matching:
+                    position_id = pos.get("id") or pos.get("positionId")
+                    if position_id:
+                        try:
+                            await ae.executor.close_position(str(position_id))
+                            closed += 1
+                        except Exception as e:
+                            log.error(
+                                f"{user_tag}Failed to close position on '{ae.account_alias}'",
+                                position_id=position_id,
+                                error=str(e),
+                            )
 
-        # Close all matching positions
-        closed_count = 0
-        for pos in matching:
-            position_id = pos.get("id") or pos.get("positionId")
-            if position_id:
-                try:
-                    await executor.close_position(str(position_id))
-                    closed_count += 1
-                except Exception as e:
-                    log.error(f"{user_tag}Failed to close position", position_id=position_id, error=str(e))
+                return closed
+            except Exception as e:
+                log.error(
+                    f"{user_tag}Failed to get positions on '{ae.account_alias}'",
+                    error=str(e),
+                )
+                return 0
 
-        if closed_count > 0:
+        results = await asyncio.gather(
+            *[close_on_account(ae) for ae in account_executors],
+            return_exceptions=True,
+        )
+
+        # Sum up closed positions
+        total_closed = sum(r for r in results if isinstance(r, int))
+
+        if total_closed > 0:
             await crud.update_signal(
                 signal_id,
                 status="executed",
@@ -601,8 +697,8 @@ class SignalRouter:
         else:
             await crud.update_signal(
                 signal_id,
-                status="failed",
-                failure_reason="Failed to close any positions",
+                status="skipped",
+                failure_reason=f"No open positions found for {symbol} on any account",
             )
 
         await event_bus.emit(
@@ -611,7 +707,8 @@ class SignalRouter:
                 "signal_id": signal_id,
                 "user_id": user_id,
                 "symbol": symbol,
-                "positions_closed": closed_count,
+                "positions_closed": total_closed,
+                "accounts": len(account_executors),
             },
         )
 
@@ -619,11 +716,12 @@ class SignalRouter:
             f"{user_tag}CLOSE signal processed",
             signal_id=signal_id,
             symbol=symbol,
-            closed=closed_count,
+            closed=total_closed,
+            accounts=len(account_executors),
         )
 
     async def _handle_lot_modifier_signal(self, user_id: str, signal_id: int, parsed: Any, conn: UserConnection):
-        """Handle a LOT_MODIFIER signal to add to existing positions."""
+        """Handle a LOT_MODIFIER signal to add to existing positions on all accounts."""
         user_tag = self._get_user_tag(user_id)
         target_symbol = getattr(parsed, 'target_symbol', None) or "XAUUSD"
         multiplier = getattr(parsed, 'lot_multiplier', 1.0) or 1.0
@@ -633,9 +731,15 @@ class SignalRouter:
         if target_symbol.upper() == "GOLD":
             target_symbol = "XAUUSD"
 
-        executor = conn.metaapi_executor
-        if not executor:
-            log.error(f"{user_tag}No executor for lot modifier")
+        # Get all connected executors
+        account_executors = user_manager.get_all_executors(user_id)
+        if not account_executors:
+            log.error(f"{user_tag}No connected accounts for lot modifier")
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="No MetaApi accounts connected",
+            )
             return
 
         symbol_suffix = conn.settings.symbol_suffix if conn.settings else ""
@@ -643,7 +747,7 @@ class SignalRouter:
         broker_symbol = target_symbol + symbol_suffix
 
         log.info(
-            f"{user_tag}Processing LOT_MODIFIER signal",
+            f"{user_tag}Processing LOT_MODIFIER signal on {len(account_executors)} account(s)",
             signal_id=signal_id,
             target_symbol=target_symbol,
             modifier_type=modifier_type,
@@ -658,132 +762,152 @@ class SignalRouter:
             parsed_at=datetime.utcnow().isoformat(),
         )
 
-        try:
-            account_info = await executor.get_account_info()
-            positions = account_info.get("positions", [])
-        except Exception as e:
-            log.error(f"{user_tag}Failed to get positions for lot modifier", error=str(e))
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason=f"Could not fetch positions: {str(e)}",
-            )
-            return
+        # Execute lot modifier on each account
+        async def modify_on_account(ae: AccountExecutor) -> AccountExecutionResult:
+            """Execute lot modifier on a single account."""
+            try:
+                account_info = await ae.executor.get_account_info()
+                positions = account_info.get("positions", [])
 
-        # Find matching position
-        matching = [
-            p for p in positions
-            if p.get("symbol", "").upper().replace(symbol_suffix.upper(), "") == target_symbol.upper()
-        ]
+                # Find matching position on this account
+                matching = [
+                    p for p in positions
+                    if p.get("symbol", "").upper().replace(symbol_suffix.upper(), "") == target_symbol.upper()
+                ]
 
-        if not matching:
-            log.warning(f"{user_tag}No open positions found for lot modifier", symbol=target_symbol)
-            await crud.update_signal(
-                signal_id,
-                status="skipped",
-                failure_reason=f"No open {target_symbol} positions to modify",
-            )
-            return
+                if not matching:
+                    return AccountExecutionResult(
+                        account_id=ae.account_id,
+                        account_alias=ae.account_alias,
+                        success=False,
+                        error=f"No {target_symbol} position found",
+                    )
 
-        # Use most recent position as reference
-        ref_position = matching[-1]
-        original_lot = ref_position.get("volume", 0.01)
-        position_type = ref_position.get("type", "").upper()
-        stop_loss = ref_position.get("stopLoss")
-        take_profit = ref_position.get("takeProfit")
+                # Use most recent position as reference
+                ref_position = matching[-1]
+                original_lot = ref_position.get("volume", 0.01)
+                position_type = ref_position.get("type", "").upper()
+                stop_loss = ref_position.get("stopLoss")
+                take_profit = ref_position.get("takeProfit")
 
-        if "BUY" in position_type:
-            direction = "BUY"
-        elif "SELL" in position_type:
-            direction = "SELL"
-        else:
-            log.error(f"{user_tag}Could not determine position direction", position_type=position_type)
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason=f"Unknown position type: {position_type}",
-            )
-            return
+                if "BUY" in position_type:
+                    direction = "BUY"
+                elif "SELL" in position_type:
+                    direction = "SELL"
+                else:
+                    return AccountExecutionResult(
+                        account_id=ae.account_id,
+                        account_alias=ae.account_alias,
+                        success=False,
+                        error=f"Unknown position type: {position_type}",
+                    )
 
-        if not stop_loss or not take_profit:
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason="Reference position has no SL/TP",
-            )
-            return
+                if not stop_loss or not take_profit:
+                    return AccountExecutionResult(
+                        account_id=ae.account_id,
+                        account_alias=ae.account_alias,
+                        success=False,
+                        error="Reference position has no SL/TP",
+                    )
 
-        # Calculate new lot size
-        if modifier_type == "DOUBLE":
-            new_lot_size = original_lot
-        else:
-            new_lot_size = round(original_lot * multiplier, 2)
+                # Calculate new lot size
+                if modifier_type == "DOUBLE":
+                    new_lot_size = original_lot
+                else:
+                    new_lot_size = round(original_lot * multiplier, 2)
+                new_lot_size = max(0.01, min(new_lot_size, max_lot))
 
-        new_lot_size = max(0.01, min(new_lot_size, max_lot))
+                # Get current price
+                try:
+                    price_info = await ae.executor.connection.get_symbol_price(broker_symbol)
+                    entry_price = price_info["ask"] if direction == "BUY" else price_info["bid"]
+                except Exception:
+                    entry_price = ref_position.get("openPrice", 0)
 
-        # Get current price
-        try:
-            price_info = await executor.connection.get_symbol_price(broker_symbol)
-            entry_price = price_info["ask"] if direction == "BUY" else price_info["bid"]
-        except Exception:
-            entry_price = ref_position.get("openPrice", 0)
+                # Create signal-like object for execution
+                class ModifierSignal:
+                    pass
 
-        # Create signal-like object for execution
-        class ModifierSignal:
-            pass
+                mod_signal = ModifierSignal()
+                mod_signal.direction = direction
+                mod_signal.symbol = target_symbol
+                mod_signal.entry_price = entry_price
+                mod_signal.stop_loss = stop_loss
+                mod_signal.take_profits = [take_profit]
+                mod_signal.confidence = 0.9
+                mod_signal.warnings = []
 
-        mod_signal = ModifierSignal()
-        mod_signal.direction = direction
-        mod_signal.symbol = target_symbol
-        mod_signal.entry_price = entry_price
-        mod_signal.stop_loss = stop_loss
-        mod_signal.take_profits = [take_profit]
-        mod_signal.confidence = 0.9
-        mod_signal.warnings = []
+                executions = await ae.executor.execute(mod_signal, new_lot_size)
+                return AccountExecutionResult(
+                    account_id=ae.account_id,
+                    account_alias=ae.account_alias,
+                    success=bool(executions),
+                    executions=executions or [],
+                    error=ae.executor.last_error if not executions else None,
+                )
 
-        try:
-            executions = await executor.execute(mod_signal, new_lot_size)
-        except Exception as e:
-            log.error(f"{user_tag}Lot modifier execution error", error=str(e))
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason=f"Execution error: {str(e)}",
-            )
-            return
+            except Exception as e:
+                log.error(
+                    f"{user_tag}Lot modifier failed on '{ae.account_alias}'",
+                    error=str(e),
+                )
+                return AccountExecutionResult(
+                    account_id=ae.account_id,
+                    account_alias=ae.account_alias,
+                    success=False,
+                    error=str(e),
+                )
 
-        if not executions:
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason="Additional order execution failed",
-            )
-            return
-
-        # Save trades
-        await crud.update_signal(
-            signal_id,
-            direction=direction,
-            entry_price=entry_price,
-            stop_loss=stop_loss,
-            take_profits=[take_profit],
-            status="executed",
-            executed_at=datetime.utcnow().isoformat(),
+        results = await asyncio.gather(
+            *[modify_on_account(ae) for ae in account_executors],
+            return_exceptions=False,
         )
 
-        for exe in executions:
-            await crud.create_trade(
-                signal_id=signal_id,
-                order_id=exe.order_id,
-                symbol=exe.symbol,
-                direction=exe.direction,
-                lot_size=exe.lot_size,
-                entry_price=exe.entry_price,
-                stop_loss=exe.stop_loss,
-                take_profit=exe.take_profit,
-                tp_index=exe.tp_index,
-                user_id=user_id,
+        successful = sum(1 for r in results if r.success)
+        failed = len(results) - successful
+
+        multi_result = MultiAccountExecutionResult(
+            total_accounts=len(results),
+            successful_accounts=successful,
+            failed_accounts=failed,
+            results=list(results),
+        )
+
+        if multi_result.overall_status == "failed":
+            errors = [f"{r.account_alias}: {r.error}" for r in results if not r.success and r.error]
+            await crud.update_signal(
+                signal_id,
+                status="failed",
+                failure_reason="; ".join(errors) if errors else "Lot modifier failed on all accounts",
             )
+            return
+
+        # Save trades from successful accounts
+        for account_result in multi_result.results:
+            if not account_result.success:
+                continue
+
+            for exe in account_result.executions:
+                await crud.create_trade(
+                    signal_id=signal_id,
+                    order_id=exe.order_id,
+                    symbol=exe.symbol,
+                    direction=exe.direction,
+                    lot_size=exe.lot_size,
+                    entry_price=exe.entry_price,
+                    stop_loss=exe.stop_loss,
+                    take_profit=exe.take_profit,
+                    tp_index=exe.tp_index,
+                    user_id=user_id,
+                    mt_account_id=account_result.account_id,
+                )
+
+        await crud.update_signal(
+            signal_id,
+            direction=multi_result.all_executions[0].direction if multi_result.all_executions else None,
+            status=multi_result.overall_status,
+            executed_at=datetime.utcnow().isoformat(),
+        )
 
         await event_bus.emit(
             Events.TRADE_OPENED,
@@ -791,25 +915,25 @@ class SignalRouter:
                 "signal_id": signal_id,
                 "user_id": user_id,
                 "symbol": target_symbol,
-                "direction": direction,
-                "trades": len(executions),
-                "lot_size": new_lot_size,
+                "direction": multi_result.all_executions[0].direction if multi_result.all_executions else None,
+                "trades": len(multi_result.all_executions),
                 "lot_modifier": True,
                 "modifier_type": modifier_type,
+                "accounts": multi_result.total_accounts,
+                "successful_accounts": multi_result.successful_accounts,
             },
         )
 
         log.info(
-            f"{user_tag}LOT_MODIFIER signal executed",
+            f"{user_tag}LOT_MODIFIER signal: {multi_result.summary_message}",
             signal_id=signal_id,
             symbol=target_symbol,
-            direction=direction,
-            lot_size=new_lot_size,
             modifier_type=modifier_type,
+            accounts=f"{multi_result.successful_accounts}/{multi_result.total_accounts}",
         )
 
     async def confirm_signal(self, user_id: str, signal_id: int, lot_size_override: Optional[float] = None) -> bool:
-        """Confirm and execute a pending signal for a user.
+        """Confirm and execute a pending signal on all connected accounts.
 
         Args:
             user_id: User UUID.
@@ -817,7 +941,7 @@ class SignalRouter:
             lot_size_override: Optional lot size override from user selection.
 
         Returns:
-            True if execution succeeded, False otherwise.
+            True if at least one execution succeeded, False otherwise.
         """
         user_tag = self._get_user_tag(user_id)
         log.info(f"{user_tag}Confirming signal", signal_id=signal_id, lot_size_override=lot_size_override)
@@ -828,15 +952,21 @@ class SignalRouter:
             log.error(f"{user_tag}No active connection for confirm_signal")
             return False
 
-        executor = conn.metaapi_executor
-        if not executor or not executor.connection:
-            log.error(f"{user_tag}No MetaAPI executor for confirm_signal")
+        # Get all connected executors
+        account_executors = user_manager.get_all_executors(user_id)
+        if not account_executors:
+            log.error(f"{user_tag}No connected MT accounts for confirm_signal")
             await crud.update_signal(
                 signal_id,
                 status="failed",
-                failure_reason="MetaAPI executor not connected",
+                failure_reason="No MetaAPI accounts connected",
             )
             return False
+
+        # Use primary executor for balance calculation (backward compat)
+        executor = conn.metaapi_executor
+        if not executor:
+            executor = account_executors[0].executor
 
         # Get signal from database
         signal = await crud.get_signal(signal_id)
@@ -943,47 +1073,56 @@ class SignalRouter:
             )
             return False
 
-        # Execute
-        try:
-            executions = await executor.execute(parsed, lot_size)
-        except Exception as e:
-            log.error(f"{user_tag}Confirmed signal execution error", error=str(e))
+        # Execute on ALL connected accounts
+        multi_result = await self._execute_on_all_accounts(
+            account_executors=account_executors,
+            signal=parsed,
+            lot_size=lot_size,
+        )
+
+        if multi_result.overall_status == "failed":
+            errors = [
+                f"{r.account_alias}: {r.error}"
+                for r in multi_result.results
+                if not r.success and r.error
+            ]
             await crud.update_signal(
                 signal_id,
                 status="failed",
-                failure_reason=f"Execution error: {str(e)}",
+                failure_reason="; ".join(errors) if errors else "Execution failed on all accounts",
+            )
+            log.error(
+                f"{user_tag}Confirmed signal failed on all accounts",
+                signal_id=signal_id,
             )
             return False
 
-        if not executions:
-            await crud.update_signal(
-                signal_id,
-                status="failed",
-                failure_reason=executor.last_error or "Order execution failed",
-            )
-            return False
+        # Save trades from successful accounts
+        for account_result in multi_result.results:
+            if not account_result.success:
+                continue
+
+            for exe in account_result.executions:
+                await crud.create_trade(
+                    signal_id=signal_id,
+                    user_id=user_id,
+                    order_id=exe.order_id,
+                    symbol=exe.symbol,
+                    direction=exe.direction,
+                    lot_size=exe.lot_size,
+                    entry_price=exe.entry_price,
+                    stop_loss=exe.stop_loss,
+                    take_profit=exe.take_profit,
+                    tp_index=exe.tp_index,
+                    mt_account_id=account_result.account_id,
+                )
 
         # Update signal status
         await crud.update_signal(
             signal_id,
-            status="executed",
+            status=multi_result.overall_status,
             executed_at=datetime.utcnow().isoformat(),
         )
-
-        # Save trades
-        for exe in executions:
-            await crud.create_trade(
-                signal_id=signal_id,
-                user_id=user_id,
-                order_id=exe.order_id,
-                symbol=exe.symbol,
-                direction=exe.direction,
-                lot_size=exe.lot_size,
-                entry_price=exe.entry_price,
-                stop_loss=exe.stop_loss,
-                take_profit=exe.take_profit,
-                tp_index=exe.tp_index,
-            )
 
         # Increment signal count for plan tracking
         await increment_signal_count(user_id)
@@ -996,19 +1135,22 @@ class SignalRouter:
                 "user_id": user_id,
                 "symbol": parsed.symbol,
                 "direction": parsed.direction,
-                "trades": len(executions),
+                "trades": len(multi_result.all_executions),
                 "lot_size": lot_size,
                 "manual_confirm": True,
+                "accounts": multi_result.total_accounts,
+                "successful_accounts": multi_result.successful_accounts,
             },
         )
 
         log.info(
-            f"{user_tag}Signal confirmed and executed",
+            f"{user_tag}Signal confirmed: {multi_result.summary_message}",
             signal_id=signal_id,
             symbol=parsed.symbol,
             direction=parsed.direction,
             lot_size=lot_size,
-            trades=len(executions),
+            trades=len(multi_result.all_executions),
+            accounts=f"{multi_result.successful_accounts}/{multi_result.total_accounts}",
         )
 
         return True

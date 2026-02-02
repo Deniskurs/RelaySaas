@@ -1,13 +1,61 @@
 """MetaApi trade execution."""
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from metaapi_cloud_sdk import MetaApi
 
 from ..database.supabase import get_system_config, get_settings, SYSTEM_USER_ID
 from ..parser.models import ParsedSignal, TradeExecution
 from ..utils.logger import log
+
+
+@dataclass
+class AccountExecutionResult:
+    """Result of executing a signal on a single MT account."""
+
+    account_id: str  # user_mt_accounts.id
+    account_alias: str
+    success: bool
+    executions: List[TradeExecution] = field(default_factory=list)
+    error: Optional[str] = None
+
+
+@dataclass
+class MultiAccountExecutionResult:
+    """Aggregated result of executing a signal across multiple MT accounts."""
+
+    total_accounts: int
+    successful_accounts: int
+    failed_accounts: int
+    results: List[AccountExecutionResult] = field(default_factory=list)
+
+    @property
+    def overall_status(self) -> str:
+        """Get overall execution status for signal tracking."""
+        if self.successful_accounts == self.total_accounts:
+            return "executed"
+        elif self.successful_accounts > 0:
+            return "partial"
+        return "failed"
+
+    @property
+    def all_executions(self) -> List[TradeExecution]:
+        """Get flat list of all successful trade executions."""
+        executions = []
+        for result in self.results:
+            if result.success:
+                executions.extend(result.executions)
+        return executions
+
+    @property
+    def summary_message(self) -> str:
+        """Get human-readable summary of execution results."""
+        if self.overall_status == "executed":
+            return f"Executed on {self.total_accounts} account(s)"
+        elif self.overall_status == "partial":
+            return f"Executed on {self.successful_accounts}/{self.total_accounts} accounts"
+        return f"Failed on all {self.total_accounts} account(s)"
 
 
 @dataclass

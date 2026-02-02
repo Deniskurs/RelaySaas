@@ -1,6 +1,6 @@
 """User connection manager for multi-tenant signal copier."""
 import asyncio
-from typing import Dict, Optional, Set, Callable
+from typing import Dict, Optional, Set, Callable, List
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -13,6 +13,23 @@ from .credentials import (
     UserCredentials,
     UserSettings,
 )
+from .mt_accounts import (
+    get_user_mt_accounts,
+    set_account_connected,
+    MTAccount,
+)
+
+
+@dataclass
+class AccountExecutor:
+    """Represents a connected MT account executor."""
+
+    account_id: str  # user_mt_accounts.id
+    metaapi_account_id: str  # MetaAPI UUID
+    account_alias: str
+    executor: object  # TradeExecutor instance
+    is_primary: bool
+    is_connected: bool = False
 
 
 @dataclass
@@ -25,7 +42,10 @@ class UserConnection:
 
     # Connection objects (will be set when connected)
     telegram_listener: Optional[object] = None
-    metaapi_executor: Optional[object] = None
+    metaapi_executor: Optional[object] = None  # Kept for backward compat (primary)
+
+    # Multiple MT account executors (Phase 2)
+    account_executors: Dict[str, AccountExecutor] = field(default_factory=dict)
 
     # Status
     telegram_connected: bool = False
@@ -43,6 +63,11 @@ class UserConnection:
     def is_fully_connected(self) -> bool:
         """Check if both Telegram and MetaApi are connected."""
         return self.telegram_connected and self.metaapi_connected
+
+    @property
+    def connected_account_count(self) -> int:
+        """Get count of connected MT accounts."""
+        return sum(1 for ae in self.account_executors.values() if ae.is_connected)
 
 
 class UserConnectionManager:
@@ -171,6 +196,7 @@ class UserConnectionManager:
         log.info(
             f"🔌 DISCONNECTING USER {user_id[:8]}",
             other_active_connections=[uid[:8] for uid in self._connections.keys() if uid != user_id],
+            connected_accounts=conn.connected_account_count,
         )
 
         conn.is_active = False
@@ -190,12 +216,21 @@ class UserConnectionManager:
             except Exception as e:
                 log.error("Error stopping Telegram listener", user_id=user_id, error=str(e))
 
-        # Disconnect MetaApi
-        if conn.metaapi_executor:
-            try:
-                await conn.metaapi_executor.disconnect()
-            except Exception as e:
-                log.error("Error disconnecting MetaApi", user_id=user_id, error=str(e))
+        # Disconnect ALL MT account executors
+        for account_id, account_executor in conn.account_executors.items():
+            if account_executor.executor:
+                try:
+                    await account_executor.executor.disconnect()
+                    set_account_connected(account_id, False)
+                except Exception as e:
+                    log.error(
+                        f"Error disconnecting account '{account_executor.account_alias}'",
+                        user_id=user_id,
+                        error=str(e),
+                    )
+
+        conn.account_executors.clear()
+        conn.metaapi_executor = None
 
         del self._connections[user_id]
         log.info("User disconnected", user_id=user_id)
@@ -300,25 +335,93 @@ class UserConnectionManager:
             log.warning("No message handler set, message dropped")
 
     async def _connect_metaapi(self, user_id: str):
-        """Connect MetaApi executor for user.
+        """Connect MetaApi executors for all active MT accounts.
+
+        Connects ALL active accounts from user_mt_accounts table,
+        stores them in account_executors dict, and sets primary
+        as metaapi_executor for backward compatibility.
 
         Args:
             user_id: User UUID.
         """
         conn = self._connections.get(user_id)
-        if not conn or not conn.credentials:
-            log.warning("No connection or credentials for MetaApi", user_id=user_id[:8])
+        if not conn:
+            log.warning("No connection for MetaApi", user_id=user_id[:8])
             return
 
-        # Check if we have a MetaApi account ID
-        if not conn.credentials.metaapi_account_id:
-            log.warning("No MetaApi account ID for user", user_id=user_id[:8])
+        # Get all active MT accounts for this user
+        mt_accounts = get_user_mt_accounts(user_id, active_only=True)
+
+        if not mt_accounts:
+            log.warning("No active MT accounts for user", user_id=user_id[:8])
             return
 
         log.info(
-            f"Connecting MetaApi for user {user_id[:8]}",
-            account_id=conn.credentials.metaapi_account_id[:8] if conn.credentials.metaapi_account_id else None,
+            f"Connecting {len(mt_accounts)} MT account(s) for user {user_id[:8]}",
+            accounts=[acc.account_alias for acc in mt_accounts],
         )
+
+        # Connect each account in parallel
+        async def connect_account(acc: MTAccount):
+            return await self._connect_single_account(user_id, acc)
+
+        tasks = [connect_account(acc) for acc in mt_accounts if acc.metaapi_account_id]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Log any connection errors
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                acc = mt_accounts[i]
+                log.error(
+                    f"Failed to connect account '{acc.account_alias}'",
+                    user_id=user_id[:8],
+                    error=str(result),
+                )
+
+        # Set backward-compat primary executor
+        primary = next(
+            (ae for ae in conn.account_executors.values() if ae.is_primary and ae.is_connected),
+            None,
+        )
+        if primary:
+            conn.metaapi_executor = primary.executor
+            conn.metaapi_connected = True
+        else:
+            # Fall back to any connected executor
+            any_connected = next(
+                (ae for ae in conn.account_executors.values() if ae.is_connected),
+                None,
+            )
+            if any_connected:
+                conn.metaapi_executor = any_connected.executor
+                conn.metaapi_connected = True
+            else:
+                conn.metaapi_connected = False
+
+        connected_count = conn.connected_account_count
+        log.info(
+            f"MetaApi connection complete for user {user_id[:8]}",
+            connected=connected_count,
+            total=len(mt_accounts),
+        )
+
+    async def _connect_single_account(self, user_id: str, mt_account: MTAccount):
+        """Connect a single MT account and store in account_executors.
+
+        Args:
+            user_id: User UUID.
+            mt_account: MTAccount to connect.
+        """
+        conn = self._connections.get(user_id)
+        if not conn:
+            return
+
+        if not mt_account.metaapi_account_id:
+            log.warning(
+                f"No MetaAPI ID for account '{mt_account.account_alias}'",
+                user_id=user_id[:8],
+            )
+            return
 
         try:
             # Import here to avoid circular imports
@@ -331,31 +434,56 @@ class UserConnectionManager:
                     symbol_suffix=conn.settings.symbol_suffix or "",
                     split_tps=conn.settings.split_tps if conn.settings.split_tps is not None else True,
                     tp_ratios=conn.settings.tp_split_ratios or [0.5, 0.3, 0.2],
-                    tp_lot_mode=conn.settings.tp_lot_mode or "split",  # "split" or "equal"
+                    tp_lot_mode=conn.settings.tp_lot_mode or "split",
                     gold_market_threshold=conn.settings.gold_market_threshold or 3.0,
                     max_lot_size=conn.settings.max_lot_size or 0.1,
                     default_lot_size=conn.settings.lot_reference_size_default or 0.01,
                 )
 
-            # Create user-specific executor
-            # Uses owner's MetaApi token by default (passed as None)
+            # Create executor for this account
             executor = TradeExecutor(
                 user_id=user_id,
-                account_id=conn.credentials.metaapi_account_id,
+                account_id=mt_account.metaapi_account_id,
                 api_token=None,  # Uses owner's token from settings
                 executor_settings=executor_settings,
             )
 
-            log.info(f"Awaiting MetaApi connection for user {user_id[:8]}...")
-            await executor.connect()
-            conn.metaapi_executor = executor
-            conn.metaapi_connected = True
+            log.info(
+                f"Connecting account '{mt_account.account_alias}'",
+                user_id=user_id[:8],
+                metaapi_id=mt_account.metaapi_account_id[:8],
+            )
 
-            log.info("MetaApi connected successfully for user", user_id=user_id[:8])
+            await executor.connect()
+
+            # Store in account_executors dict
+            account_executor = AccountExecutor(
+                account_id=mt_account.id,
+                metaapi_account_id=mt_account.metaapi_account_id,
+                account_alias=mt_account.account_alias,
+                executor=executor,
+                is_primary=mt_account.is_primary,
+                is_connected=True,
+            )
+            conn.account_executors[mt_account.id] = account_executor
+
+            # Update connection status in database
+            set_account_connected(mt_account.id, True)
+
+            log.info(
+                f"Account '{mt_account.account_alias}' connected",
+                user_id=user_id[:8],
+                is_primary=mt_account.is_primary,
+            )
 
         except Exception as e:
-            log.error("Failed to connect MetaApi for user", user_id=user_id[:8], error=str(e), exc_info=True)
-            conn.metaapi_connected = False
+            log.error(
+                f"Failed to connect account '{mt_account.account_alias}'",
+                user_id=user_id[:8],
+                error=str(e),
+            )
+            # Update connection status in database
+            set_account_connected(mt_account.id, False)
 
     def get_connection(self, user_id: str) -> Optional[UserConnection]:
         """Get user connection object.
@@ -369,7 +497,9 @@ class UserConnectionManager:
         return self._connections.get(user_id)
 
     def get_executor(self, user_id: str) -> Optional[object]:
-        """Get MetaApi executor for user.
+        """Get primary MetaApi executor for user.
+
+        Kept for backward compatibility - returns the primary account's executor.
 
         Args:
             user_id: User UUID.
@@ -379,6 +509,27 @@ class UserConnectionManager:
         """
         conn = self._connections.get(user_id)
         return conn.metaapi_executor if conn else None
+
+    def get_all_executors(self, user_id: str) -> List[AccountExecutor]:
+        """Get all connected MT account executors for a user.
+
+        Returns executors for all active, connected MT accounts.
+        Used for multi-account trade execution.
+
+        Args:
+            user_id: User UUID.
+
+        Returns:
+            List of AccountExecutor objects.
+        """
+        conn = self._connections.get(user_id)
+        if not conn:
+            return []
+
+        return [
+            ae for ae in conn.account_executors.values()
+            if ae.is_connected
+        ]
 
     def get_telegram_listener(self, user_id: str) -> Optional[object]:
         """Get Telegram listener for user.
@@ -395,8 +546,8 @@ class UserConnectionManager:
     async def reload_user_settings(self, user_id: str) -> bool:
         """Reload settings for a connected user.
 
-        Also updates the MetaAPI executor's cached settings so changes
-        take effect immediately without requiring reconnection.
+        Also updates the settings on ALL connected MT account executors
+        so changes take effect immediately without requiring reconnection.
 
         Args:
             user_id: User UUID.
@@ -412,21 +563,30 @@ class UserConnectionManager:
         if settings:
             conn.settings = settings
 
-            # Also update executor's cached settings if connected
-            if conn.metaapi_executor and conn.metaapi_executor._settings:
-                from ..trading.executor import ExecutorSettings
-                conn.metaapi_executor._settings = ExecutorSettings(
-                    symbol_suffix=settings.symbol_suffix or "",
-                    split_tps=settings.split_tps if settings.split_tps is not None else True,
-                    tp_ratios=settings.tp_split_ratios or [0.5, 0.3, 0.2],
-                    tp_lot_mode=settings.tp_lot_mode or "split",
-                    gold_market_threshold=settings.gold_market_threshold or 3.0,
-                    max_lot_size=settings.max_lot_size or 0.1,
-                    default_lot_size=settings.lot_reference_size_default or 0.01,
-                )
-                log.info("Executor settings also updated", user_id=user_id[:8])
+            # Build updated executor settings
+            from ..trading.executor import ExecutorSettings
+            new_executor_settings = ExecutorSettings(
+                symbol_suffix=settings.symbol_suffix or "",
+                split_tps=settings.split_tps if settings.split_tps is not None else True,
+                tp_ratios=settings.tp_split_ratios or [0.5, 0.3, 0.2],
+                tp_lot_mode=settings.tp_lot_mode or "split",
+                gold_market_threshold=settings.gold_market_threshold or 3.0,
+                max_lot_size=settings.max_lot_size or 0.1,
+                default_lot_size=settings.lot_reference_size_default or 0.01,
+            )
 
-            log.info("User settings reloaded", user_id=user_id)
+            # Update settings on ALL connected executors
+            updated_count = 0
+            for account_executor in conn.account_executors.values():
+                if account_executor.executor and account_executor.executor._settings:
+                    account_executor.executor._settings = new_executor_settings
+                    updated_count += 1
+
+            log.info(
+                "User settings reloaded",
+                user_id=user_id[:8],
+                executors_updated=updated_count,
+            )
             return True
 
         return False
@@ -537,6 +697,7 @@ class UserConnectionManager:
 
         This detects when positions have closed on MetaAPI and updates
         the database with profit/loss data for accurate win rate calculation.
+        Syncs across ALL connected MT accounts per user.
         """
         SYNC_INTERVAL = 30  # Sync every 30 seconds
 
@@ -547,12 +708,13 @@ class UserConnectionManager:
                 if not self._connections:
                     continue
 
-                # Sync trades for all active users with MetaAPI connection
+                # Sync trades for all active users with any connected MT accounts
                 for user_id, conn in list(self._connections.items()):
-                    if not conn.is_active or not conn.metaapi_connected:
+                    if not conn.is_active:
                         continue
 
-                    if not conn.metaapi_executor or not conn.metaapi_executor.connection:
+                    # Check if any accounts are connected
+                    if conn.connected_account_count == 0:
                         continue
 
                     try:
@@ -571,19 +733,46 @@ class UserConnectionManager:
         log.info("Trade sync loop stopped")
 
     async def _sync_closed_trades_for_user(self, user_id: str, conn: UserConnection):
-        """Sync closed trades for a specific user.
+        """Sync closed trades for a specific user across all MT accounts.
 
-        Compares database trades with live MetaAPI positions and marks
-        trades as closed when their positions no longer exist.
+        Iterates over all connected account executors and compares
+        database trades with live MetaAPI positions, marking trades
+        as closed when their positions no longer exist.
 
         Args:
             user_id: User UUID.
             conn: User's connection object.
         """
-        executor = conn.metaapi_executor
-        if not executor:
-            return
+        # Sync each connected account
+        for account_id, account_executor in conn.account_executors.items():
+            if not account_executor.is_connected or not account_executor.executor:
+                continue
 
+            try:
+                await self._sync_closed_trades_for_account(
+                    user_id=user_id,
+                    account_id=account_id,
+                    account_alias=account_executor.account_alias,
+                    executor=account_executor.executor,
+                )
+            except Exception as e:
+                log.error(
+                    f"Trade sync failed for account '{account_executor.account_alias}'",
+                    user_id=user_id[:8],
+                    error=str(e),
+                )
+
+    async def _sync_closed_trades_for_account(
+        self, user_id: str, account_id: str, account_alias: str, executor
+    ):
+        """Sync closed trades for a specific MT account.
+
+        Args:
+            user_id: User UUID.
+            account_id: MT account UUID (user_mt_accounts.id).
+            account_alias: Account display name for logging.
+            executor: TradeExecutor for this account.
+        """
         try:
             # Get current live positions from MetaAPI
             account_info = await executor.get_account_info()
@@ -596,8 +785,11 @@ class UserConnectionManager:
                 if pos_id:
                     live_position_ids.add(pos_id)
 
-            # Get all "open" or "pending" trades from database for this user
-            db_trades = await crud.get_open_trades_for_sync(user_id=user_id)
+            # Get trades for this specific account
+            db_trades = await crud.get_open_trades_for_sync(
+                user_id=user_id,
+                mt_account_id=account_id,
+            )
 
             if not db_trades:
                 return
@@ -615,13 +807,15 @@ class UserConnectionManager:
 
             if closed_count > 0:
                 log.info(
-                    f"Synced {closed_count} closed trades for user {user_id[:8]}",
-                    closed_count=closed_count,
+                    f"Synced {closed_count} closed trades for account '{account_alias}'",
+                    user_id=user_id[:8],
+                    account_id=account_id[:8],
                 )
 
         except Exception as e:
             log.error(
-                f"Failed to sync trades for user {user_id[:8]}",
+                f"Failed to sync trades for account '{account_alias}'",
+                user_id=user_id[:8],
                 error=str(e),
             )
 
