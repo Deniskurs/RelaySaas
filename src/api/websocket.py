@@ -91,6 +91,7 @@ def setup_websocket_events():
         Events.ACCOUNT_UPDATED,
         Events.ERROR,
         Events.SYSTEM_STATUS,
+        Events.PROVISIONING_PROGRESS,
     ]
 
     for event in event_types:

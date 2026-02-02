@@ -20,10 +20,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApi } from "@/hooks/useApi";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useConditionalPolling } from "@/hooks/useVisibilityPolling";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -232,12 +235,19 @@ function AccountCard({
 }
 
 function AddAccountDialog({ open, onOpenChange, onAccountAdded }) {
+  const { user } = useAuth();
   const { postData, fetchData } = useApi();
+
+  // WebSocket for real-time progress updates
+  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+  const { lastMessage } = useWebSocket(wsUrl);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [suggestedServers, setSuggestedServers] = useState([]);
   const [provisioningStatus, setProvisioningStatus] = useState("idle");
   const [provisioningMessage, setProvisioningMessage] = useState("");
+  const [provisioningProgress, setProvisioningProgress] = useState(0);
   const [newAccountId, setNewAccountId] = useState(null);
   const [metaapiAccountId, setMetaapiAccountId] = useState(null);
   const hasReloadedRef = useRef(false);
@@ -251,7 +261,32 @@ function AddAccountDialog({ open, onOpenChange, onAccountAdded }) {
     broker_keywords: "",
   });
 
-  // Poll for deployment status
+  // Listen for WebSocket progress events
+  useEffect(() => {
+    if (lastMessage && lastMessage.type === "provisioning.progress") {
+      const data = lastMessage.data;
+      // Only process events for the current user
+      if (data.user_id === user?.id) {
+        setProvisioningMessage(data.message);
+        setProvisioningProgress(data.progress || 0);
+
+        if (data.status === "complete") {
+          setProvisioningStatus("deployed");
+          hasReloadedRef.current = true;
+          setTimeout(() => {
+            onOpenChange(false);
+            onAccountAdded();
+          }, 1500);
+        } else if (data.status === "error") {
+          setProvisioningStatus("error");
+          setError(data.message);
+          setIsSubmitting(false);
+        }
+      }
+    }
+  }, [lastMessage, user?.id, onOpenChange, onAccountAdded]);
+
+  // Fallback polling for deployment status (in case WebSocket misses events)
   const checkDeploymentStatus = useCallback(async () => {
     if (!metaapiAccountId || hasReloadedRef.current) return;
 
@@ -264,31 +299,32 @@ function AddAccountDialog({ open, onOpenChange, onAccountAdded }) {
         ) {
           setProvisioningStatus("deployed");
           setProvisioningMessage("Account connected successfully!");
+          setProvisioningProgress(100);
           hasReloadedRef.current = true;
           setTimeout(() => {
             onOpenChange(false);
             onAccountAdded();
           }, 1500);
         } else if (result.state === "DEPLOYED") {
-          setProvisioningMessage(
-            `Account deployed. Connecting to broker... (${
-              result.connection_status || "waiting"
-            })`
-          );
-        } else {
-          setProvisioningMessage(
-            `Setting up your account... (${result.state || "initializing"})`
-          );
+          // Only update if not already getting WebSocket updates
+          if (provisioningProgress < 80) {
+            setProvisioningMessage(
+              `Account deployed. Connecting to broker... (${
+                result.connection_status || "waiting"
+              })`
+            );
+            setProvisioningProgress(80);
+          }
         }
       }
     } catch (e) {
       console.error("Error polling status:", e);
     }
-  }, [metaapiAccountId, newAccountId, fetchData, onOpenChange, onAccountAdded]);
+  }, [metaapiAccountId, newAccountId, fetchData, onOpenChange, onAccountAdded, provisioningProgress]);
 
   useConditionalPolling(
     checkDeploymentStatus,
-    3000,
+    5000, // Poll less frequently since we have WebSocket
     provisioningStatus === "provisioning" && metaapiAccountId != null,
     { runOnMount: true }
   );
@@ -315,7 +351,8 @@ function AddAccountDialog({ open, onOpenChange, onAccountAdded }) {
 
     setIsSubmitting(true);
     setProvisioningStatus("provisioning");
-    setProvisioningMessage("Creating your trading account connection...");
+    setProvisioningMessage("Validating credentials...");
+    setProvisioningProgress(5);
 
     try {
       const result = await postData("/mt-accounts", {
@@ -370,6 +407,7 @@ function AddAccountDialog({ open, onOpenChange, onAccountAdded }) {
   const handleRetry = () => {
     setProvisioningStatus("idle");
     setProvisioningMessage("");
+    setProvisioningProgress(0);
     setError("");
     setNewAccountId(null);
     setMetaapiAccountId(null);
@@ -395,6 +433,7 @@ function AddAccountDialog({ open, onOpenChange, onAccountAdded }) {
       setSuggestedServers([]);
       setProvisioningStatus("idle");
       setProvisioningMessage("");
+      setProvisioningProgress(0);
       setNewAccountId(null);
       setMetaapiAccountId(null);
       hasReloadedRef.current = false;
@@ -437,6 +476,15 @@ function AddAccountDialog({ open, onOpenChange, onAccountAdded }) {
                 {provisioningMessage}
               </p>
             </div>
+            {/* Progress bar */}
+            {provisioningStatus === "provisioning" && (
+              <div className="w-full space-y-1.5">
+                <Progress value={provisioningProgress} className="h-1.5" />
+                <p className="text-[10px] text-foreground-muted/60">
+                  {provisioningProgress}% complete
+                </p>
+              </div>
+            )}
             {provisioningStatus === "provisioning" && (
               <p className="text-xs text-foreground-muted/70">
                 This usually takes 30-60 seconds...

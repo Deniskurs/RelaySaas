@@ -80,6 +80,9 @@ class Events:
     ERROR = "error"
     SYSTEM_STATUS = "system.status"
 
+    # Provisioning events (for onboarding/account setup progress)
+    PROVISIONING_PROGRESS = "provisioning.progress"
+
 
 # Global event bus instance
 event_bus = EventBus()

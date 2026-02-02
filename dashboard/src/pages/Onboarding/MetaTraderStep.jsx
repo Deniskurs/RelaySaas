@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApi } from "@/hooks/useApi";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Loader2,
   AlertCircle,
@@ -77,6 +79,10 @@ export default function MetaTraderStep({ onComplete, onSkip }) {
   const { user, session } = useAuth();
   const { postData, fetchData } = useApi();
 
+  // WebSocket for real-time progress updates
+  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+  const { lastMessage } = useWebSocket(wsUrl);
+
   // Form state
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -89,10 +95,33 @@ export default function MetaTraderStep({ onComplete, onSkip }) {
   const [error, setError] = useState("");
   const [provisioningStatus, setProvisioningStatus] = useState(null); // null, 'provisioning', 'deployed', 'error'
   const [provisioningMessage, setProvisioningMessage] = useState("");
+  const [provisioningProgress, setProvisioningProgress] = useState(0);
   const [accountId, setAccountId] = useState(null);
   const [suggestedServers, setSuggestedServers] = useState([]);
 
-  // Poll for account deployment status
+  // Listen for WebSocket progress events
+  useEffect(() => {
+    if (lastMessage && lastMessage.type === "provisioning.progress") {
+      const data = lastMessage.data;
+      // Only process events for the current user
+      if (data.user_id === user?.id) {
+        setProvisioningMessage(data.message);
+        setProvisioningProgress(data.progress || 0);
+
+        if (data.status === "complete") {
+          setProvisioningStatus("deployed");
+          // Auto-proceed after brief delay
+          setTimeout(() => onComplete(), 1500);
+        } else if (data.status === "error") {
+          setProvisioningStatus("error");
+          setError(data.message);
+          setIsLoading(false);
+        }
+      }
+    }
+  }, [lastMessage, user?.id, onComplete]);
+
+  // Fallback polling for account deployment status (in case WebSocket misses events)
   useEffect(() => {
     if (provisioningStatus === "provisioning" && accountId) {
       const pollInterval = setInterval(async () => {
@@ -102,23 +131,26 @@ export default function MetaTraderStep({ onComplete, onSkip }) {
             if (result.state === "DEPLOYED" && result.connection_status === "CONNECTED") {
               setProvisioningStatus("deployed");
               setProvisioningMessage("Account connected successfully!");
+              setProvisioningProgress(100);
               clearInterval(pollInterval);
               // Auto-proceed after brief delay
               setTimeout(() => onComplete(), 1500);
             } else if (result.state === "DEPLOYED") {
-              setProvisioningMessage(`Account deployed. Connecting to broker... (${result.connection_status || "waiting"})`);
-            } else {
-              setProvisioningMessage(`Setting up your account... (${result.state || "initializing"})`);
+              // Only update if not already getting WebSocket updates
+              if (provisioningProgress < 80) {
+                setProvisioningMessage(`Account deployed. Connecting to broker... (${result.connection_status || "waiting"})`);
+                setProvisioningProgress(80);
+              }
             }
           }
         } catch (e) {
           console.error("Error polling status:", e);
         }
-      }, 3000);
+      }, 5000); // Poll less frequently since we have WebSocket
 
       return () => clearInterval(pollInterval);
     }
-  }, [provisioningStatus, accountId, fetchData, onComplete]);
+  }, [provisioningStatus, accountId, fetchData, onComplete, provisioningProgress]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -138,7 +170,8 @@ export default function MetaTraderStep({ onComplete, onSkip }) {
 
     setIsLoading(true);
     setProvisioningStatus("provisioning");
-    setProvisioningMessage("Creating your trading account connection...");
+    setProvisioningMessage("Validating credentials...");
+    setProvisioningProgress(5);
 
     try {
       const result = await postData("/onboarding/metatrader", {
@@ -184,6 +217,7 @@ export default function MetaTraderStep({ onComplete, onSkip }) {
   const handleRetry = () => {
     setProvisioningStatus(null);
     setProvisioningMessage("");
+    setProvisioningProgress(0);
     setError("");
     setAccountId(null);
   };
@@ -212,6 +246,16 @@ export default function MetaTraderStep({ onComplete, onSkip }) {
               {provisioningMessage}
             </p>
           </div>
+
+          {/* Progress bar */}
+          {provisioningStatus === "provisioning" && (
+            <div className="w-full max-w-md mx-auto space-y-2">
+              <Progress value={provisioningProgress} className="h-2" />
+              <p className="text-xs text-foreground-muted">
+                {provisioningProgress}% complete
+              </p>
+            </div>
+          )}
 
           {provisioningStatus === "provisioning" && (
             <p className="text-xs md:text-sm text-foreground-muted leading-relaxed">

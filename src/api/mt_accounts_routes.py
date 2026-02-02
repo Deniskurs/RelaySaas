@@ -551,6 +551,27 @@ async def reconnect_account(
         }
 
 
+async def _emit_progress(user_id: str, step: str, message: str, progress: int, status: str = "in_progress"):
+    """Emit a provisioning progress event via WebSocket.
+
+    Args:
+        user_id: User ID for targeting the right client.
+        step: Current step identifier (e.g., "creating", "deploying", "connecting").
+        message: Human-readable progress message.
+        progress: Progress percentage (0-100).
+        status: Status of the provisioning ("in_progress", "complete", "error").
+    """
+    from ..utils.events import event_bus, Events
+
+    await event_bus.emit(Events.PROVISIONING_PROGRESS, {
+        "user_id": user_id,
+        "step": step,
+        "message": message,
+        "progress": progress,
+        "status": status,
+    })
+
+
 async def _provision_metaapi_account(
     user_id: str,
     login: str,
@@ -563,15 +584,20 @@ async def _provision_metaapi_account(
     """Provision a MetaApi account with proper deployment and error handling.
 
     This creates the account in MetaAPI, deploys it, and waits for it to be ready.
+    Emits progress events via WebSocket for frontend to display.
     Based on MetaAPI documentation best practices.
     """
     import asyncio
     import httpx
 
+    # Emit initial progress
+    await _emit_progress(user_id, "validating", "Validating credentials...", 5)
+
     system_config = get_system_config()
     metaapi_token = system_config.get("metaapi_token") or os.getenv("METAAPI_TOKEN")
 
     if not metaapi_token:
+        await _emit_progress(user_id, "error", "MetaAPI not configured", 0, "error")
         return {
             "success": False,
             "message": "MetaAPI is not configured. Please contact support.",
@@ -616,15 +642,19 @@ async def _provision_metaapi_account(
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             # Step 1: Create the account
+            await _emit_progress(user_id, "creating", "Creating trading account...", 15)
+
             response = await client.post(api_url, json=payload, headers=headers)
 
             # Handle async operation (202 means processing)
             if response.status_code == 202:
                 log.info("MetaAPI returned 202, polling for completion...")
+                await _emit_progress(user_id, "creating", "Verifying broker connection...", 25)
                 result = await _poll_account_creation(
                     client, base_url, headers, transaction_id, user_id
                 )
                 if not result["success"]:
+                    await _emit_progress(user_id, "error", result.get("message", "Failed"), 0, "error")
                     return result
                 account_id = result["account_id"]
             elif response.status_code in [200, 201]:
@@ -632,13 +662,20 @@ async def _provision_metaapi_account(
                 account_id = data.get("id")
                 log.info(f"Account created: {account_id}")
             else:
-                return _handle_provisioning_error(response, server)
+                error_result = _handle_provisioning_error(response, server)
+                await _emit_progress(user_id, "error", error_result.get("message", "Failed"), 0, "error")
+                return error_result
 
             if not account_id:
+                await _emit_progress(user_id, "error", "No account ID returned", 0, "error")
                 return {"success": False, "message": "No account ID returned from MetaAPI"}
+
+            await _emit_progress(user_id, "created", "Account created successfully", 40)
 
             # Step 2: Deploy the account (start the API server)
             log.info(f"Deploying account {account_id[:8]}...")
+            await _emit_progress(user_id, "deploying", "Starting trading server...", 50)
+
             deploy_url = f"{base_url}/users/current/accounts/{account_id}/deploy"
             deploy_response = await client.post(deploy_url, headers=headers)
 
@@ -649,8 +686,10 @@ async def _provision_metaapi_account(
 
             # Step 3: Wait for DEPLOYED state (poll with exponential backoff)
             log.info(f"Waiting for account to reach DEPLOYED state...")
+            await _emit_progress(user_id, "deploying", "Waiting for server to be ready...", 60)
+
             deployed = await _wait_for_deployed_state(
-                client, base_url, headers, account_id, max_wait_seconds=120
+                client, base_url, headers, account_id, user_id, max_wait_seconds=120
             )
 
             if not deployed:
@@ -658,6 +697,9 @@ async def _provision_metaapi_account(
                     "Account not fully deployed yet, but creation succeeded. "
                     "Connection will be established when the account is ready."
                 )
+                await _emit_progress(user_id, "pending", "Account created. Connection finalizing...", 85, "complete")
+            else:
+                await _emit_progress(user_id, "complete", "Account ready!", 100, "complete")
 
             return {
                 "success": True,
@@ -667,15 +709,18 @@ async def _provision_metaapi_account(
 
     except httpx.TimeoutException as e:
         log.error("MetaAPI timeout during provisioning", error=str(e))
+        await _emit_progress(user_id, "error", "Connection timed out. Please try again.", 0, "error")
         return {
             "success": False,
             "message": "Connection to MetaAPI timed out. The broker may be slow to respond. Please try again.",
         }
     except httpx.RequestError as e:
         log.error("MetaAPI request error", error=str(e))
+        await _emit_progress(user_id, "error", f"Network error: {str(e)}", 0, "error")
         return {"success": False, "message": f"Network error: {str(e)}"}
     except Exception as e:
         log.error("MetaAPI unexpected error", error=str(e), exc_info=True)
+        await _emit_progress(user_id, "error", str(e), 0, "error")
         return {"success": False, "message": str(e)}
 
 
@@ -831,9 +876,12 @@ async def _wait_for_deployed_state(
     base_url: str,
     headers: Dict[str, str],
     account_id: str,
+    user_id: str = None,
     max_wait_seconds: int = 120,
 ) -> bool:
     """Wait for an account to reach DEPLOYED state.
+
+    Emits progress updates via WebSocket as deployment progresses.
 
     Returns True if deployed successfully, False if timeout.
     """
@@ -844,6 +892,7 @@ async def _wait_for_deployed_state(
 
     start_time = asyncio.get_event_loop().time()
     poll_interval = 5  # Check every 5 seconds
+    check_count = 0
 
     while (asyncio.get_event_loop().time() - start_time) < max_wait_seconds:
         try:
@@ -858,11 +907,25 @@ async def _wait_for_deployed_state(
                     f"Account state: {state}, connection: {connection_status}"
                 )
 
+                # Emit progress updates with incrementing percentage
+                check_count += 1
+                progress = min(60 + (check_count * 3), 95)  # 60% to 95%
+
+                if user_id:
+                    if state == "DEPLOYING":
+                        await _emit_progress(user_id, "deploying", f"Server starting... ({state})", progress)
+                    elif connection_status == "CONNECTING":
+                        await _emit_progress(user_id, "connecting", "Connecting to broker...", progress)
+                    elif state == "DEPLOYED" and connection_status == "CONNECTED":
+                        await _emit_progress(user_id, "connected", "Connected to broker!", 98)
+
                 if state == "DEPLOYED":
                     return True
 
                 if state in ["DEPLOY_FAILED", "DELETE_FAILED"]:
                     log.error(f"Account deployment failed with state: {state}")
+                    if user_id:
+                        await _emit_progress(user_id, "error", f"Deployment failed: {state}", 0, "error")
                     return False
 
         except Exception as e:
