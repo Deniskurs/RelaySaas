@@ -14,7 +14,8 @@ MAX_RECONNECT_ATTEMPTS = 10
 INITIAL_RECONNECT_DELAY = 5  # seconds
 MAX_RECONNECT_DELAY = 300   # 5 minutes max backoff
 HEALTH_CHECK_INTERVAL = 60  # Check connection health every 60 seconds
-STALE_CONNECTION_THRESHOLD = 180  # Force reconnect if no activity for 3 minutes
+STALE_CONNECTION_THRESHOLD = 300  # Log warning if no messages for 5 minutes
+FORCE_RECONNECT_THRESHOLD = 600   # Force reconnect if no messages for 10 minutes (channels may be quiet)
 
 
 class TelegramListener:
@@ -66,6 +67,7 @@ class TelegramListener:
         self._health_task: Optional[asyncio.Task] = None
         self._should_stop = False  # Flag to stop the reconnect loop
         self._session_lock = asyncio.Lock()  # Prevent concurrent session writes
+        self._force_reconnect_requested = False  # External trigger for forced reconnect
 
     def _create_client(self) -> TelegramClient:
         """Create Telegram client based on mode."""
@@ -176,10 +178,23 @@ class TelegramListener:
     async def _connect_and_listen(self, user_tag: str):
         """Internal method to connect and start listening."""
         self.client = self._create_client()
-        
+
         log.info(f"{user_tag}Starting Telegram client...")
-        await self.client.start(phone=self._get_phone())
-        
+
+        # Add timeout to client.start() to prevent indefinite blocking
+        # This can block waiting for verification codes which shouldn't happen
+        # if we have a valid session
+        try:
+            await asyncio.wait_for(
+                self.client.start(phone=self._get_phone()),
+                timeout=60.0  # 60 seconds should be plenty for session-based auth
+            )
+        except asyncio.TimeoutError:
+            log.error(f"{user_tag}Telegram client.start() timed out - session may be invalid")
+            if self.client:
+                await self.client.disconnect()
+            raise RuntimeError("Telegram connection timed out - session may need re-verification")
+
         self._is_connected = True
         self._is_reconnecting = False
         self._reconnect_attempts = 0
@@ -431,16 +446,26 @@ class TelegramListener:
         """Background task to monitor connection health.
 
         Periodically pings Telegram to verify the connection is actually working,
-        not just appearing connected. Forces reconnection if connection is stale.
+        not just appearing connected. Forces reconnection if connection is stale
+        or if a force reconnect was requested externally.
 
-        IMPORTANT: This checks CONNECTION health, not message reception.
-        A connection can be healthy but event handlers might not fire.
+        Handles two scenarios:
+        1. Connection failures (ping timeout) - immediate reconnect
+        2. Stale connection (no messages for extended period) - proactive reconnect
         """
         while self._is_connected:
             try:
                 await asyncio.sleep(HEALTH_CHECK_INTERVAL)
 
                 if not self._is_connected or not self.client:
+                    break
+
+                # Check if external force reconnect was requested
+                if self._force_reconnect_requested:
+                    log.warning(f"{user_tag}🔄 Force reconnect requested - disconnecting")
+                    self._force_reconnect_requested = False
+                    if self.client:
+                        await self.client.disconnect()
                     break
 
                 now = datetime.utcnow()
@@ -481,13 +506,21 @@ class TelegramListener:
                         await self.client.disconnect()
                     break
 
-                # IMPORTANT: Don't use "no messages" as a reason to reconnect
-                # Channels might just be quiet. Only reconnect on actual connection failures.
-                # Log a notice if it's been a while since any message
+                # Log warning if connection seems quiet
                 if time_since_message > STALE_CONNECTION_THRESHOLD:
-                    log.info(
+                    log.warning(
                         f"{user_tag}⚠️ No messages in {int(time_since_message)}s (connection OK, channels may be quiet)",
                     )
+
+                # Force reconnect if no messages for extended period
+                # This handles "zombie" connections that appear healthy but aren't receiving events
+                if time_since_message > FORCE_RECONNECT_THRESHOLD:
+                    log.warning(
+                        f"{user_tag}🔄 No messages for {int(time_since_message)}s - forcing reconnect",
+                    )
+                    if self.client:
+                        await self.client.disconnect()
+                    break
 
             except asyncio.CancelledError:
                 break
@@ -496,6 +529,19 @@ class TelegramListener:
                 break
 
         log.debug(f"{user_tag}Health check loop ended")
+
+    def request_reconnect(self):
+        """Request a forced reconnection.
+
+        This can be called externally (e.g., from watchdog or API) to trigger
+        a reconnection cycle. The health check loop will pick this up and
+        initiate the reconnection process.
+
+        Use this when connection appears healthy but messages aren't being received.
+        """
+        user_tag = f"[user:{self.user_id[:8]}] " if self.user_id else ""
+        log.info(f"{user_tag}🔄 Reconnect requested externally")
+        self._force_reconnect_requested = True
 
     async def stop(self):
         """Stop the Telegram listener with proper cleanup.

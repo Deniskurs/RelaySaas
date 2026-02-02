@@ -579,6 +579,31 @@ class UserConnectionManager:
         conn = self._connections.get(user_id)
         return conn.telegram_listener if conn else None
 
+    def request_telegram_reconnect(self, user_id: str) -> bool:
+        """Request a Telegram reconnection for a user.
+
+        This triggers the listener's internal reconnect mechanism, which will
+        gracefully disconnect and reconnect. Use this when the connection
+        appears to be stale or not receiving messages.
+
+        Args:
+            user_id: User UUID.
+
+        Returns:
+            True if reconnect was requested, False if no listener found.
+        """
+        conn = self._connections.get(user_id)
+        if not conn or not conn.telegram_listener:
+            log.warning(f"Cannot request reconnect - no listener for {user_id[:8]}")
+            return False
+
+        if hasattr(conn.telegram_listener, 'request_reconnect'):
+            conn.telegram_listener.request_reconnect()
+            log.info(f"Telegram reconnect requested for user {user_id[:8]}")
+            return True
+
+        return False
+
     async def reload_user_settings(self, user_id: str) -> bool:
         """Reload settings for a connected user.
 
@@ -660,9 +685,13 @@ class UserConnectionManager:
         """Periodically monitor all connections and verify they're actually working.
 
         This helps detect "zombie" connections that appear connected but aren't
-        actually receiving messages.
+        actually receiving messages. Now with AUTO-RECOVERY for unhealthy connections.
         """
         WATCHDOG_INTERVAL = 30  # Check every 30 seconds
+        MAX_UNHEALTHY_CYCLES = 3  # Reconnect after 3 consecutive unhealthy checks
+
+        # Track consecutive unhealthy checks per user
+        unhealthy_counts: Dict[str, int] = {}
 
         while self._running:
             try:
@@ -677,6 +706,7 @@ class UserConnectionManager:
 
                 for user_id, conn in list(self._connections.items()):
                     if not conn.is_active:
+                        unhealthy_counts.pop(user_id, None)
                         continue
 
                     # Check Telegram listener health
@@ -707,8 +737,21 @@ class UserConnectionManager:
 
                     if telegram_healthy:
                         healthy += 1
+                        unhealthy_counts.pop(user_id, None)  # Reset counter
                     else:
                         unhealthy += 1
+                        unhealthy_counts[user_id] = unhealthy_counts.get(user_id, 0) + 1
+
+                        # Auto-recover if consistently unhealthy
+                        consecutive_unhealthy = unhealthy_counts[user_id]
+                        if consecutive_unhealthy >= MAX_UNHEALTHY_CYCLES:
+                            log.warning(
+                                f"🔄 AUTO-RECOVERY: Requesting reconnect for {user_id[:8]} after {consecutive_unhealthy} unhealthy cycles",
+                            )
+                            # Request reconnect via the listener's method
+                            if conn.telegram_listener and hasattr(conn.telegram_listener, 'request_reconnect'):
+                                conn.telegram_listener.request_reconnect()
+                            unhealthy_counts[user_id] = 0  # Reset after triggering
 
                 # Log summary
                 if unhealthy > 0:
