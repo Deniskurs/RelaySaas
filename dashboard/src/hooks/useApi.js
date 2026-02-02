@@ -98,6 +98,32 @@ export function useApi() {
     }
   }, []);
 
+  const patchData = useCallback(async (endpoint, data = {}) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "API request failed");
+      }
+      return await response.json();
+    } catch (e) {
+      setError(e.message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const deleteData = useCallback(async (endpoint) => {
     setLoading(true);
     setError(null);
@@ -122,5 +148,5 @@ export function useApi() {
     }
   }, []);
 
-  return { fetchData, postData, putData, deleteData, loading, error };
+  return { fetchData, postData, putData, patchData, deleteData, loading, error };
 }

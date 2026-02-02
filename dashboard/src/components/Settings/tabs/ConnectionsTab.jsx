@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import ConnectionStatusCard from "../ConnectionStatusCard";
 import { SettingRow, PasswordInput, ChannelTags, inputClass } from "../SettingsComponents";
 import { useTelegramReconnectCoordination } from "@/hooks/useTelegramReconnectCoordination";
+import MTAccountsManager from "../MTAccountsManager";
 
 function MetaTraderSection({
   mtCreds,
@@ -1112,7 +1113,7 @@ export default function ConnectionsTab({
         </CardContent>
       </Card>
 
-      {/* MetaTrader Section */}
+      {/* MetaTrader Accounts Section */}
       <Card className={cn(
         "bg-white/[0.02] border border-white/[0.06] rounded-lg overflow-hidden",
         "shadow-[0_1px_2px_rgba(0,0,0,0.1)]",
@@ -1121,16 +1122,11 @@ export default function ConnectionsTab({
       )}>
         <CardHeader className="pb-0 pt-6 px-8">
           <CardTitle className="text-[11px] font-semibold text-foreground-muted/70 uppercase tracking-widest">
-            MetaTrader
+            MetaTrader Accounts
           </CardTitle>
         </CardHeader>
         <CardContent className="px-8 pt-5 pb-8">
-          <MetaTraderSection
-            mtCreds={mtCreds}
-            onCredsChange={() => {}}
-            isLoading={isLoading}
-            defaultExpanded={!mtConnected}
-          />
+          <MTAccountsManager defaultExpanded={!mtConnected} />
         </CardContent>
       </Card>
     </div>
