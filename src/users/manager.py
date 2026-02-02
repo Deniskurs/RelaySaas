@@ -405,12 +405,20 @@ class UserConnectionManager:
             total=len(mt_accounts),
         )
 
-    async def _connect_single_account(self, user_id: str, mt_account: MTAccount):
+    async def _connect_single_account(
+        self,
+        user_id: str,
+        mt_account: MTAccount,
+        timeout_seconds: int = 180,
+        retry_count: int = 2,
+    ):
         """Connect a single MT account and store in account_executors.
 
         Args:
             user_id: User UUID.
             mt_account: MTAccount to connect.
+            timeout_seconds: Connection timeout per attempt.
+            retry_count: Number of retry attempts on failure.
         """
         conn = self._connections.get(user_id)
         if not conn:
@@ -423,67 +431,95 @@ class UserConnectionManager:
             )
             return
 
-        try:
-            # Import here to avoid circular imports
-            from ..trading.executor import TradeExecutor, ExecutorSettings
+        # Import here to avoid circular imports
+        from ..trading.executor import TradeExecutor, ExecutorSettings
 
-            # Build executor settings from user settings
-            executor_settings = ExecutorSettings()
-            if conn.settings:
-                executor_settings = ExecutorSettings(
-                    symbol_suffix=conn.settings.symbol_suffix or "",
-                    split_tps=conn.settings.split_tps if conn.settings.split_tps is not None else True,
-                    tp_ratios=conn.settings.tp_split_ratios or [0.5, 0.3, 0.2],
-                    tp_lot_mode=conn.settings.tp_lot_mode or "split",
-                    gold_market_threshold=conn.settings.gold_market_threshold or 3.0,
-                    max_lot_size=conn.settings.max_lot_size or 0.1,
-                    default_lot_size=conn.settings.lot_reference_size_default or 0.01,
+        # Build executor settings from user settings
+        executor_settings = ExecutorSettings()
+        if conn.settings:
+            executor_settings = ExecutorSettings(
+                symbol_suffix=conn.settings.symbol_suffix or "",
+                split_tps=conn.settings.split_tps if conn.settings.split_tps is not None else True,
+                tp_ratios=conn.settings.tp_split_ratios or [0.5, 0.3, 0.2],
+                tp_lot_mode=conn.settings.tp_lot_mode or "split",
+                gold_market_threshold=conn.settings.gold_market_threshold or 3.0,
+                max_lot_size=conn.settings.max_lot_size or 0.1,
+                default_lot_size=conn.settings.lot_reference_size_default or 0.01,
+            )
+
+        last_error = None
+
+        for attempt in range(retry_count + 1):
+            try:
+                # Create executor for this account
+                executor = TradeExecutor(
+                    user_id=user_id,
+                    account_id=mt_account.metaapi_account_id,
+                    api_token=None,  # Uses owner's token from settings
+                    executor_settings=executor_settings,
                 )
 
-            # Create executor for this account
-            executor = TradeExecutor(
-                user_id=user_id,
-                account_id=mt_account.metaapi_account_id,
-                api_token=None,  # Uses owner's token from settings
-                executor_settings=executor_settings,
-            )
+                if attempt > 0:
+                    log.info(
+                        f"Retry {attempt}/{retry_count} connecting account '{mt_account.account_alias}'",
+                        user_id=user_id[:8],
+                    )
+                    # Wait before retry with exponential backoff
+                    await asyncio.sleep(min(10 * attempt, 30))
+                else:
+                    log.info(
+                        f"Connecting account '{mt_account.account_alias}'",
+                        user_id=user_id[:8],
+                        metaapi_id=mt_account.metaapi_account_id[:8],
+                    )
 
-            log.info(
-                f"Connecting account '{mt_account.account_alias}'",
-                user_id=user_id[:8],
-                metaapi_id=mt_account.metaapi_account_id[:8],
-            )
+                await executor.connect(timeout_seconds=timeout_seconds)
 
-            await executor.connect()
+                # Store in account_executors dict
+                account_executor = AccountExecutor(
+                    account_id=mt_account.id,
+                    metaapi_account_id=mt_account.metaapi_account_id,
+                    account_alias=mt_account.account_alias,
+                    executor=executor,
+                    is_primary=mt_account.is_primary,
+                    is_connected=True,
+                )
+                conn.account_executors[mt_account.id] = account_executor
 
-            # Store in account_executors dict
-            account_executor = AccountExecutor(
-                account_id=mt_account.id,
-                metaapi_account_id=mt_account.metaapi_account_id,
-                account_alias=mt_account.account_alias,
-                executor=executor,
-                is_primary=mt_account.is_primary,
-                is_connected=True,
-            )
-            conn.account_executors[mt_account.id] = account_executor
+                # Update connection status in database
+                set_account_connected(mt_account.id, True)
 
-            # Update connection status in database
-            set_account_connected(mt_account.id, True)
+                log.info(
+                    f"Account '{mt_account.account_alias}' connected successfully",
+                    user_id=user_id[:8],
+                    is_primary=mt_account.is_primary,
+                    attempts=attempt + 1,
+                )
+                return  # Success - exit retry loop
 
-            log.info(
-                f"Account '{mt_account.account_alias}' connected",
-                user_id=user_id[:8],
-                is_primary=mt_account.is_primary,
-            )
+            except Exception as e:
+                last_error = str(e)
+                log.warning(
+                    f"Connection attempt {attempt + 1}/{retry_count + 1} failed for '{mt_account.account_alias}'",
+                    user_id=user_id[:8],
+                    error=last_error,
+                )
 
-        except Exception as e:
-            log.error(
-                f"Failed to connect account '{mt_account.account_alias}'",
-                user_id=user_id[:8],
-                error=str(e),
-            )
-            # Update connection status in database
-            set_account_connected(mt_account.id, False)
+                # Clean up failed executor
+                try:
+                    if 'executor' in locals() and executor:
+                        await executor.disconnect()
+                except Exception:
+                    pass
+
+        # All attempts failed
+        log.error(
+            f"Failed to connect account '{mt_account.account_alias}' after {retry_count + 1} attempts",
+            user_id=user_id[:8],
+            last_error=last_error,
+        )
+        # Update connection status in database
+        set_account_connected(mt_account.id, False)
 
     def get_connection(self, user_id: str) -> Optional[UserConnection]:
         """Get user connection object.

@@ -675,10 +675,12 @@ async def _provision_metaapi_account(
     """Provision a MetaApi account for the user with their credentials.
 
     Password is sent directly to MetaAPI and never stored locally.
+    Includes proper deployment and wait logic based on MetaAPI best practices.
 
     Returns:
         Dict with success, account_id, state, message, and optional suggested_servers
     """
+    import asyncio
     import httpx
 
     # Get MetaAPI token from system_config (admin setting)
@@ -691,8 +693,9 @@ async def _provision_metaapi_account(
             "message": "MetaAPI is not configured. Please contact support.",
         }
 
-    # MetaApi API endpoint for creating accounts
-    api_url = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts"
+    # MetaApi API base URL
+    base_url = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai"
+    api_url = f"{base_url}/users/current/accounts"
 
     # Generate unique transaction ID for this request
     transaction_id = str(uuid.uuid4()).replace("-", "")
@@ -720,207 +723,269 @@ async def _provision_metaapi_account(
     if broker_keywords:
         payload["keywords"] = broker_keywords
 
+    log.info(
+        "Provisioning MetaAPI account during onboarding",
+        user_id=user_id[:8],
+        login=login,
+        server=server,
+        transaction_id=transaction_id[:8],
+    )
+
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                api_url,
-                json=payload,
-                headers=headers,
-                timeout=60,  # Account creation can take time
-            )
+        async with httpx.AsyncClient(timeout=120) as client:
+            # Step 1: Create the account
+            response = await client.post(api_url, json=payload, headers=headers)
 
             # Handle 202 - async operation in progress
             if response.status_code == 202:
-                data = response.json()
-                message = data.get("message", "Account creation in progress")
-                retry_after = response.headers.get("Retry-After")
-
-                log.info(
-                    "MetaApi account creation pending",
-                    user_id=user_id,
-                    message=message,
-                    retry_after=retry_after,
+                log.info("MetaAPI returned 202, polling for completion...")
+                result = await _poll_account_creation(
+                    client, base_url, headers, transaction_id, user_id
                 )
-
-                # Poll for result using same transaction ID
-                return await _poll_account_creation(
-                    client, api_url, headers, user_id, transaction_id
-                )
-
-            # Handle success
-            if response.status_code in [200, 201]:
+                if not result["success"]:
+                    return result
+                account_id = result["account_id"]
+            elif response.status_code in [200, 201]:
                 data = response.json()
                 account_id = data.get("id")
-                state = data.get("state", "CREATED")
+                log.info(f"Account created: {account_id}")
+            else:
+                return _handle_provisioning_error(response, server)
 
-                log.info(
-                    "MetaApi account provisioned",
-                    user_id=user_id,
-                    account_id=account_id,
-                    state=state,
+            if not account_id:
+                return {"success": False, "message": "No account ID returned from MetaAPI"}
+
+            # Step 2: Deploy the account (start the API server)
+            log.info(f"Deploying account {account_id[:8]}...")
+            deploy_url = f"{base_url}/users/current/accounts/{account_id}/deploy"
+            deploy_response = await client.post(deploy_url, headers=headers)
+
+            if deploy_response.status_code not in [200, 204]:
+                log.warning(
+                    f"Deploy returned {deploy_response.status_code}, continuing anyway"
                 )
 
-                return {
-                    "success": True,
-                    "account_id": account_id,
-                    "state": state,
-                }
-
-            # Handle errors
-            if response.status_code == 400:
-                data = response.json()
-                error_code = data.get("details", {})
-                error_message = data.get("message", "")
-
-                # Check for specific error types
-                if isinstance(error_code, dict):
-                    code = error_code.get("code", "")
-
-                    # Server not found - suggest alternatives
-                    if code == "E_SRV_NOT_FOUND":
-                        servers_by_broker = error_code.get("serversByBrokers", {})
-                        suggested = []
-                        for broker, servers in servers_by_broker.items():
-                            suggested.extend(servers[:5])  # Limit suggestions
-
-                        return {
-                            "success": False,
-                            "message": f"Server '{server}' not found. Please check the server name.",
-                            "suggested_servers": suggested[:10],
-                        }
-
-                    # Authentication error
-                    if code == "E_AUTH":
-                        return {
-                            "success": False,
-                            "message": "Invalid login or password. Please verify your credentials and try again.",
-                        }
-
-                    # Resource slots error
-                    if code == "E_RESOURCE_SLOTS":
-                        recommended = error_code.get("recommendedResourceSlots", 2)
-                        return {
-                            "success": False,
-                            "message": f"Your broker requires additional resources. Please contact support.",
-                        }
-
-                    # No symbols error
-                    if code == "E_NO_SYMBOLS":
-                        return {
-                            "success": False,
-                            "message": "No trading symbols configured for this account. Please check with your broker.",
-                        }
-
-                    # OTP required
-                    if code == "ERR_OTP_REQUIRED":
-                        return {
-                            "success": False,
-                            "message": "One-time password is required. Please disable OTP in your MT mobile app and try again.",
-                        }
-
-                    # Password change required
-                    if code == "E_PASSWORD_CHANGE_REQUIRED":
-                        return {
-                            "success": False,
-                            "message": "Your broker requires a password change. Please change your password and try again.",
-                        }
-
-                    # Account disabled
-                    if code == "E_TRADING_ACCOUNT_DISABLED":
-                        return {
-                            "success": False,
-                            "message": "This trading account is disabled. Please contact your broker.",
-                        }
-
-                # Generic validation error
-                return {
-                    "success": False,
-                    "message": error_message or "Invalid account details. Please check and try again.",
-                }
-
-            # Other error
-            log.error(
-                "MetaApi account creation failed",
-                user_id=user_id,
-                status=response.status_code,
-                response=response.text,
+            # Step 3: Wait for DEPLOYED state (poll with exponential backoff)
+            log.info(f"Waiting for account to reach DEPLOYED state...")
+            deployed = await _wait_for_deployed_state(
+                client, base_url, headers, account_id, max_wait_seconds=120
             )
 
+            if not deployed:
+                log.warning(
+                    "Account not fully deployed yet, but creation succeeded. "
+                    "Connection will be established when the account is ready."
+                )
+
             return {
-                "success": False,
-                "message": "Failed to create account. Please try again later.",
+                "success": True,
+                "account_id": account_id,
+                "state": "DEPLOYED" if deployed else "DEPLOYING",
             }
 
-    except httpx.TimeoutException:
-        log.error("MetaApi request timeout", user_id=user_id)
+    except httpx.TimeoutException as e:
+        log.error("MetaAPI timeout during onboarding provisioning", error=str(e))
         return {
             "success": False,
-            "message": "Request timed out. Please try again.",
+            "message": "Connection to MetaAPI timed out. The broker may be slow to respond. Please try again.",
         }
+    except httpx.RequestError as e:
+        log.error("MetaAPI request error during onboarding", error=str(e))
+        return {"success": False, "message": f"Network error: {str(e)}"}
     except Exception as e:
-        log.error("MetaApi API error", user_id=user_id, error=str(e))
+        log.error("MetaAPI unexpected error during onboarding", error=str(e), exc_info=True)
+        return {"success": False, "message": str(e)}
+
+
+def _handle_provisioning_error(response, server: str) -> Dict[str, Any]:
+    """Handle MetaAPI provisioning error responses with user-friendly messages."""
+    try:
+        data = response.json()
+    except Exception:
         return {
             "success": False,
-            "message": f"An error occurred: {str(e)}",
+            "message": f"MetaAPI error (HTTP {response.status_code})",
         }
+
+    error_details = data.get("details", {})
+    error_message = data.get("message", "")
+
+    if isinstance(error_details, dict):
+        code = error_details.get("code", "")
+
+        # Server not found - suggest alternatives
+        if code == "E_SRV_NOT_FOUND":
+            servers_by_broker = error_details.get("serversByBrokers", {})
+            suggested = []
+            for broker, servers in servers_by_broker.items():
+                suggested.extend(servers[:5])
+            return {
+                "success": False,
+                "message": f"Server '{server}' not found. Please check the server name.",
+                "suggested_servers": suggested[:10],
+            }
+
+        # Authentication failed
+        if code == "E_AUTH":
+            return {
+                "success": False,
+                "message": "Invalid login or password. Please verify your credentials.",
+            }
+
+        # Broker settings detection in progress
+        if code == "E_SERVER_TIMEZONE":
+            return {
+                "success": False,
+                "message": "Broker settings detection in progress. Please try again in 60 seconds.",
+            }
+
+        # Resource slots issue
+        if code == "E_RESOURCE_SLOTS":
+            return {
+                "success": False,
+                "message": "This broker requires additional resources. Please contact support.",
+            }
+
+        # OTP required
+        if code == "ERR_OTP_REQUIRED":
+            return {
+                "success": False,
+                "message": "Your broker requires one-time password (OTP). Please disable OTP in your broker settings.",
+            }
+
+        # Password change required
+        if code == "E_PASSWORD_CHANGE_REQUIRED":
+            return {
+                "success": False,
+                "message": "Your broker requires a password change. Please update your password via the broker portal.",
+            }
+
+        # Account disabled
+        if code == "E_TRADING_ACCOUNT_DISABLED":
+            return {
+                "success": False,
+                "message": "This trading account has been disabled by your broker. Please contact your broker.",
+            }
+
+        # No symbols configured
+        if code == "E_NO_SYMBOLS":
+            return {
+                "success": False,
+                "message": "No trading symbols configured for this account. Please check account settings with your broker.",
+            }
+
+    log.warning(
+        "Unhandled MetaAPI error during onboarding",
+        status=response.status_code,
+        message=error_message,
+        details=error_details,
+    )
+
+    return {
+        "success": False,
+        "message": error_message or "Failed to create account. Please check your details and try again.",
+    }
 
 
 async def _poll_account_creation(
     client,
-    api_url: str,
+    base_url: str,
     headers: Dict[str, str],
-    user_id: str,
     transaction_id: str,
-    max_attempts: int = 10,
+    user_id: str,
+    max_attempts: int = 20,
 ) -> Dict[str, Any]:
-    """Poll for account creation completion when 202 is received."""
+    """Poll for account creation completion when MetaAPI returns 202.
+
+    Uses GET requests to check account status instead of POST with empty body.
+    """
     import asyncio
 
+    # Remove transaction-id from headers for GET requests
+    get_headers = {k: v for k, v in headers.items() if k != "transaction-id"}
+    accounts_url = f"{base_url}/users/current/accounts"
+
     for attempt in range(max_attempts):
-        await asyncio.sleep(6)  # Wait between polls
+        # Exponential backoff: 3s, 3s, 6s, 6s, 9s, 9s, 12s...
+        wait_time = min(3 + (attempt // 2) * 3, 15)
+        await asyncio.sleep(wait_time)
 
         try:
-            response = await client.post(
-                api_url,
-                json={},  # Empty body for polling
-                headers=headers,
+            # Query accounts to find the one we just created
+            response = await client.get(
+                accounts_url,
+                headers=get_headers,
+                params={"query": f"SignalCopier-{user_id[:8]}"},
                 timeout=30,
             )
 
-            if response.status_code in [200, 201]:
-                data = response.json()
-                account_id = data.get("id")
-                state = data.get("state", "CREATED")
+            if response.status_code == 200:
+                accounts = response.json()
+                # Find the most recently created account matching our prefix
+                for acc in accounts:
+                    if acc.get("name", "").startswith(f"SignalCopier-{user_id[:8]}"):
+                        account_id = acc.get("_id") or acc.get("id")
+                        if account_id:
+                            log.info(f"Found created account: {account_id}")
+                            return {
+                                "success": True,
+                                "account_id": account_id,
+                                "state": acc.get("state", "CREATED"),
+                            }
 
-                log.info(
-                    "MetaApi account created after polling",
-                    user_id=user_id,
-                    account_id=account_id,
-                    attempt=attempt + 1,
-                )
-
-                return {
-                    "success": True,
-                    "account_id": account_id,
-                    "state": state,
-                }
-
-            if response.status_code == 202:
-                # Still processing
-                continue
-
-            # Error occurred
-            data = response.json()
-            return {
-                "success": False,
-                "message": data.get("message", "Account creation failed"),
-            }
+            log.debug(f"Polling attempt {attempt + 1}/{max_attempts}...")
 
         except Exception as e:
-            log.error("Error polling account creation", error=str(e))
-            continue
+            log.warning(f"Polling attempt {attempt + 1} failed: {e}")
 
     return {
         "success": False,
-        "message": "Account creation timed out. Please try again.",
+        "message": "Account creation is taking longer than expected. Please check the Accounts page in a few minutes.",
     }
+
+
+async def _wait_for_deployed_state(
+    client,
+    base_url: str,
+    headers: Dict[str, str],
+    account_id: str,
+    max_wait_seconds: int = 120,
+) -> bool:
+    """Wait for an account to reach DEPLOYED state.
+
+    Returns True if deployed successfully, False if timeout.
+    """
+    import asyncio
+
+    account_url = f"{base_url}/users/current/accounts/{account_id}"
+    get_headers = {k: v for k, v in headers.items() if k != "transaction-id"}
+
+    start_time = asyncio.get_event_loop().time()
+    poll_interval = 5  # Check every 5 seconds
+
+    while (asyncio.get_event_loop().time() - start_time) < max_wait_seconds:
+        try:
+            response = await client.get(account_url, headers=get_headers, timeout=30)
+
+            if response.status_code == 200:
+                data = response.json()
+                state = data.get("state")
+                connection_status = data.get("connectionStatus")
+
+                log.debug(
+                    f"Account state: {state}, connection: {connection_status}"
+                )
+
+                if state == "DEPLOYED":
+                    return True
+
+                if state in ["DEPLOY_FAILED", "DELETE_FAILED"]:
+                    log.error(f"Account deployment failed with state: {state}")
+                    return False
+
+        except Exception as e:
+            log.warning(f"Error checking account state: {e}")
+
+        await asyncio.sleep(poll_interval)
+
+    return False

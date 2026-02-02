@@ -180,8 +180,15 @@ class TradeExecutor:
         """Get user tag for logging."""
         return f"[user:{self.user_id[:8]}] " if self.user_id else ""
 
-    async def connect(self):
-        """Connect to MetaApi and synchronize."""
+    async def connect(self, timeout_seconds: int = 300):
+        """Connect to MetaApi and synchronize.
+
+        Args:
+            timeout_seconds: Maximum time to wait for connection (default 5 minutes).
+                            MetaAPI recommends 300 seconds for synchronization.
+        """
+        import asyncio
+
         user_tag = self._get_user_tag()
         log.info(f"{user_tag}Connecting to MetaApi...")
 
@@ -189,28 +196,74 @@ class TradeExecutor:
         api_token = self._get_api_token()
         account_id = self._get_account_id()
 
-        self.api = MetaApi(api_token)
-        self.account = await self.api.metatrader_account_api.get_account(
-            account_id
-        )
+        try:
+            self.api = MetaApi(api_token)
+            self.account = await self.api.metatrader_account_api.get_account(
+                account_id
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "not found" in error_msg.lower():
+                raise RuntimeError(f"MetaAPI account not found: {account_id[:8]}...")
+            raise RuntimeError(f"Failed to get MetaAPI account: {error_msg}")
 
         # Deploy if needed
         if self.account.state != "DEPLOYED":
-            log.info(f"{user_tag}Deploying MetaApi account...")
-            await self.account.deploy()
+            log.info(f"{user_tag}Deploying MetaApi account (state: {self.account.state})...")
+            try:
+                await self.account.deploy()
+            except Exception as e:
+                log.warning(f"{user_tag}Deploy call returned error (may be already deploying): {e}")
 
-        # Wait for connection
-        log.info(f"{user_tag}Waiting for account connection...")
-        await self.account.wait_connected()
+        # Wait for connection with timeout
+        log.info(f"{user_tag}Waiting for account connection (timeout: {timeout_seconds}s)...")
+        try:
+            await asyncio.wait_for(
+                self.account.wait_connected(),
+                timeout=timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            # Check current state for better error message
+            try:
+                await self.account.reload()
+                state = self.account.state
+                connection_status = getattr(self.account, 'connection_status', 'unknown')
+            except Exception:
+                state = "unknown"
+                connection_status = "unknown"
+
+            raise RuntimeError(
+                f"Connection timed out after {timeout_seconds}s. "
+                f"Account state: {state}, connection: {connection_status}. "
+                "The broker may be slow or credentials may be incorrect."
+            )
 
         # Get RPC connection
+        log.info(f"{user_tag}Getting RPC connection...")
         self.connection = self.account.get_rpc_connection()
-        await self.connection.connect()
-        await self.connection.wait_synchronized()
+
+        try:
+            await self.connection.connect()
+        except Exception as e:
+            raise RuntimeError(f"Failed to establish RPC connection: {e}")
+
+        # Wait for synchronization with timeout
+        log.info(f"{user_tag}Waiting for synchronization...")
+        try:
+            await asyncio.wait_for(
+                self.connection.wait_synchronized(),
+                timeout=timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            log.warning(
+                f"{user_tag}Synchronization timed out after {timeout_seconds}s, "
+                "but connection is established. Trading may work with limited data."
+            )
+            # Don't raise - connection might still be usable for trading
 
         log.info(
             f"{user_tag}Connected to MetaApi",
-            account_id=self._account_id,
+            account_id=self._account_id[:8] if self._account_id else "unknown",
             state=self.account.state,
         )
 
